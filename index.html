@@ -2279,7 +2279,7 @@ window.addEventListener('unhandledrejection', function(e) {
       <span class="nav-icon">➕</span>
       <span class="nav-label" data-i18n="nav_erstellen">Erstellen</span>
     </div>
-    <div class="nav-item" onclick="swipeTo(2,this)" id="nav-profile-bottom" data-nav-id="nav-profile-btn">
+    <div class="nav-item" onclick="swipeTo(2)" id="nav-profile-bottom">
       <span class="nav-icon">👤</span>
       <span class="nav-label" data-i18n="nav_profil">Profil</span>
     </div>
@@ -2314,7 +2314,7 @@ window.addEventListener('unhandledrejection', function(e) {
         <input type="password" class="form-input" id="login-password" placeholder="••••••••">
       </div>
       <button class="submit-btn" onclick="doLogin()">Anmelden</button>
-      <p style="text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword()" style="color:var(--gold);font-size:12px;text-decoration:none">Passwort vergessen?</a></p>
+      <p style="text-align:center;margin-top:8px"><a href="#" onclick="event.preventDefault(); forgotPassword();" style="color:var(--gold);font-size:12px;text-decoration:none">Passwort vergessen?</a></p>
     </div>
     <div class="auth-form-section" id="auth-register">
       <div class="form-group">
@@ -5175,7 +5175,7 @@ async function submitCmGesuch() {
     <span class="dropdown-item-icon">🔨</span>
     <span>Mein Kaufen</span>
   </div>
-  <div class="dropdown-item" onclick="openPlaceholder('🏪','Mein Verkaufen','Hier siehst du bald alle deine aktiven Inserate, Verkaufshistorie und Statistiken. Diese Funktion ist in Arbeit.'); closeDropdown()">
+  <div class="dropdown-item" onclick="swipeTo(2); closeDropdown()">
     <span class="dropdown-item-icon">🏪</span>
     <span>Mein Verkaufen</span>
  <div class="dropdown-item" onclick="swipeTo(2); closeDropdown()">
