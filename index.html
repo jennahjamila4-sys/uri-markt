@@ -4981,22 +4981,20 @@ function switchWalletTab(tab, btnEl) {
   if (tab === 'uebersicht') {
     body.innerHTML = `
       <div class="wallet-beta-banner">🎉 <strong>Beta-Bonus aktiv:</strong> 100 Taler geschenkt!</div>
-      <div class="wallet-info-box">
-        💡 <strong>1 Uri-Taler = 1 CHF.</strong> Bei einem erfolgreichen Verkauf buchen wir 10% des Verkaufspreises in Talern ab. Keine Abos, keine versteckten Kosten.
+      
+      <div style="background:rgba(255,215,0,0.08); border:1px solid var(--gold); border-radius:12px; padding:16px; margin-bottom:16px; text-align:left;">
+        <h3 style="font-size:15px; font-weight:800; color:var(--gold); margin-bottom:8px;">🤝 Unser Fair-Play Prinzip</h3>
+        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:10px;"><strong>1 Uri-Taler = 1 CHF.</strong> Du zahlst nur, wenn du erfolgreich bist! Bei einem Verkauf fliessen <strong>10%</strong> in Talern als Community-Beitrag an uns.</p>
+        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:14px;">⛰️ Damit halten wir den Uri-Markt werbefrei und lokal. Danke!</p>
+        <button onclick="showToast('☕ Danke für deinen Kaffee! (3 Taler abgezogen)')" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:var(--text); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:16px;">☕ Spendier dem Team einen Kaffee (3 Taler)</button>
       </div>
-      <div style="font-size:14px;font-weight:700;margin-bottom:10px">Taler aufladen</div>
-      <div class="wallet-packages">
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 50 Taler</div><div class="wallet-pkg-sub">Starter-Paket</div></div>
-          <div class="wallet-pkg-price">CHF 50</div>
-        </div>
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 110 Taler</div><div class="wallet-pkg-sub">10% geschenkt – beliebt!</div></div>
-          <div class="wallet-pkg-price">CHF 100</div>
-        </div>
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 250 Taler</div><div class="wallet-pkg-sub">25% geschenkt – bester Wert</div></div>
-          <div class="wallet-pkg-price">CHF 200</div>
+
+      <div style="margin-top:20px;">
+        <h3 style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:12px;">Taler aufladen</h3>
+        <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+          <button class="submit-btn" style="background:#000; color:#00E5FF; border:1px solid #00E5FF;" onclick="showToast('TWINT wird geladen...')">Top-up mit TWINT</button>
+          <button class="submit-btn" style="background:#1a1a1a; color:var(--text);" onclick="showToast('Kreditkartenzahlung wird vorbereitet...')">💳 Kreditkarte (Visa/Mastercard)</button>
+          <button class="submit-btn" style="background:#fff; color:#000;" onclick="showToast('Apple/Google Pay wird gestartet...')"> Apple Pay / G Pay</button>
         </div>
       </div>`;
   } else if (tab === 'history') {
