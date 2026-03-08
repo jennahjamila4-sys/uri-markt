@@ -2176,6 +2176,35 @@ window.addEventListener('unhandledrejection', function(e) {
         <div class="feed-tab" onclick="switchTab('coming-soon',this)" data-i18n="tab_coming_soon">🚀 Vorankündigungen</div>
       </div>
       <div class="listings-container">
+<div style="padding:12px; padding-bottom:0;">
+  <h3 style="font-size:14px; font-weight:800; color:var(--red); margin-bottom:8px; display:flex; align-items:center; gap:6px;"><span class="fomo-dot"></span>⚡ Kürzlich verpasst</h3>
+  <div style="display:flex; overflow-x:auto; gap:10px; padding-bottom:10px; scroll-snap-type: x mandatory;" id="fake-missed-deals">
+    <div class="listing-card" style="min-width:140px; opacity:0.7; filter:grayscale(0.5);">
+      <div class="card-img-placeholder" style="height:100px; font-size:30px">🧹</div>
+      <div class="card-sold-stamp" style="font-size:10px; padding:4px 8px;">VERKAUFT IN 12 MIN</div>
+      <div class="card-body" style="padding:8px">
+        <div class="card-title" style="font-size:11px">Dyson Staubsauger</div>
+        <div class="card-price" style="font-size:12px">CHF 50</div>
+      </div>
+    </div>
+    <div class="listing-card" style="min-width:140px; opacity:0.7; filter:grayscale(0.5);">
+      <div class="card-img-placeholder" style="height:100px; font-size:30px">🏂</div>
+      <div class="card-sold-stamp" style="font-size:10px; padding:4px 8px;">VERKAUFT IN 2 STD</div>
+      <div class="card-body" style="padding:8px">
+        <div class="card-title" style="font-size:11px">Burton Snowboard</div>
+        <div class="card-price" style="font-size:12px">CHF 120</div>
+      </div>
+    </div>
+    <div class="listing-card" style="min-width:140px; opacity:0.7; filter:grayscale(0.5);">
+      <div class="card-img-placeholder" style="height:100px; font-size:30px">🎸</div>
+      <div class="card-sold-stamp" style="font-size:10px; padding:4px 8px;">VERKAUFT IN 45 MIN</div>
+      <div class="card-body" style="padding:8px">
+        <div class="card-title" style="font-size:11px">E-Gitarre Fender</div>
+        <div class="card-price" style="font-size:12px">CHF 280</div>
+      </div>
+    </div>
+  </div>
+</div>
         <div class="listings-grid" id="listings-grid">
           <!-- Listings loaded here -->
         </div>
@@ -3762,7 +3791,7 @@ async function submitCreateModal() {
       title,
       description: fullDesc,
       price,
-      type: createSelectedType,
+      type: (createSelectedType === 'Angebot' || createSelectedType === 'Gesuch') ? createSelectedType : 'Angebot',
       status: createSelectedType === 'Coming Soon' ? 'coming_soon' : 'active',
       location: gemeinde,
       gemeinde,
@@ -4451,7 +4480,8 @@ function renderProfile() {
       <p>Für jeden Freund der sich über deinen Code anmeldet, erhaltet ihr beide 20 Uri-Taler extra.</p>
       <div class="pd-referral-box">
         <span class="pd-referral-code">${referralCode}</span>
-        <button class="copy-btn" onclick="copyReferral('${referralLink}')">Kopieren</button>
+        <button class="copy-btn" onclick="copyReferral('${referralLink}')">📋 Kopieren</button>
+        <button class="copy-btn" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;margin-left:6px" onclick="if(navigator.share){navigator.share({title:'Uri-Markt',text:'Komm zum smartesten Marktplatz im Kanton Uri! Hier ist mein Code: ${referralCode}',url:'${referralLink}'})}else{copyReferral('${referralLink}')}">🚀 Teilen</button>
       </div>
     </div>
 
@@ -4981,20 +5011,22 @@ function switchWalletTab(tab, btnEl) {
   if (tab === 'uebersicht') {
     body.innerHTML = `
       <div class="wallet-beta-banner">🎉 <strong>Beta-Bonus aktiv:</strong> 100 Taler geschenkt!</div>
-      
-      <div style="background:rgba(255,215,0,0.08); border:1px solid var(--gold); border-radius:12px; padding:16px; margin-bottom:16px; text-align:left;">
-        <h3 style="font-size:15px; font-weight:800; color:var(--gold); margin-bottom:8px;">🤝 Unser Fair-Play Prinzip</h3>
-        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:10px;"><strong>1 Uri-Taler = 1 CHF.</strong> Du zahlst nur, wenn du erfolgreich bist! Bei einem Verkauf fliessen <strong>10%</strong> in Talern als Community-Beitrag an uns.</p>
-        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:14px;">⛰️ Damit halten wir den Uri-Markt werbefrei und lokal. Danke!</p>
-        <button onclick="showToast('☕ Danke für deinen Kaffee! (3 Taler abgezogen)')" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:var(--text); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:16px;">☕ Spendier dem Team einen Kaffee (3 Taler)</button>
+      <div class="wallet-info-box">
+        💡 <strong>1 Uri-Taler = 1 CHF.</strong> Bei einem erfolgreichen Verkauf buchen wir 10% des Verkaufspreises in Talern ab. Keine Abos, keine versteckten Kosten.
       </div>
-
-      <div style="margin-top:20px;">
-        <h3 style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:12px;">Taler aufladen</h3>
-        <div style="display:grid; grid-template-columns:1fr; gap:10px;">
-          <button class="submit-btn" style="background:#000; color:#00E5FF; border:1px solid #00E5FF;" onclick="showToast('TWINT wird geladen...')">Top-up mit TWINT</button>
-          <button class="submit-btn" style="background:#1a1a1a; color:var(--text);" onclick="showToast('Kreditkartenzahlung wird vorbereitet...')">💳 Kreditkarte (Visa/Mastercard)</button>
-          <button class="submit-btn" style="background:#fff; color:#000;" onclick="showToast('Apple/Google Pay wird gestartet...')"> Apple Pay / G Pay</button>
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">Taler aufladen</div>
+      <div class="wallet-packages">
+        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
+          <div><div class="wallet-pkg-name">🪙 50 Taler</div><div class="wallet-pkg-sub">Starter-Paket</div></div>
+          <div class="wallet-pkg-price">CHF 50</div>
+        </div>
+        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
+          <div><div class="wallet-pkg-name">🪙 110 Taler</div><div class="wallet-pkg-sub">10% geschenkt – beliebt!</div></div>
+          <div class="wallet-pkg-price">CHF 100</div>
+        </div>
+        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
+          <div><div class="wallet-pkg-name">🪙 250 Taler</div><div class="wallet-pkg-sub">25% geschenkt – bester Wert</div></div>
+          <div class="wallet-pkg-price">CHF 200</div>
         </div>
       </div>`;
   } else if (tab === 'history') {
@@ -5041,7 +5073,10 @@ function switchWalletTab(tab, btnEl) {
         <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Dein Referral-Code</div>
         <div style="font-size:28px;font-weight:900;color:var(--gold);letter-spacing:3px">${code}</div>
       </div>
-      <button class="avatar-upload-btn" onclick="copyReferral('${link}')">📋 Link kopieren</button>`;
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button class="avatar-upload-btn" style="flex:1" onclick="copyReferral('${link}')">📋 Link kopieren</button>
+        <button class="avatar-upload-btn" style="flex:1;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none" onclick="if(navigator.share){navigator.share({title:'Uri-Markt',text:'Komm zum smartesten Marktplatz im Kanton Uri! Hier ist mein Code: ${code}',url:'${link}'})}else{copyReferral('${link}')}">🚀 Teilen</button>
+      </div>`;
   }
 }
 
@@ -5381,13 +5416,7 @@ function closeModalIfBg(e, id) {
 function renderKaufenContent(tab) {
   const container = document.getElementById('kaufen-content');
   // For now, show empty state as requested
-  container.innerHTML = `
-    <div class="empty-state">
-      <div class="empty-icon">👕</div>
-      <p class="text-text-dim mb-6">Dein Einkaufswagen gähnt! Werde zum Pionier, entdecke lokale Deals und sammle XP!</p>
-      <button class="submit-btn" style="background:var(--gold); color:#000; font-weight:900" onclick="closeModal('mein-kaufen-modal'); swipeTo(0)">JETZT EINKAUFEN</button>
-    </div>
-  `;
+  container.innerHTML = `<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=600&auto=format&fit=crop" style="width:100%; height:160px; object-fit:cover; border-radius:16px; margin-bottom:16px; filter:brightness(0.8)"><p style="font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:20px;"><strong>Die besten Deals sind schnell weg! ⏳</strong><br>Erspare dir teure Neukäufe. Entdecke exklusive lokale Schätze, bevor deine Nachbarn schneller sind!</p><button class="submit-btn" onclick="closeModal('mein-kaufen-modal'); swipeTo(0)">👀 Zeig mir die Deals!</button></div>`;
 }
 
 function renderVerkaufenContent(tab) {
@@ -5401,9 +5430,9 @@ function renderVerkaufenContent(tab) {
   else if (tab === 'entwuerfe') filtered = []; // Mock drafts
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state text-text-faint">Keine Inserate gefunden.</div>';
+    container.innerHTML = `<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1558227691-41ea78d1f631?q=80&w=600&auto=format&fit=crop" style="width:100%; height:160px; object-fit:cover; border-radius:16px; margin-bottom:16px; filter:brightness(0.8)"><p style="font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:20px;"><strong>Dein Schrank und Keller sind Goldminen! 💰</strong><br>Während du zögerst, verdienen andere Urner bereits an Dingen, die sie nicht mehr brauchen. Spüre die Erleichterung, alten Ballast loszuwerden. Mach ihn in unter 60 Sekunden zu Cash!</p><button class="submit-btn" onclick="closeModal('mein-verkaufen-modal'); swipeTo(1)">➕ Jetzt befreien & kassieren</button></div>`;
     return;
-  }
+  } 
 
   let html = '';
   if (tab === 'verkauft') {
@@ -5514,7 +5543,7 @@ function copyReferralCode() {
     <div class="modal-handle"></div>
     <div class="modal-body">
       <div class="flex justify-between items-center mb-4" style="padding: 0 20px">
-        <h2 class="text-xl font-black">🛒 Mein Kaufen</h2>
+        <h2 class="text-xl font-black">🎯 Schnäppchen-Jagd</h2>
         <button class="p-2 bg-glass rounded-full" onclick="closeModal('mein-kaufen-modal')" style="border:none; color:white; cursor:pointer">✕</button>
       </div>
       <div class="modal-tabs mb-4" style="margin: 0 20px">
@@ -5535,7 +5564,7 @@ function copyReferralCode() {
     <div class="modal-handle"></div>
     <div class="modal-body">
       <div class="flex justify-between items-center mb-4" style="padding: 0 20px">
-        <h2 class="text-xl font-black">🏪 Mein Verkaufen</h2>
+        <h2 class="text-xl font-black">💸 Loswerden &amp; Verdienen</h2>
         <button class="p-2 bg-glass rounded-full" onclick="closeModal('mein-verkaufen-modal')" style="border:none; color:white; cursor:pointer">✕</button>
       </div>
       <div class="modal-tabs mb-4" style="margin: 0 20px">
@@ -6172,11 +6201,11 @@ function copyReferralCode() {
   </div>
   <div class="dropdown-item" id="dd-kaufen">
     <span class="dropdown-item-icon">🛒</span>
-    <span>Mein Kaufen</span>
+    <span>🎯 Schnäppchen-Jagd</span>
   </div>
   <div class="dropdown-item" id="dd-verkaufen">
     <span class="dropdown-item-icon">🏪</span>
-    <span>Mein Verkaufen</span>
+    <span>💸 Loswerden &amp; Verdienen</span>
   </div>
   <div class="dropdown-item" id="dd-wallet">
     <span class="dropdown-item-icon">🪙</span>
