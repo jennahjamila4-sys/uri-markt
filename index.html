@@ -3663,6 +3663,22 @@ function setPriceModel(model, el) {
   el.classList.add('active');
   const lbl = document.getElementById('cm-price-label');
   if (lbl) lbl.textContent = model === 'auktion' ? '– Startpreis' : '– Fixpreis';
+  // TASK 2: Auktion – Enddatum-Feld ein-/ausblenden
+  let auctionGroup = document.getElementById('cm-auction-end-group');
+  const priceField = document.getElementById('cm-price')?.closest('.konto-field');
+  if (model === 'auktion') {
+    if (!auctionGroup && priceField) {
+      auctionGroup = document.createElement('div');
+      auctionGroup.id = 'cm-auction-end-group';
+      auctionGroup.className = 'konto-field';
+      auctionGroup.innerHTML = '<label class="konto-label" for="cm-auction-end">Auktion endet am</label><input type="datetime-local" id="cm-auction-end" class="konto-input" style="color:#fff;">';
+      priceField.parentNode.insertBefore(auctionGroup, priceField.nextSibling);
+    } else if (auctionGroup) {
+      auctionGroup.style.display = 'block';
+    }
+  } else {
+    if (auctionGroup) auctionGroup.style.display = 'none';
+  }
 }
 
 function updateCharCount() {
@@ -3792,7 +3808,7 @@ async function submitCreateModal() {
       description: fullDesc,
       price,
       type: (createSelectedType === 'Angebot' || createSelectedType === 'Gesuch') ? createSelectedType : 'Angebot',
-      status: createSelectedType === 'Coming Soon' ? 'coming_soon' : 'active',
+      status: (createSelectedType === 'Coming Soon' || createSelectedType === 'Vorankündigung') ? 'coming_soon' : 'active',
       location: gemeinde,
       gemeinde,
       category,
@@ -3806,6 +3822,12 @@ async function submitCreateModal() {
       delivery_abholung: abholung,
     };
     if (countdown) payload.countdown = new Date(countdown).toISOString();
+    // TASK 1+2: Auktion End-Datum
+    const auctionEndEl = document.getElementById('cm-auction-end');
+    if (auctionEndEl && auctionEndEl.value) payload.auction_end = new Date(auctionEndEl.value).toISOString();
+    // TASK 2: Vorankündigung – available_from
+    const availFromEl = document.getElementById('cm-available-from');
+    if (availFromEl && availFromEl.value) payload.available_from = availFromEl.value;
 
     const data = await supaFetch('listings', { method: 'POST', body: JSON.stringify(payload) });
 
@@ -3871,9 +3893,10 @@ async function submitCreateModal() {
 // ============================================================
 function setType(type, el) {
   selectedType = type;
+  createSelectedType = type;
   document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('countdown-group').style.display = type === 'Coming Soon' ? 'block' : 'none';
+  document.getElementById('countdown-group').style.display = (type === 'Coming Soon' || type === 'Vorankündigung') ? 'block' : 'none';
   // Chamäleon-Logik: Bei Gesuch das smarte Formular einblenden
   const gesuchBlock = document.getElementById('gesuch-chameleon-block');
   const normalBlock = document.getElementById('normal-form-block');
@@ -3885,6 +3908,27 @@ function setType(type, el) {
       gesuchBlock.style.display = 'none';
       normalBlock.style.display = 'block';
     }
+  }
+  // TASK 2: Vorankündigung – Preis ausblenden, available-from einblenden
+  const priceGroup = document.getElementById('cm-price-group');
+  let availGroup = document.getElementById('cm-available-from-group');
+  const descEl = document.getElementById('cm-desc');
+  if (type === 'Vorankündigung') {
+    if (priceGroup) priceGroup.style.display = 'none';
+    if (!availGroup) {
+      availGroup = document.createElement('div');
+      availGroup.id = 'cm-available-from-group';
+      availGroup.className = 'konto-field';
+      availGroup.innerHTML = '<label class="konto-label" for="cm-available-from">Ab wann verfügbar?</label><input type="date" id="cm-available-from" class="konto-input" style="color:#fff;">';
+      if (priceGroup) priceGroup.parentNode.insertBefore(availGroup, priceGroup);
+    } else {
+      availGroup.style.display = 'block';
+    }
+    if (descEl) descEl.placeholder = 'Mach die Community neugierig...';
+  } else {
+    if (priceGroup) priceGroup.style.display = 'block';
+    if (availGroup) availGroup.style.display = 'none';
+    if (descEl) descEl.placeholder = 'Beschreibe dein Angebot detailliert...';
   }
 }
 
@@ -4453,6 +4497,13 @@ function renderProfile() {
       <div class="pd-stat"><div class="pd-stat-val">${verkauftCount}</div><div class="pd-stat-lbl">Verkauft</div></div>
       <div class="pd-stat"><div class="pd-stat-val">${credits}</div><div class="pd-stat-lbl">🪙 Taler</div></div>
     </div>
+    <!-- BADGES (TASK 4) -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:0 2px;">
+      <div style="background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:6px;">🎯 Erster Login</div>
+      <div style="background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#ff6400;display:flex;align-items:center;gap:6px;">🚀 Pioneer</div>
+      ${myListings.length >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#22c55e;display:flex;align-items:center;gap:6px;">📦 Erstes Inserat</div>' : ''}
+      ${verkauftCount >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#818cf8;display:flex;align-items:center;gap:6px;">💰 Erster Verkauf</div>' : ''}
+    </div>
 
     <!-- TABS -->
     <div class="pd-tabs-wrap">
@@ -5011,8 +5062,12 @@ function switchWalletTab(tab, btnEl) {
   if (tab === 'uebersicht') {
     body.innerHTML = `
       <div class="wallet-beta-banner">🎉 <strong>Beta-Bonus aktiv:</strong> 100 Taler geschenkt!</div>
-      <div class="wallet-info-box">
-        💡 <strong>1 Uri-Taler = 1 CHF.</strong> Bei einem erfolgreichen Verkauf buchen wir 10% des Verkaufspreises in Talern ab. Keine Abos, keine versteckten Kosten.
+      
+      <div style="background:rgba(255,215,0,0.08); border:1px solid var(--gold); border-radius:12px; padding:16px; margin-bottom:16px; text-align:left;">
+        <h3 style="font-size:15px; font-weight:800; color:var(--gold); margin-bottom:8px;">🤝 Unser Fair-Play Prinzip</h3>
+        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:10px;"><strong>1 Uri-Taler = 1 CHF.</strong> Du zahlst nur, wenn du erfolgreich bist! Bei einem Verkauf fliessen <strong>10%</strong> in Talern als Community-Beitrag an uns.</p>
+        <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:14px;">⛰️ Damit halten wir den Uri-Markt werbefrei und lokal. Danke!</p>
+        <button onclick="showToast('☕ Danke für deinen Kaffee! (3 Taler abgezogen)')" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:var(--text); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:0;">☕ Spendier dem Team einen Kaffee (3 Taler)</button>
       </div>
       <div style="font-size:14px;font-weight:700;margin-bottom:10px">Taler aufladen</div>
       <div class="wallet-packages">
@@ -6020,8 +6075,8 @@ function copyReferralCode() {
           <div class="price-model-tile-sub">Sofort kaufen</div>
         </div>
       </div>
-      <div class="konto-field">
-        <label class="konto-label">Preis (CHF) <span id="cm-price-label">– Fixpreis</span></label>
+      <div class="konto-field" id="cm-price-group">
+        <label class="konto-label" for="cm-price">Preis (CHF) <span id="cm-price-label">– Fixpreis</span></label>
         <input type="number" class="konto-input" id="cm-price" placeholder="0 = Gratis" min="0">
       </div>
 
