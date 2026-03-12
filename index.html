@@ -3770,7 +3770,8 @@ function toggleCreateVoice() {
 
 async function submitCreateModal() {
   // TASK 1 FIX: Robuster Session-Guard – holt immer die aktuelle Session
-  const { data: { session: _sess } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  // FIX: Kein Supabase-JS-Client - nutze direkt currentUser
+  const _sess = currentUser ? { user: currentUser.user || currentUser } : null;
   const _activeSession = _sess || currentUser;
   if (!_activeSession) { openAuth(); showToast('⚠️ Bitte zuerst einloggen', 'error'); return; }
   // Stelle sicher dass user_id immer gesetzt ist
@@ -3812,7 +3813,7 @@ async function submitCreateModal() {
     const fullDesc = smartStr ? desc + '\n\n--- Smart-Details ---\n' + smartStr : desc;
 
     const payload = {
-      user_id: currentUser.user.id,
+      user_id: _userId,
       title,
       description: fullDesc,
       price,
@@ -4213,7 +4214,7 @@ async function submitGesuch() {
 
   try {
     const payload = {
-      user_id: currentUser.user.id,
+      user_id: _userId,
       title: 'Gesuch: ' + was.substring(0, 60),
       description: desc,
       price: parseFloat(budgetBis) || 0,
@@ -4274,7 +4275,7 @@ async function submitListing() {
 
   try {
     const payload = {
-      user_id: currentUser.user.id,
+      user_id: _userId,
       title,
       description: desc,
       price,
@@ -5390,7 +5391,7 @@ async function submitCmGesuch() {
 
   try {
     const payload = {
-      user_id: currentUser.user.id,
+      user_id: _userId,
       title: 'Gesuch: ' + was.substring(0, 60),
       description: desc,
       price: parseFloat(budgetBis) || 0,
