@@ -2078,6 +2078,22 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
   font-size: 24px;
 }
 
+
+/* ============================================================
+   PROFIL DASHBOARD CSS (Task 4)
+   ============================================================ */
+.xp-bar-container { height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; margin-top: 5px; }
+.xp-bar-fill { background: linear-gradient(90deg, var(--gold), #F59E0B); height: 100%; width: 40%; transition: width 0.8s ease; }
+.taler-glow-box { background: rgba(20,20,20,0.8); border: 2px solid var(--gold); border-radius: 16px; padding: 12px; text-align: center; animation: talerPulse 2s infinite; }
+@keyframes talerPulse { 0%, 100% { box-shadow: 0 0 8px rgba(255,215,0,0.4); } 50% { box-shadow: 0 0 16px rgba(255,215,0,0.8); } }
+.motivation-box { background: rgba(255,255,255,0.05); border-left: 4px solid #DC2626; padding: 16px; border-radius: 0 12px 12px 0; margin-bottom: 20px; }
+.profile-tabs { display: flex; gap: 8px; margin-bottom: 15px; }
+.profile-tab-btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: bold; background: rgba(255,255,255,0.05); color: var(--text-dim); border: none; cursor: pointer; }
+.profile-tab-btn.active { background: linear-gradient(135deg, var(--gold), #F59E0B); color: #000; }
+.profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.profile-card { background: var(--surface, rgba(255,255,255,0.06)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 8px; text-align: center; transition: transform 0.3s; }
+.profile-card:hover { transform: translateY(-4px); }
+
 </style>
 <script>
 // ============================================================
@@ -2366,8 +2382,8 @@ window.addEventListener('unhandledrejection', function(e) {
     </div>
 
     <!-- PANEL 2: PROFILE -->
-    <div class="swipe-panel" id="profile-panel">
-      <!-- Profile content loaded dynamically -->
+    <div class="swipe-panel" id="profile-panel" style="overflow-y:auto; padding-bottom:90px;">
+      <!-- Profile content loaded dynamically by renderProfile() -->
       <div id="profile-content">
         <div style="text-align:center;padding:60px 20px;color:var(--text-faint)">
           <div style="font-size:48px;margin-bottom:16px">👤</div>
@@ -3130,7 +3146,12 @@ function swipeTo(index, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const targetNav = el || document.getElementById('nav-' + index) || (index === 2 ? document.getElementById('nav-profile-bottom') : null);
   if (targetNav) targetNav.classList.add('active');
-  if (index === 2 && typeof renderProfile === 'function') renderProfile();
+  if (index === 2) {
+    if (typeof renderProfile === 'function') renderProfile();
+    // Scroll Profil-Panel nach oben
+    const pp = document.getElementById('profile-panel');
+    if (pp) pp.scrollTop = 0;
+  }
 }
 
 window.swipeTo = swipeTo;
@@ -3892,7 +3913,17 @@ async function submitCreateModal() {
     if (smContainer) smContainer.innerHTML = '';
     if (boostCheckbox) boostCheckbox.checked = false;
   } catch(e) {
-    showToast('❌ Fehler: ' + e.message);
+    console.error('submitCreateModal ERROR:', e);
+    const errMsg = e.message || String(e);
+    if (errMsg.includes('user_id') || errMsg.includes('foreign key') || errMsg.includes('fkey')) {
+      showToast('❌ Bitte neu einloggen (Session abgelaufen)', 'error');
+      doLogout(); openAuth();
+    } else if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else {
+      showToast('❌ Fehler: ' + errMsg);
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'VERÖFFENTLICHEN'; }
   }
@@ -4187,6 +4218,8 @@ function toggleGesuchVoice() {
 
 async function submitGesuch() {
   if (!currentUser) { openAuth(); return; }
+  const _userId = (currentUser?.user?.id) || (currentUser?.id) || null;
+  if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
   const was = (document.getElementById('gesuch-was-input')?.value || '').trim();
   if (!was) { showToast('⚠️ Bitte beschreibe was du suchst'); return; }
   const gemeinde = document.getElementById('gesuch-gemeinde')?.value || 'Altdorf';
@@ -4259,6 +4292,8 @@ async function submitGesuch() {
 
 async function submitListing() {
   if (!currentUser) { openAuth(); return; }
+  const _userId = (currentUser?.user?.id) || (currentUser?.id) || null;
+  if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
   const title = document.getElementById('form-title').value.trim();
   const desc = document.getElementById('form-desc').value.trim();
   const price = parseFloat(document.getElementById('form-price').value) || 0;
@@ -4815,7 +4850,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (navHome) navHome.addEventListener('click', (e) => swipeTo(0, e.currentTarget));
   if (navCreate) navCreate.addEventListener('click', () => openCreateModal());
-  if (navProfileBottom) navProfileBottom.addEventListener('click', () => swipeTo(2));
+  if (navProfileBottom) navProfileBottom.addEventListener('click', () => {
+    swipeTo(2, navProfileBottom);
+  });
   if (authHeaderBtn) authHeaderBtn.addEventListener('click', () => {
     if (currentUser) {
       toggleDropdown();
@@ -5077,21 +5114,14 @@ function switchWalletTab(tab, btnEl) {
         <h3 style="font-size:15px; font-weight:800; color:var(--gold); margin-bottom:8px;">🤝 Unser Fair-Play Prinzip</h3>
         <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:10px;"><strong>1 Uri-Taler = 1 CHF.</strong> Du zahlst nur, wenn du erfolgreich bist! Bei einem Verkauf fliessen <strong>10%</strong> in Talern als Community-Beitrag an uns.</p>
         <p style="font-size:13px; color:var(--text-dim); line-height:1.5; margin-bottom:14px;">⛰️ Damit halten wir den Uri-Markt werbefrei und lokal. Danke!</p>
-        <button onclick="showToast('☕ Danke für deinen Kaffee! (3 Taler abgezogen)')" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:var(--text); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:0;">☕ Spendier dem Team einen Kaffee (3 Taler)</button>
+        <button onclick="handleCoffeeSpend()")" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); border-radius:8px; color:var(--text); font-size:13px; font-weight:700; cursor:pointer; margin-bottom:0;">☕ Spendier dem Team einen Kaffee (3 Taler)</button>
       </div>
-      <div style="font-size:14px;font-weight:700;margin-bottom:10px">Taler aufladen</div>
-      <div class="wallet-packages">
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 50 Taler</div><div class="wallet-pkg-sub">Starter-Paket</div></div>
-          <div class="wallet-pkg-price">CHF 50</div>
-        </div>
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 110 Taler</div><div class="wallet-pkg-sub">10% geschenkt – beliebt!</div></div>
-          <div class="wallet-pkg-price">CHF 100</div>
-        </div>
-        <div class="wallet-pkg" onclick="showToast('Coming Soon – TWINT/Card wird bald verfügbar!','info')">
-          <div><div class="wallet-pkg-name">🪙 250 Taler</div><div class="wallet-pkg-sub">25% geschenkt – bester Wert</div></div>
-          <div class="wallet-pkg-price">CHF 200</div>
+            <div style="margin-top:20px;">
+        <h3 style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:12px;">Taler aufladen</h3>
+        <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+          <button class="auth-btn" style="background:#000; color:#00E5FF; border:1px solid #00E5FF; padding:14px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; width:100%;" onclick="handleTwintTopup()">📱 Top-up mit TWINT</button>
+          <button class="auth-btn" style="background:#1a1a1a; color:var(--text); border:1px solid var(--glass-border); padding:14px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; width:100%;" onclick="handleCardTopup()">💳 Kreditkarte (Visa/Mastercard)</button>
+          <button class="auth-btn" style="background:#fff; color:#000; border:none; padding:14px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; width:100%;" onclick="handleApplePayTopup()">🍎 Apple Pay / G Pay</button>
         </div>
       </div>`;
   } else if (tab === 'history') {
@@ -5145,31 +5175,7 @@ function switchWalletTab(tab, btnEl) {
   }
 }
 
-async function boostListing(listingId) {
-  if (!currentUser || !currentProfile) return;
-  const credits = currentProfile.credits || 0;
-  if (credits < 5) { showToast('Nicht genug Uri-Taler! Lade Taler auf.', 'error'); return; }
-  try {
-    const isDemo = typeof listingId === 'string' && (listingId.startsWith('demo-') || listingId.startsWith('new-'));
-    if (!isDemo) {
-      await supaFetch(`listings?id=eq.${listingId}`, {
-        method: 'PATCH', body: JSON.stringify({ is_promoted: true })
-      });
-    }
-    const newCredits = credits - 5;
-    currentProfile.credits = newCredits;
-    await supaFetch(`profiles?id=eq.${currentUser.user.id}`, {
-      method: 'PATCH', body: JSON.stringify({ credits: newCredits })
-    });
-    document.getElementById('wallet-balance-display').textContent = newCredits;
-    const listing = allListings.find(l => String(l.id) === String(listingId));
-    if (listing) listing.is_promoted = true;
-    showToast('⚡ Inserat geboostet! 5 Taler abgezogen.', 'success');
-    switchWalletTab('boosts', null);
-  } catch(e) {
-    showToast('Fehler beim Boosten: ' + e.message, 'error');
-  }
-}
+// boostListing ist oben definiert (Duplikat entfernt)
 
 // ============================================================
 // FEATURE: SMART MATRIX – Dynamische Formularfelder
@@ -5448,15 +5454,7 @@ function openMeinVerkaufen() {
   renderVerkaufenContent('aktiv');
 }
 
-function openWalletModal() {
-  const modal = document.getElementById('wallet-modal');
-  modal.classList.add('open');
-  if (currentProfile) {
-    document.getElementById('wallet-credits').textContent = currentProfile.credits || 0;
-    document.getElementById('wallet-ref-code').textContent = currentProfile.referral_code || 'URI-MARKT';
-  }
-  renderTransactions();
-}
+// openWalletModal ist oben definiert (Duplikat entfernt um Konflikte zu vermeiden)
 
 function openPublicProfile() {
   const modal = document.getElementById('public-profile-modal');
@@ -5600,6 +5598,12 @@ function copyReferralCode() {
 }
 
 
+
+function switchDashTab(tab, btn) {
+  document.querySelectorAll('.profile-tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+window.switchDashTab = switchDashTab;
 </script>
 
 <!-- MEIN KAUFEN MODAL -->
