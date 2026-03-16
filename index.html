@@ -2604,6 +2604,16 @@ const i18n = {
 // ============================================================
 let currentLang = 'de';
 let currentUser = null;
+// Helper: robuste User-ID Extraktion aus currentUser
+function getUID() {
+  if (!currentUser) return null;
+  return (currentUser && currentUser.user && currentUser.user.id) || (currentUser && currentUser.id) || null;
+}
+// Helper: robuster Access-Token
+function getToken() {
+  if (!currentUser) return null;
+  return currentUser?.access_token || currentUser?.token || null;
+}
 let currentProfile = null;
 let currentTab = 'angebote';
 let currentPanel = 0;
@@ -2621,7 +2631,7 @@ async function supaFetch(path, options = {}, _retry = false) {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
   const headers = {
     'apikey': SUPABASE_KEY,
-    'Authorization': `Bearer ${(currentUser?.access_token) || SUPABASE_KEY}`,
+    'Authorization': `Bearer ${getToken() || SUPABASE_KEY}`,
     'Content-Type': 'application/json',
     'Prefer': 'return=representation',
     ...options.headers
@@ -2827,7 +2837,9 @@ async function checkSession() {
 async function refreshProfile() {
   if (!currentUser) return;
   try {
-    const data = await supaFetch(`profiles?id=eq.${currentUser.user.id}&select=*`);
+    const _uid = getUID();
+    if (!_uid) return;
+    const data = await supaFetch(`profiles?id=eq.${_uid}&select=*`);
     if (data && data.length > 0) {
       currentProfile = data[0];
       renderProfile();
@@ -2962,7 +2974,7 @@ async function saveKontoAngaben() {
   const newLang = document.getElementById('konto-sprache').value;
   if (newLang !== currentLang) changeLanguage(newLang);
   try {
-    await supaFetch('profiles?id=eq.' + currentUser.user.id, {
+    await supaFetch('profiles?id=eq.' + getUID(), {
       method: 'PATCH',
       body: JSON.stringify(payload)
     });
@@ -2983,7 +2995,7 @@ async function saveKontoZahlungen() {
     bar: document.getElementById('pay-bar').checked,
   };
   try {
-    await supaFetch('profiles?id=eq.' + currentUser.user.id, {
+    await supaFetch('profiles?id=eq.' + getUID(), {
       method: 'PATCH',
       body: JSON.stringify({ payment_methods: JSON.stringify(pm) })
     });
@@ -3310,7 +3322,7 @@ function openDetail(id) {
   if (!l) return;
   const modal = document.getElementById('detail-modal');
   const content = document.getElementById('detail-content');
-  const isOwner = currentUser && l.user_id === currentUser.user?.id;
+  const isOwner = currentUser && l.user_id === getUID();
   const isAdmin = currentUser?.user?.email === ADMIN_EMAIL;
   const isSold = l.status === 'sold' || l.status === 'verkauft';
   const isComingSoon = l.type === 'Coming Soon' || l.status === 'coming_soon';
@@ -3586,7 +3598,7 @@ async function boostListing(id) {
         method: 'PATCH',
         body: JSON.stringify({ is_promoted: true })
       });
-      await supaFetch(`profiles?id=eq.${currentUser.user.id}`, {
+      await supaFetch(`profiles?id=eq.${getUID()}`, {
         method: 'PATCH',
         body: JSON.stringify({ credits: currentProfile.credits - 50 })
       });
@@ -3797,7 +3809,7 @@ async function submitCreateModal() {
   if (!_activeSession) { openAuth(); showToast('⚠️ Bitte zuerst einloggen', 'error'); return; }
   // Stelle sicher dass user_id immer gesetzt ist
   const _userId = (_sess && _sess.user && _sess.user.id)
-    || (currentUser && currentUser.user && currentUser.user.id)
+    || (currentUser && currentUser.user && getUID())
     || (currentUser && currentUser.id)
     || null;
   if (!_userId) { showToast('❌ Fehler: Benutzer-ID nicht gefunden. Bitte neu einloggen.', 'error'); openAuth(); return; }
@@ -3891,7 +3903,7 @@ async function submitCreateModal() {
     if (wantBoost && currentProfile) {
       try {
         const newCredits = (currentProfile.credits || 0) - 5;
-        await supaFetch('profiles?id=eq.' + currentUser.user.id, {
+        await supaFetch('profiles?id=eq.' + getUID(), {
           method: 'PATCH',
           body: JSON.stringify({ credits: newCredits })
         });
@@ -4218,7 +4230,7 @@ function toggleGesuchVoice() {
 
 async function submitGesuch() {
   if (!currentUser) { openAuth(); return; }
-  const _userId = (currentUser?.user?.id) || (currentUser?.id) || null;
+  const _userId = (getUID()) || (currentUser?.id) || null;
   if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
   const was = (document.getElementById('gesuch-was-input')?.value || '').trim();
   if (!was) { showToast('⚠️ Bitte beschreibe was du suchst'); return; }
@@ -4292,7 +4304,7 @@ async function submitGesuch() {
 
 async function submitListing() {
   if (!currentUser) { openAuth(); return; }
-  const _userId = (currentUser?.user?.id) || (currentUser?.id) || null;
+  const _userId = (getUID()) || (currentUser?.id) || null;
   if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
   const title = document.getElementById('form-title').value.trim();
   const desc = document.getElementById('form-desc').value.trim();
@@ -4417,7 +4429,7 @@ async function addXP(amount) {
   currentProfile.xp = newXP;
   currentProfile.credits = newCredits;
   try {
-    await supaFetch(`profiles?id=eq.${currentUser.user.id}`, {
+    await supaFetch(`profiles?id=eq.${getUID()}`, {
       method: 'PATCH',
       body: JSON.stringify({ xp: newXP, credits: newCredits })
     });
@@ -4457,7 +4469,7 @@ function renderProfile() {
   const levelNum = LEVEL_NAMES.indexOf(level.name) + 1 || 1;
 
   // Inserats-Counts aus allListings
-  const uid = currentUser.user?.id || currentUser.id;
+  const uid = getUID() || currentUser.id;
   const myListings = allListings.filter(l => l.user_id === uid);
   const angeboteCount = myListings.filter(l => (l.type === 'Angebot' || l.type === 'Coming Soon') && l.status !== 'sold' && l.status !== 'verkauft').length;
   const gesucheCount = myListings.filter(l => l.type === 'Gesuch').length;
@@ -4642,7 +4654,7 @@ function renderPdGrid(tab, myListings) {
 function switchPdTab(tab, btnEl) {
   document.querySelectorAll('.pd-tab').forEach(b => b.classList.remove('active'));
   btnEl.classList.add('active');
-  const uid = currentUser?.user?.id || currentUser?.id;
+  const uid = getUID() || currentUser?.id;
   const myListings = allListings.filter(l => l.user_id === uid);
   const wrap = document.getElementById('pd-grid-wrap');
   if (wrap) wrap.innerHTML = renderPdGrid(tab, myListings);
@@ -4678,8 +4690,8 @@ async function deleteAccount() {
   if (!confirm('Konto und alle Daten wirklich löschen? Dies kann nicht rückgängig gemacht werden.')) return;
   try {
     if (currentUser) {
-      await supaFetch(`listings?user_id=eq.${currentUser.user.id}`, { method: 'DELETE' });
-      await supaFetch(`profiles?id=eq.${currentUser.user.id}`, { method: 'DELETE' });
+      await supaFetch(`listings?user_id=eq.${getUID()}`, { method: 'DELETE' });
+      await supaFetch(`profiles?id=eq.${getUID()}`, { method: 'DELETE' });
     }
     doLogout();
     showToast('✅ Konto gelöscht');
@@ -4712,8 +4724,8 @@ function toggleFav(id, el) {
 async function loadNotifications() {
   if (!currentUser) return;
   try {
-    const alerts = await supaFetch(`notifications?user_id=eq.${currentUser.user.id}&is_read=eq.false&order=created_at.desc`) || [];
-    const data = await supaFetch(`notifications?user_id=eq.${currentUser.user.id}&order=created_at.desc&limit=10&select=*`);
+    const alerts = await supaFetch(`notifications?user_id=eq.${getUID()}&is_read=eq.false&order=created_at.desc`) || [];
+    const data = await supaFetch(`notifications?user_id=eq.${getUID()}&order=created_at.desc&limit=10&select=*`);
     const list = document.getElementById('notif-list');
     const badge = document.getElementById('notif-badge');
     if (alerts.length > 0) { badge.textContent = alerts.length; badge.style.display = 'flex'; }
@@ -4995,7 +5007,7 @@ async function setAvatarIcon(emoji) {
   currentProfile.avatar_url = null;
   currentProfile._avatarEmoji = emoji;
   try {
-    await supaFetch(`profiles?id=eq.${currentUser.user.id}`, {
+    await supaFetch(`profiles?id=eq.${getUID()}`, {
       method: 'PATCH', body: JSON.stringify({ avatar_url: null, avatar_emoji: emoji })
     });
   } catch(e) {}
@@ -5010,7 +5022,7 @@ async function handleAvatarUpload(event) {
   showToast('Bild wird hochgeladen...', 'info');
   try {
     const ext = file.name.split('.').pop();
-    const path = `avatars/${currentUser.user.id}.${ext}`;
+    const path = `avatars/${getUID()}.${ext}`;
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/avatars/${path}`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${currentUser.access_token}`, 'Content-Type': file.type },
@@ -5019,7 +5031,7 @@ async function handleAvatarUpload(event) {
     if (!uploadRes.ok) throw new Error('Upload fehlgeschlagen');
     const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${path}`;
     currentProfile.avatar_url = publicUrl;
-    await supaFetch(`profiles?id=eq.${currentUser.user.id}`, {
+    await supaFetch(`profiles?id=eq.${getUID()}`, {
       method: 'PATCH', body: JSON.stringify({ avatar_url: publicUrl })
     });
     document.getElementById('avatar-modal-overlay').classList.remove('open');
@@ -5140,7 +5152,7 @@ function switchWalletTab(tab, btnEl) {
       </div>`).join('');
     body.innerHTML = items || '<div style="text-align:center;padding:32px;color:var(--text-faint)">Noch keine Transaktionen</div>';
   } else if (tab === 'boosts') {
-    const uid = currentUser?.user?.id || currentUser?.id;
+    const uid = getUID() || currentUser?.id;
     const myActive = allListings.filter(l => l.user_id === uid && l.status !== 'sold' && l.status !== 'verkauft');
     if (myActive.length === 0) {
       body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint)">Keine aktiven Inserate zum Boosten</div>';
@@ -5156,7 +5168,7 @@ function switchWalletTab(tab, btnEl) {
         <div class="wallet-boost-desc">🚀 Dein Inserat für 24h ganz nach oben pushen – 3x schneller verkaufen!</div>
       </div>`).join('');
   } else if (tab === 'referral') {
-    const code = currentProfile.referral_code || 'URI' + (currentUser?.user?.id || '').substring(0,6).toUpperCase();
+    const code = currentProfile.referral_code || 'URI' + (getUID() || '').substring(0,6).toUpperCase();
     const link = `${window.location.origin}?ref=${code}`;
     body.innerHTML = `
       <div style="text-align:center;margin-bottom:16px">
@@ -5486,7 +5498,7 @@ function renderVerkaufenContent(tab) {
   const container = document.getElementById('verkaufen-content');
   if (!currentUser) return;
   
-  let filtered = allListings.filter(l => l.user_id === currentUser.user.id);
+  let filtered = allListings.filter(l => l.user_id === getUID());
   
   if (tab === 'aktiv') filtered = filtered.filter(l => l.status === 'active');
   else if (tab === 'verkauft') filtered = filtered.filter(l => l.status === 'sold');
@@ -5549,7 +5561,7 @@ function renderPublicContent(tab) {
   }
   
   if (!currentUser) return;
-  const myActive = allListings.filter(l => l.user_id === currentUser.user.id && l.status === 'active');
+  const myActive = allListings.filter(l => l.user_id === getUID() && l.status === 'active');
   
   if (myActive.length === 0) {
     container.innerHTML = '<div class="empty-state text-text-faint">Keine aktiven Angebote.</div>';
