@@ -2839,12 +2839,44 @@ async function refreshProfile() {
   try {
     const _uid = getUID();
     if (!_uid) return;
-    const data = await supaFetch(`profiles?id=eq.${_uid}&select=*`);
+    let data = await supaFetch(`profiles?id=eq.${_uid}&select=*`);
     if (data && data.length > 0) {
       currentProfile = data[0];
       renderProfile();
+    } else {
+      // FALLBACK: Profil existiert nicht → automatisch erstellen
+      console.log('refreshProfile: Kein Profil gefunden, erstelle automatisch...');
+      const email = currentUser?.user?.email || currentUser?.email || '';
+      const username = email.split('@')[0] || 'User';
+      const referralCode = 'URI' + _uid.substring(0, 6).toUpperCase();
+      try {
+        const created = await supaFetch('profiles', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: _uid,
+            username,
+            email,
+            credits: 100,
+            xp_points: 0,
+            level: 1,
+            referral_code: referralCode
+          })
+        });
+        console.log('Profil erstellt:', created);
+        // Nochmal laden
+        const data2 = await supaFetch(`profiles?id=eq.${_uid}&select=*`);
+        if (data2 && data2.length > 0) {
+          currentProfile = data2[0];
+          renderProfile();
+          showToast('🎉 Profil erstellt! 100 Uri-Taler geschenkt!');
+        }
+      } catch(createErr) {
+        console.error('Profil-Erstellung fehlgeschlagen:', createErr.message);
+      }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error('refreshProfile Fehler:', e.message);
+  }
 }
 
 function updateAuthUI() {
