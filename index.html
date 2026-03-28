@@ -4434,13 +4434,22 @@ async function submitGesuch() {
     const smartDiv = document.getElementById('gesuch-smart-fields');
     if (smartDiv) { smartDiv.innerHTML = ''; smartDiv.classList.remove('show'); }
     gesuchDetectedCategory = null;
-  } catch(e) {
-    showToast('❌ Fehler: ' + e.message);
+   } catch(e) {
+    console.error('submitGesuch ERROR:', e);
+    const errMsg = e.message || String(e);
+    if (errMsg.includes('user_id') || errMsg.includes('foreign key') || errMsg.includes('fkey')) {
+      showToast('❌ Bitte neu einloggen (Session abgelaufen)', 'error');
+      doLogout(); openAuth();
+    } else if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else {
+      showToast('❌ Fehler: ' + errMsg, 'error');
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Gesuch veröffentlichen'; }
   }
 }
-
 async function submitListing() {
   if (!currentUser) { openAuth(); return; }
   const _userId = (getUID()) || (currentUser?.id) || null;
@@ -5525,14 +5534,17 @@ function toggleCmGesuchVoice() {
 }
 
 async function submitCmGesuch() {
-  if (!currentUser) { openAuth(); return; }
+  // Robuster Session-Guard
+  if (!currentUser) { openAuth(); showToast('\u26a0\ufe0f Bitte zuerst einloggen', 'error'); return; }
+  // user_id sicher ermitteln
+  const _gesuchUserId = getUID();
+  if (!_gesuchUserId) { showToast('\u274c Fehler: Benutzer-ID nicht gefunden. Bitte neu einloggen.', 'error'); doLogout(); openAuth(); return; }
   const was = (document.getElementById('cm-gesuch-was-input')?.value || '').trim();
-  if (!was) { showToast('\u26a0\ufe0f Bitte beschreibe was du suchst'); return; }
+  if (!was) { showToast('\u26a0\ufe0f Bitte beschreibe was du suchst', 'error'); return; }
   const gemeinde = document.getElementById('cm-gesuch-gemeinde')?.value || 'Altdorf';
   const budgetVon = document.getElementById('cm-gesuch-budget-von')?.value || '0';
   const budgetBis = document.getElementById('cm-gesuch-budget-bis')?.value || '0';
   const contact = document.getElementById('cm-gesuch-contact')?.value || '';
-
   let extraFields = {};
   if (cmGesuchDetectedCategory) {
     const config = categoryConfig[cmGesuchDetectedCategory];
@@ -5543,22 +5555,20 @@ async function submitCmGesuch() {
       });
     }
   }
-
   const extraStr = Object.entries(extraFields).map(([k,v]) => k + ': ' + v).join(' | ');
   const desc = extraStr ? was + '\n\n' + extraStr + '\n\nBudget: CHF ' + budgetVon + '\u2013' + budgetBis : was + '\n\nBudget: CHF ' + budgetVon + '\u2013' + budgetBis;
-
   const publishBtn = document.getElementById('publish-btn');
   if (publishBtn) { publishBtn.disabled = true; publishBtn.textContent = '\u23f3 Wird ver\u00f6ffentlicht...'; }
-
   try {
     const payload = {
-      user_id: _userId,
+      user_id: _gesuchUserId,
       title: 'Gesuch: ' + was.substring(0, 60),
       description: desc,
       price: parseFloat(budgetBis) || 0,
       type: 'Gesuch',
       status: 'active',
       location: gemeinde,
+      gemeinde: gemeinde,
       category: cmGesuchDetectedCategory || 'Sonstiges',
       contact_info: contact,
       is_promoted: false,
@@ -5589,13 +5599,24 @@ async function submitCmGesuch() {
     if (smartDiv) { smartDiv.innerHTML = ''; smartDiv.classList.remove('show'); }
     cmGesuchDetectedCategory = null;
   } catch(e) {
-    showToast('\u274c Fehler: ' + e.message);
+    console.error('submitCmGesuch ERROR:', e);
+    const errMsg = e.message || String(e);
+    if (errMsg.includes('user_id') || errMsg.includes('foreign key') || errMsg.includes('fkey')) {
+      showToast('\u274c Bitte neu einloggen (Session abgelaufen)', 'error');
+      doLogout(); openAuth();
+    } else if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('\u274c Sitzung abgelaufen \u2013 bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else if (errMsg.includes('violates check constraint')) {
+      showToast('\u274c Datenbankfehler: Ung\u00fcltiger Wert. Bitte Support kontaktieren.', 'error');
+    } else {
+      showToast('\u274c Fehler: ' + errMsg, 'error');
+    }
   } finally {
     if (publishBtn) { publishBtn.disabled = false; publishBtn.textContent = '\ud83d\udd0d GESUCH VER\u00d6FFENTLICHEN'; }
   }
 }
-
-// --- NEW MODAL FUNCTIONS ---
+// --- NEW MODAL FUNCTIONS ----
 
 function openMeinKaufen() {
   const modal = document.getElementById('mein-kaufen-modal');
