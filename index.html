@@ -3021,9 +3021,7 @@ function openKontoTab(tab) {
 // ============================================================
 // FIX 1: getLevel Alias (getLevelInfo war definiert, getLevel fehlte)
 // ============================================================
-function getLevel(xp) {
-  return getLevelInfo(xp).name;
-}
+// getLevel Alias weiter unten definiert
 
 // ============================================================
 // FIX 2: Platzhalter-Screens für Mein Kaufen / Verkaufen / Taler / Profil
@@ -4653,11 +4651,7 @@ function toggleVoice() {
 // ============================================================
 // GAMIFICATION / XP
 // ============================================================
-function getLevelInfo(xp) {
-  if (xp < 100) return { name: 'Urner Erstling', next: 100, color: '#aaa' };
-  if (xp < 500) return { name: 'Dorf-Kenner', next: 500, color: '#4fc3f7' };
-  return { name: 'Kantons-Legende', next: null, color: '#FFD700' };
-}
+// getLevelInfo ist weiter unten mit 5 Stufen definiert (Beobachter → Gotthard-Titan)
 
 async function addXP(amount, reason) {
   if (!currentUser || !currentProfile) return;
