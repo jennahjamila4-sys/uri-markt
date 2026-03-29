@@ -2362,7 +2362,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <div id="app" style="display:none">
   <!-- HEADER -->
   <div id="header">
-    <div class="header-logo">
+    <div class="header-logo" onclick="swipeTo(0, document.getElementById('nav-0'))" style="cursor:pointer" title="Zurück zum Marktplatz">
       <img src="assets/uri-markt-uristier-logo.png" alt="Uri-Markt Logo">
       <div class="header-logo-text">
         <span>URI-MARKT</span>
@@ -4078,11 +4078,22 @@ function closeDetail() {
 // COMMENTS
 // ============================================================
 const CENSORED_PATTERNS = [
-  /\b\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}\b/g, // phone
+  // Schweizer Nummern: 079 123 45 67, +41 79 123 45 67, 0041791234567
+  /\+41[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g,
+  /0041[\s\-]?\d{2}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g,
+  /0[6-9]\d[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g,
+  // Internationale Nummern
+  /\b\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}\b/g,
   /\b\d{10,}\b/g,
-  /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, // email
+  // E-Mail
+  /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g,
+  // Messenger / Social
   /wa\.me\//gi, /whatsapp/gi, /t\.me\//gi, /telegram/gi,
-  /https?:\/\/[^\s]+/gi
+  /instagram\.com/gi, /facebook\.com/gi, /tiktok\.com/gi,
+  // URLs
+  /https?:\/\/[^\s]+/gi,
+  // Versteckte Nummern (Leerzeichen zwischen Ziffern)
+  /\b(\d[\s\.\-]){6,}\d\b/g
 ];
 
 function censorComment(text) {
@@ -4428,21 +4439,21 @@ function aiFeatureSoon() {
   showToast('✨ KI-Assistent kommt bald! Beschreibe deinen Artikel und die KI erstellt den Text automatisch.');
 }
 
-function handlePhotoUpload(input, slot) {
+async function handlePhotoUpload(input, slot) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
+  // Sofort Vorschau anzeigen (Base64)
   const reader = new FileReader();
   reader.onload = function(e) {
     const slotEl = document.getElementById('photo-' + slot);
     if (slotEl) {
-      // Vorhandenes Bild entfernen
       const existing = slotEl.querySelector('img');
       if (existing) existing.remove();
       const img = document.createElement('img');
       img.src = e.target.result;
       img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px;';
+      img.dataset.slot = slot;
       slotEl.appendChild(img);
-      // Icon und Label ausblenden
       const icon = slotEl.querySelector('.photo-slot-icon');
       const label = slotEl.querySelector('.photo-slot-label');
       if (icon) icon.style.display = 'none';
@@ -4450,6 +4461,38 @@ function handlePhotoUpload(input, slot) {
     }
   };
   reader.readAsDataURL(file);
+  // Zu Supabase Storage hochladen (falls eingeloggt)
+  if (!currentUser) return;
+  try {
+    const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const uid = getUID() || 'anon';
+    const path = 'listings/' + uid + '_' + Date.now() + '_' + slot + '.' + ext;
+    const uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/listings/' + path, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + (currentUser.access_token || currentUser.session?.access_token || ''),
+        'Content-Type': file.type || 'image/jpeg',
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if (uploadRes.ok) {
+      const publicUrl = SUPABASE_URL + '/storage/v1/object/public/listings/' + path;
+      // URL für spätere Verwendung beim Speichern des Inserats speichern
+      if (!window._uploadedPhotos) window._uploadedPhotos = {};
+      window._uploadedPhotos[slot] = publicUrl;
+      // Vorschau-Bild mit echter URL aktualisieren
+      const slotEl = document.getElementById('photo-' + slot);
+      if (slotEl) {
+        const img = slotEl.querySelector('img');
+        if (img) img.dataset.url = publicUrl;
+      }
+    }
+  } catch(e) {
+    // Fehler beim Upload – Vorschau bleibt trotzdem sichtbar
+    console.warn('Photo upload error:', e.message);
+  }
 }
 
 function toggleCreateVoice() {
@@ -4914,18 +4957,121 @@ window.submitCmTeaser = submitCmTeaser;
 function onTeaserCommitmentChange(val) {
   const priceGroup = document.getElementById('cm-teaser-price-group');
   const hint = document.getElementById('cm-teaser-commitment-hint');
+  const headcountGroup = document.getElementById('cm-teaser-headcount-group');
+  const ticketStripeHint = document.getElementById('cm-teaser-stripe-hint');
+  if (priceGroup) priceGroup.classList.remove('visible');
+  if (headcountGroup) headcountGroup.style.display = 'none';
+  if (ticketStripeHint) ticketStripeHint.style.display = 'none';
   if (val === 'waitlist') {
-    if (priceGroup) priceGroup.classList.remove('visible');
-    if (hint) hint.textContent = 'Interessenten tragen sich gratis ein – du sammelst Leads.';
+    if (hint) hint.textContent = '📋 Interessenten tragen sich gratis ein – du sammelst Leads & E-Mails.';
+  } else if (val === 'headcount') {
+    if (headcountGroup) headcountGroup.style.display = 'block';
+    if (hint) hint.textContent = '🪑 Käufer geben an wie viele Personen kommen – ideal für Restaurants & Gratis-Events.';
   } else if (val === 'ticket') {
     if (priceGroup) priceGroup.classList.add('visible');
-    if (hint) hint.textContent = '🎟️ Käufer reservieren einen Platz – QR-Code wird nach Buchung generiert.';
+    if (ticketStripeHint) ticketStripeHint.style.display = 'block';
+    if (hint) hint.textContent = '💳 Klassischer Vorverkauf – Käufer zahlt den vollen Betrag, erhält QR-Code.';
   } else if (val === 'deposit') {
     if (priceGroup) priceGroup.classList.add('visible');
-    if (hint) hint.textContent = '💰 Verbindliche Reservierung mit Anzahlung – maximale Commitment-Rate.';
+    if (hint) hint.textContent = '💰 Käufer zahlt Anzahlung (Teilbetrag), Rest wird vor Ort bezahlt.';
   }
 }
 window.onTeaserCommitmentChange = onTeaserCommitmentChange;
+
+// ============================================================
+// KAFFEE-SPENDE-MODAL (bei 0 CHF Inseraten)
+// ============================================================
+function showCoffeeDonationModal() {
+  return new Promise(function(resolve) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = '<div style="background:var(--surface);border-radius:24px;padding:28px;max-width:360px;width:100%;text-align:center;border:1px solid var(--gold-glow)">' +
+      '<div style="font-size:48px;margin-bottom:12px">☕</div>' +
+      '<h3 style="color:var(--gold);font-size:20px;margin-bottom:8px">Dein Inserat ist gratis!</h3>' +
+      '<p style="color:var(--text-dim);font-size:14px;line-height:1.6;margin-bottom:20px">' +
+      'Uri-Markt lebt von der Gemeinschaft. Wenn du möchtest, spendiere dem Team einen Kaffee – ' +
+      'damit wir die App weiterentwickeln können. 🙏<br>' +
+      '<em style="font-size:12px;color:var(--text-faint)">Deine Uri-Taler werden abgezogen.</em></p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">' +
+      '<button onclick="donateCoffee(1,this)" style="background:var(--surface-2);border:1px solid var(--gold);color:var(--gold);padding:10px 16px;border-radius:12px;cursor:pointer;font-size:14px">☕ CHF 1</button>' +
+      '<button onclick="donateCoffee(3,this)" style="background:var(--surface-2);border:1px solid var(--gold);color:var(--gold);padding:10px 16px;border-radius:12px;cursor:pointer;font-size:14px">☕☕ CHF 3</button>' +
+      '<button onclick="donateCoffee(5,this)" style="background:var(--gold);border:none;color:#000;padding:10px 16px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700">☕☕☕ CHF 5</button>' +
+      '<button onclick="donateCoffee(10,this)" style="background:linear-gradient(135deg,#FFD700,#FFA500);border:none;color:#000;padding:10px 16px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700">🏆 CHF 10</button>' +
+      '</div>' +
+      '<button onclick="closeCoffeeModal()" ' +
+      'style="background:transparent;border:none;color:var(--text-faint);font-size:13px;cursor:pointer;text-decoration:underline">' +
+      'Nein danke, gratis veröffentlichen</button></div>';
+    window._coffeeResolve = resolve;
+    document.body.appendChild(overlay);
+  });
+}
+async function donateCoffee(amount, btn) {
+  const uid = getUID();
+  if (!uid) { showToast('Bitte einloggen', 'error'); return; }
+  const creditsNeeded = amount * 10;
+  const currentCredits = (currentProfile && currentProfile.credits) ? currentProfile.credits : 0;
+  if (currentCredits < creditsNeeded) {
+    showToast('Nicht genug Uri-Taler (benötigt: ' + creditsNeeded + ')', 'error');
+    return;
+  }
+  try {
+    await supaFetch('profiles?id=eq.' + uid, {
+      method: 'PATCH',
+      body: JSON.stringify({ credits: currentCredits - creditsNeeded })
+    });
+    if (currentProfile) currentProfile.credits = currentCredits - creditsNeeded;
+    try {
+      await supaFetch('coffee_donations', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: uid, amount: amount, credits_spent: creditsNeeded })
+      });
+    } catch(e2) {}
+    const overlay = btn.closest('[style]');
+    if (overlay && overlay.style.position === 'fixed') overlay.remove();
+    showToast('☕ Danke! ' + creditsNeeded + ' Uri-Taler gespendet!', 'success');
+    if (window._coffeeResolve) window._coffeeResolve(true);
+  } catch(e) {
+    showToast('Fehler: ' + e.message, 'error');
+  }
+}
+window.donateCoffee = donateCoffee;
+function closeCoffeeModal() {
+  const overlays = document.querySelectorAll('[style*="position:fixed"][style*="z-index:9999"]');
+  overlays.forEach(function(o) { o.remove(); });
+  if (window._coffeeResolve) window._coffeeResolve(false);
+}
+window.closeCoffeeModal = closeCoffeeModal;
+
+// ============================================================
+// DEAL-FLOW: Match → Bestätigung → Kontakt-Freigabe
+// ============================================================
+async function initiateDeal(listingId, sellerId) {
+  if (!currentUser) { openAuth(); return; }
+  const uid = getUID();
+  if (!uid) { showToast('Bitte neu einloggen', 'error'); return; }
+  if (uid === sellerId) { showToast('Du kannst nicht dein eigenes Inserat kaufen', 'error'); return; }
+  try {
+    const existing = await supaFetch('deals?listing_id=eq.' + listingId + '&buyer_id=eq.' + uid);
+    if (existing && existing.length > 0) {
+      showToast('Du hast bereits einen Deal für dieses Inserat', 'info');
+      return;
+    }
+    await supaFetch('deals', {
+      method: 'POST',
+      body: JSON.stringify({
+        listing_id: parseInt(listingId),
+        buyer_id: uid,
+        seller_id: sellerId,
+        status: 'pending',
+        commission_amount: 5
+      })
+    });
+    showToast('🤝 Deal-Anfrage gesendet! Der Verkäufer wird benachrichtigt.', 'success');
+  } catch(e) {
+    showToast('Fehler: ' + e.message, 'error');
+  }
+}
+window.initiateDeal = initiateDeal;
 
 // Ticket buchen und QR generieren
 async function bookTicket(listingId) {
@@ -5595,6 +5741,12 @@ async function submitListing() {
 
   if (!title) { showToast('⚠️ Bitte Titel eingeben'); return; }
 
+  // Kaffee-Spende bei 0 CHF (empathisch)
+  if (price === 0 && selectedType === 'Angebot') {
+    const donated = await showCoffeeDonationModal();
+    if (donated === null) return; // User hat abgebrochen
+  }
+
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Wird veröffentlicht...';
@@ -5613,7 +5765,8 @@ async function submitListing() {
       contact_info: contact,
       is_promoted: false,
       emoji: getCategoryEmoji(category),
-      viewers: Math.floor(Math.random() * 5 + 1)
+      viewers: Math.floor(Math.random() * 5 + 1),
+      image_url: (window._uploadedPhotos && window._uploadedPhotos['main']) || null
     };
     if (countdown) payload.countdown = new Date(countdown).toISOString();
 
@@ -5630,6 +5783,7 @@ async function submitListing() {
     document.getElementById('form-desc').value = '';
     document.getElementById('form-price').value = '';
     document.getElementById('form-contact').value = '';
+    window._uploadedPhotos = {};
 
     addXP(10, 'Inserat erstellt');
     showToast('🎉 Inserat veröffentlicht!');
@@ -7628,9 +7782,10 @@ window.switchDashTab = switchDashTab;
         <div class="konto-field">
           <label class="konto-label">🎯 Verbindlichkeit / Commitment</label>
           <select class="konto-input" id="cm-teaser-commitment" style="color:#fff" onchange="onTeaserCommitmentChange(this.value)">
-            <option value="waitlist">🔔 Warteliste (kostenlos, Lead-Sammlung)</option>
-            <option value="ticket">🎟️ Ticket buchen (Reservierung ohne Zahlung)</option>
-            <option value="deposit">💰 Anzahlung (Verbindliche Reservierung mit Betrag)</option>
+            <option value="waitlist">📋 Nur eintragen (Kostenlose Warteliste)</option>
+            <option value="headcount">🪑 Platzreservierung (Headcount – z.B. "Wir kommen zu 3")</option>
+            <option value="ticket">💳 Komplettbetrag zahlen (Ticketkauf)</option>
+            <option value="deposit">💰 Vorab-Anzahlung (Commitment – Rest vor Ort)</option>
           </select>
           <div style="font-size:11px;color:var(--text-faint);margin-top:4px" id="cm-teaser-commitment-hint">
             Interessenten tragen sich gratis ein – du sammelst Leads.
@@ -7640,8 +7795,15 @@ window.switchDashTab = switchDashTab;
         <div class="commitment-price-group" id="cm-teaser-price-group">
           <label class="konto-label">💶 Preis / Anzahlung (CHF)</label>
           <input type="number" class="konto-input" id="cm-teaser-price" value="0" min="0" step="0.50" placeholder="z.B. 25">
-          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px" id="cm-teaser-stripe-hint" style="display:none">
             ⚠️ Zahlung erfolgt aktuell direkt (Twint/Bar). Stripe-Integration folgt.
+            <br><a href="mailto:kontakt@uri-markt.ch?subject=Stripe-Feature" style="color:var(--primary)">💬 Wünschst du diese Funktion? Schreib uns!</a>
+          </div>
+          <!-- HEADCOUNT-GRUPPE (nur bei headcount) -->
+          <div id="cm-teaser-headcount-group" style="display:none;margin-top:12px">
+            <label class="konto-label">👥 Max. Personen pro Gruppe</label>
+            <input type="number" class="konto-input" id="cm-teaser-headcount-max" value="10" min="1" max="100" placeholder="z.B. 10">
+            <div style="font-size:11px;color:var(--text-faint);margin-top:4px">Käufer können angeben: "Wir kommen zu 3" – du siehst die Gesamtzahl.</div>
           </div>
         </div>
         <div class="konto-field">
