@@ -2153,6 +2153,150 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
 .pioneer-banner-text h4 { font-size:13px; font-weight:800; color:var(--gold); margin:0 0 2px; }
 .pioneer-banner-text p { font-size:11px; color:var(--text-faint); margin:0; }
 
+
+/* ===== QR TICKET SYSTEM ===== */
+.ticket-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.ticket-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold), var(--orange));
+}
+.ticket-qr-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+}
+.ticket-qr-wrapper canvas, .ticket-qr-wrapper img {
+  border-radius: 8px;
+}
+.ticket-info { margin-bottom: 12px; }
+.ticket-title { font-size: 16px; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
+.ticket-meta { font-size: 12px; color: var(--text-faint); }
+.ticket-code { 
+  font-family: monospace; 
+  font-size: 14px; 
+  color: var(--orange); 
+  font-weight: 700;
+  text-align: center;
+  margin-top: 8px;
+  letter-spacing: 2px;
+}
+.ticket-used-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.ticket-valid-badge {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: var(--green);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+/* Scanner */
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.scanner-video-wrapper {
+  position: relative;
+  width: min(90vw, 400px);
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 3px solid var(--gold);
+}
+.scanner-video-wrapper video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.scanner-crosshair {
+  position: absolute;
+  inset: 20%;
+  border: 3px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
+  animation: scanner-pulse 1.5s ease-in-out infinite;
+}
+@keyframes scanner-pulse {
+  0%, 100% { border-color: var(--gold); }
+  50% { border-color: var(--orange); }
+}
+.scanner-result {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 16px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  min-width: 280px;
+}
+.scanner-result.valid { background: rgba(0,200,100,0.2); border: 2px solid var(--green); color: var(--green); }
+.scanner-result.invalid { background: rgba(255,68,68,0.2); border: 2px solid var(--red); color: var(--red); }
+/* Commitment Preis-Feld */
+.commitment-price-group {
+  background: rgba(255,165,0,0.08);
+  border: 1px solid rgba(255,165,0,0.3);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: none;
+}
+.commitment-price-group.visible { display: block; }
+/* Ticket-Buchungs-Button */
+.cs-ticket-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--gold), var(--orange));
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 12px;
+  letter-spacing: 0.3px;
+}
+.cs-waitlist-btn {
+  width: 100%;
+  padding: 14px;
+  background: rgba(255,215,0,0.1);
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
 </style>
 <script>
 // ============================================================
@@ -2659,6 +2803,33 @@ window.addEventListener('unhandledrejection', function(e) {
   </div>
 </div>
 <!-- TOAST -->
+
+<!-- MEINE TICKETS MODAL -->
+<div id="my-tickets-modal" class="auth-overlay">
+  <div class="auth-modal" style="max-width:420px">
+    <div class="auth-modal-header">
+      <div class="auth-modal-title">🎟️ Meine Tickets</div>
+      <button class="auth-modal-close" onclick="closeMyTickets()">✕</button>
+    </div>
+    <div id="my-tickets-content" style="padding:16px;max-height:70vh;overflow-y:auto">
+      <div style="text-align:center;padding:40px;color:var(--text-faint)">⏳ Lade...</div>
+    </div>
+  </div>
+</div>
+
+<!-- QR-SCANNER OVERLAY -->
+<div id="qr-scanner-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:20px">
+  <button onclick="closeQRScanner()" style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:24px;width:44px;height:44px;border-radius:50%;cursor:pointer">✕</button>
+  <div style="color:var(--gold);font-size:18px;font-weight:800;margin-bottom:20px">📷 QR-Code scannen</div>
+  <div class="scanner-video-wrapper">
+    <video id="scanner-video" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+    <canvas id="scanner-canvas" style="display:none"></canvas>
+    <div class="scanner-crosshair"></div>
+  </div>
+  <div id="scanner-result" class="scanner-result" style="display:none"></div>
+  <button onclick="openQRScanner()" style="margin-top:16px;background:rgba(255,215,0,0.1);border:1px solid var(--gold);color:var(--gold);padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px">🔄 Erneut scannen</button>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -3688,12 +3859,25 @@ function openDetail(id) {
         <span class="modal-fomo-text">🔥 ${viewers} Personen schauen gerade auf dieses Inserat</span>
       </div>
       ${l.description ? `<div class="modal-desc">${escHtml(l.description)}</div>` : ''}
-      ${isComingSoon && l.countdown ? `
+      ${isComingSoon && (l.countdown || l.available_from) ? `
         <div class="cs-countdown" style="margin-bottom:16px;display:inline-block">
           <div class="cs-countdown-label">STARTET IN</div>
-          <div class="cs-countdown-time" data-countdown="${l.countdown}">--:--:--</div>
+          <div class="cs-countdown-time" data-countdown="${l.countdown || l.available_from}">--:--:--</div>
         </div>` : ''}
-      ${!isSold && !isOwner ? renderContactSection(l) : ''}
+      ${isComingSoon ? `
+        <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:12px;padding:14px;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text-faint);margin-bottom:8px">
+            ${l.commitment === 'ticket' || l.commitment === 'deposit' 
+              ? '🎟️ Reserviere jetzt deinen Platz – QR-Code wird sofort generiert.' 
+              : '🔔 Trage dich auf die Warteliste ein – du wirst als Erstes benachrichtigt.'}
+          </div>
+          ${l.spots_total ? `<div style="font-size:12px;color:var(--orange);margin-bottom:12px">⚡ Noch ${Math.max(0, (l.spots_total||50) - (l.spots_taken||0))} Plätze verfügbar</div>` : ''}
+          ${l.commitment === 'ticket' || l.commitment === 'deposit'
+            ? `<button id="book-ticket-btn-${l.id}" class="cs-ticket-btn" onclick="bookTicket('${l.id}')">🎟️ Ticket buchen${l.price_ticket > 0 ? ' · CHF ' + l.price_ticket : ' (kostenlos)'}</button>`
+            : `<button class="cs-waitlist-btn" onclick="joinWaitlist('${l.id}')">🔔 Auf Warteliste eintragen</button>`
+          }
+        </div>` : ''}
+      ${!isSold && !isOwner && !isComingSoon ? renderContactSection(l) : ''}
       ${isOwner || isAdmin ? renderOwnerActions(l) : ''}
       <div class="comments-section">
         <div class="comments-title">💬 Kommentare</div>
@@ -4551,6 +4735,246 @@ async function submitCmTeaser() {
   }
 }
 window.submitCmTeaser = submitCmTeaser;
+
+// ============================================================
+// QR-TICKET SYSTEM - VOLLSTÄNDIGE IMPLEMENTIERUNG
+// ============================================================
+
+// Commitment-Change Handler für Teaser-Formular
+function onTeaserCommitmentChange(val) {
+  const priceGroup = document.getElementById('cm-teaser-price-group');
+  const hint = document.getElementById('cm-teaser-commitment-hint');
+  if (val === 'waitlist') {
+    if (priceGroup) priceGroup.classList.remove('visible');
+    if (hint) hint.textContent = 'Interessenten tragen sich gratis ein – du sammelst Leads.';
+  } else if (val === 'ticket') {
+    if (priceGroup) priceGroup.classList.add('visible');
+    if (hint) hint.textContent = '🎟️ Käufer reservieren einen Platz – QR-Code wird nach Buchung generiert.';
+  } else if (val === 'deposit') {
+    if (priceGroup) priceGroup.classList.add('visible');
+    if (hint) hint.textContent = '💰 Verbindliche Reservierung mit Anzahlung – maximale Commitment-Rate.';
+  }
+}
+window.onTeaserCommitmentChange = onTeaserCommitmentChange;
+
+// Ticket buchen und QR generieren
+async function bookTicket(listingId) {
+  if (!currentUser) { openAuth(); return; }
+  const uid = getUID();
+  if (!uid) { showToast('❌ Bitte neu einloggen', 'error'); return; }
+  const listing = allListings.find(function(l) { return l.id == listingId; });
+  if (!listing) { showToast('❌ Inserat nicht gefunden', 'error'); return; }
+  const btn = document.getElementById('book-ticket-btn-' + listingId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ticket wird erstellt...'; }
+  try {
+    const qrCode = 'URI-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const payload = {
+      listing_id: parseInt(listingId),
+      buyer_id: uid,
+      buyer_email: (currentUser && currentUser.user && currentUser.user.email) ? currentUser.user.email : (currentUser && currentUser.email ? currentUser.email : ''),
+      buyer_name: (currentProfile && currentProfile.username) ? currentProfile.username : 'Anonym',
+      qr_code: qrCode,
+      used: false
+    };
+    const data = await supaFetch('tickets', { method: 'POST', body: JSON.stringify(payload) });
+    if (data && (Array.isArray(data) ? data.length > 0 : data.id)) {
+      showToast('🎟️ Ticket gebucht! QR-Code generiert.', 'success');
+      closeDetail();
+      setTimeout(function() { openMyTickets(); }, 300);
+    } else {
+      throw new Error('Ticket konnte nicht erstellt werden');
+    }
+  } catch(e) {
+    showToast('❌ Fehler: ' + (e.message || 'Unbekannt'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🎟️ Ticket buchen'; }
+  }
+}
+window.bookTicket = bookTicket;
+
+// Warteliste eintragen
+async function joinWaitlist(listingId) {
+  if (!currentUser) { openAuth(); return; }
+  const uid = getUID();
+  if (!uid) { showToast('❌ Bitte neu einloggen', 'error'); return; }
+  try {
+    const payload = {
+      listing_id: parseInt(listingId),
+      user_id: uid,
+      user_email: (currentUser && currentUser.user && currentUser.user.email) ? currentUser.user.email : '',
+      user_name: (currentProfile && currentProfile.username) ? currentProfile.username : 'Anonym'
+    };
+    await supaFetch('waitlist', { method: 'POST', body: JSON.stringify(payload) });
+    const listing = allListings.find(function(l) { return l.id == listingId; });
+    if (listing) {
+      listing.spots_taken = (listing.spots_taken || 0) + 1;
+      renderListings();
+    }
+    showToast('🔔 Du bist auf der Warteliste!');
+    closeDetail();
+  } catch(e) {
+    if (e.message && (e.message.includes('duplicate') || e.message.includes('23505'))) {
+      showToast('ℹ️ Du bist bereits auf der Warteliste');
+    } else {
+      showToast('❌ Fehler: ' + (e.message || 'Unbekannt'), 'error');
+    }
+  }
+}
+window.joinWaitlist = joinWaitlist;
+
+// Meine Tickets Modal öffnen
+async function openMyTickets() {
+  if (!currentUser) { openAuth(); return; }
+  const uid = getUID();
+  const modal = document.getElementById('my-tickets-modal');
+  const content = document.getElementById('my-tickets-content');
+  if (!modal || !content) return;
+  content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">⏳ Lade Tickets...</div>';
+  modal.classList.add('open');
+  try {
+    const tickets = await supaFetch('tickets?buyer_id=eq.' + uid + '&order=created_at.desc');
+    if (!tickets || tickets.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">🎟️ Noch keine Tickets.<br><small>Buche ein Ticket bei einer Vorankündigung!</small></div>';
+      return;
+    }
+    const listingIds = Array.from(new Set(tickets.map(function(t) { return t.listing_id; })));
+    var listingMap = {};
+    try {
+      const listings = await supaFetch('listings?id=in.(' + listingIds.join(',') + ')');
+      if (listings) listings.forEach(function(l) { listingMap[l.id] = l; });
+    } catch(e2) {}
+    content.innerHTML = tickets.map(function(ticket) {
+      const listing = listingMap[ticket.listing_id] || {};
+      return '<div class="ticket-card">' +
+        (ticket.used ? '<div class="ticket-used-badge">✅ EINGELÖST</div>' : '<div class="ticket-valid-badge">✓ GÜLTIG</div>') +
+        '<div class="ticket-info">' +
+          '<div class="ticket-title">' + escHtml(listing.title || 'Event') + '</div>' +
+          '<div class="ticket-meta">📍 ' + escHtml(listing.location || 'Uri') + ' · ' + (ticket.created_at ? new Date(ticket.created_at).toLocaleDateString('de-CH') : '') + '</div>' +
+          (listing.available_from ? '<div class="ticket-meta">📅 Event: ' + new Date(listing.available_from).toLocaleDateString('de-CH') + '</div>' : '') +
+          (listing.price_ticket > 0 ? '<div class="ticket-meta">💶 CHF ' + listing.price_ticket + '</div>' : '') +
+        '</div>' +
+        '<div class="ticket-qr-wrapper" id="qr-wrapper-' + ticket.id + '">' +
+          '<div style="text-align:center;color:#999;font-size:12px">⏳ QR wird geladen...</div>' +
+        '</div>' +
+        '<div class="ticket-code">' + escHtml(ticket.qr_code) + '</div>' +
+      '</div>';
+    }).join('');
+    // QR-Codes rendern
+    tickets.forEach(function(ticket) {
+      const wrapper = document.getElementById('qr-wrapper-' + ticket.id);
+      if (wrapper && typeof QRCode !== 'undefined') {
+        wrapper.innerHTML = '';
+        new QRCode(wrapper, {
+          text: ticket.qr_code,
+          width: 180,
+          height: 180,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      } else if (wrapper) {
+        wrapper.innerHTML = '<div style="font-size:40px;text-align:center;padding:20px">🔲<br><small style="font-size:12px;color:#999">' + ticket.qr_code + '</small></div>';
+      }
+    });
+  } catch(e) {
+    content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">❌ Fehler: ' + e.message + '</div>';
+  }
+}
+window.openMyTickets = openMyTickets;
+
+function closeMyTickets() {
+  const modal = document.getElementById('my-tickets-modal');
+  if (modal) modal.classList.remove('open');
+}
+window.closeMyTickets = closeMyTickets;
+
+// QR-Scanner öffnen
+function openQRScanner() {
+  const overlay = document.getElementById('qr-scanner-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  const video = document.getElementById('scanner-video');
+  const canvas = document.getElementById('scanner-canvas');
+  const resultEl = document.getElementById('scanner-result');
+  if (resultEl) { resultEl.style.display = 'none'; resultEl.innerHTML = ''; }
+  let scanning = true;
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function(stream) {
+    video.srcObject = stream;
+    video.play();
+    const ctx = canvas.getContext('2d');
+    function scan() {
+      if (!scanning) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (typeof jsQR !== 'undefined') {
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data && code.data.startsWith('URI-')) {
+            scanning = false;
+            stream.getTracks().forEach(function(t) { t.stop(); });
+            validateQRCode(code.data, resultEl);
+            return;
+          }
+        }
+      }
+      requestAnimationFrame(scan);
+    }
+    requestAnimationFrame(scan);
+  }).catch(function(e) {
+    if (resultEl) {
+      resultEl.innerHTML = '❌ Kamera nicht verfügbar: ' + e.message;
+      resultEl.className = 'scanner-result invalid';
+      resultEl.style.display = 'block';
+    }
+  });
+}
+window.openQRScanner = openQRScanner;
+
+function closeQRScanner() {
+  const overlay = document.getElementById('qr-scanner-overlay');
+  if (overlay) overlay.style.display = 'none';
+  const video = document.getElementById('scanner-video');
+  if (video && video.srcObject) {
+    video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+    video.srcObject = null;
+  }
+}
+window.closeQRScanner = closeQRScanner;
+
+async function validateQRCode(qrCode, resultEl) {
+  if (!resultEl) return;
+  resultEl.innerHTML = '⏳ Prüfe QR-Code...';
+  resultEl.className = 'scanner-result';
+  resultEl.style.display = 'block';
+  try {
+    const tickets = await supaFetch('tickets?qr_code=eq.' + encodeURIComponent(qrCode));
+    if (!tickets || tickets.length === 0) {
+      resultEl.innerHTML = '❌ UNGÜLTIG<br><small>QR-Code nicht gefunden</small>';
+      resultEl.className = 'scanner-result invalid';
+      return;
+    }
+    const ticket = tickets[0];
+    if (ticket.used) {
+      resultEl.innerHTML = '❌ BEREITS EINGELÖST<br><small>Eingelöst am ' + (ticket.used_at ? new Date(ticket.used_at).toLocaleString('de-CH') : 'unbekannt') + '</small>';
+      resultEl.className = 'scanner-result invalid';
+      return;
+    }
+    await supaFetch('tickets?id=eq.' + ticket.id, {
+      method: 'PATCH',
+      body: JSON.stringify({ used: true, used_at: new Date().toISOString() })
+    });
+    resultEl.innerHTML = '✅ GÜLTIG!<br><small>' + escHtml(ticket.buyer_name || ticket.buyer_email || 'Gast') + '<br>' + escHtml(qrCode) + '</small>';
+    resultEl.className = 'scanner-result valid';
+    showToast('✅ Ticket eingelöst!', 'success');
+  } catch(e) {
+    resultEl.innerHTML = '❌ Fehler: ' + e.message;
+    resultEl.className = 'scanner-result invalid';
+  }
+}
+window.validateQRCode = validateQRCode;
+
+
 
 // Voice für Create-Modal Teaser
 let cmTeaserRecognition = null;
@@ -6984,6 +7408,26 @@ window.switchDashTab = switchDashTab;
         <div class="konto-field">
           <label class="konto-label">&#x1F39F;&#xFE0F; Max. Wartelisten-Pl&#228;tze <span style="color:var(--orange);font-size:10px">(Scarcity!)</span></label>
           <input type="number" class="konto-input" id="cm-teaser-spots" value="50" min="1" max="9999">
+        </div>
+        <!-- COMMITMENT: Verbindlichkeit -->
+        <div class="konto-field">
+          <label class="konto-label">🎯 Verbindlichkeit / Commitment</label>
+          <select class="konto-input" id="cm-teaser-commitment" style="color:#fff" onchange="onTeaserCommitmentChange(this.value)">
+            <option value="waitlist">🔔 Warteliste (kostenlos, Lead-Sammlung)</option>
+            <option value="ticket">🎟️ Ticket buchen (Reservierung ohne Zahlung)</option>
+            <option value="deposit">💰 Anzahlung (Verbindliche Reservierung mit Betrag)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px" id="cm-teaser-commitment-hint">
+            Interessenten tragen sich gratis ein – du sammelst Leads.
+          </div>
+        </div>
+        <!-- PREIS-FELD (nur bei ticket/deposit) -->
+        <div class="commitment-price-group" id="cm-teaser-price-group">
+          <label class="konto-label">💶 Preis / Anzahlung (CHF)</label>
+          <input type="number" class="konto-input" id="cm-teaser-price" value="0" min="0" step="0.50" placeholder="z.B. 25">
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">
+            ⚠️ Zahlung erfolgt aktuell direkt (Twint/Bar). Stripe-Integration folgt.
+          </div>
         </div>
         <div class="konto-field">
           <label class="konto-label">Kontakt (WhatsApp/Tel/Email)</label>
