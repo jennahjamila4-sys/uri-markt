@@ -2502,17 +2502,37 @@ window.addEventListener('unhandledrejection', function(e) {
         <div class="form-group">
           <label class="form-label">Gemeinde</label>
           <select class="form-select" id="gesuch-gemeinde">
-            <option value="Altdorf">Altdorf</option><option value="Erstfeld">Erstfeld</option>
-            <option value="Schattdorf">Schattdorf</option><option value="Bürglen">Bürglen</option>
-            <option value="Attinghausen">Attinghausen</option><option value="Seedorf">Seedorf</option>
-            <option value="Andermatt">Andermatt</option><option value="Ganz Uri">Ganz Uri</option>
+            <option value="Altdorf">Altdorf (Hauptort)</option>
+            <option value="Bürglen">Bürglen</option>
+            <option value="Schattdorf">Schattdorf</option>
+            <option value="Attinghausen">Attinghausen</option>
+            <option value="Erstfeld">Erstfeld</option>
+            <option value="Silenen">Silenen</option>
+            <option value="Amsteg">Amsteg</option>
+            <option value="Gurtnellen">Gurtnellen</option>
+            <option value="Wassen">Wassen</option>
+            <option value="Göschenen">Göschenen</option>
+            <option value="Andermatt">Andermatt</option>
+            <option value="Hospental">Hospental</option>
+            <option value="Realp">Realp</option>
+            <option value="Flüelen">Flüelen</option>
+            <option value="Seedorf">Seedorf</option>
+            <option value="Bauen">Bauen</option>
+            <option value="Isenthal">Isenthal</option>
+            <option value="Seelisberg">Seelisberg</option>
+            <option value="Spiringen">Spiringen</option>
+            <option value="Unterschächen">Unterschächen</option>
+            <option value="Ganz Uri">🗺️ Ganz Uri</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="gesuch-kontakt">Dein Kontakt (WhatsApp/Tel/Email)</label>
           <input type="text" class="form-input" id="gesuch-contact" placeholder="z.B. https://wa.me/41791234567">
         </div>
-        <button class="submit-btn" onclick="submitGesuch()" id="gesuch-submit-btn">🔍 Gesuch veröffentlichen</button>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button class="submit-btn" onclick="saveGesuchDraft()" id="gesuch-draft-btn" style="flex:1;background:rgba(255,255,255,0.08);color:var(--text-faint);border:1px solid rgba(255,255,255,0.15)">💾 Als Entwurf speichern</button>
+          <button class="submit-btn" onclick="submitGesuch()" id="gesuch-submit-btn" style="flex:2">🔍 Gesuch veröffentlichen</button>
+        </div>
       </div>
 
       <!-- NORMALES ANGEBOT/VORANKUENDIGUNG FORMULAR -->
@@ -2649,7 +2669,7 @@ window.addEventListener('unhandledrejection', function(e) {
         <div style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:14px;margin-bottom:16px">
           <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
             <div style="position:relative;width:44px;height:24px;flex-shrink:0">
-              <input type="checkbox" id="teaser-waitlist-toggle" checked style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:2;width:100%;height:100%;margin:0">
+              <input type="checkbox" id="teaser-waitlist-toggle" checked onchange="onWaitlistToggleChange(this.checked)" style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:2;width:100%;height:100%;margin:0">
               <div id="teaser-toggle-track" style="position:absolute;inset:0;background:var(--gold);border-radius:12px;transition:background 0.2s"></div>
               <div id="teaser-toggle-thumb" style="position:absolute;top:2px;left:2px;width:20px;height:20px;background:#000;border-radius:50%;transition:transform 0.2s;transform:translateX(20px)"></div>
             </div>
@@ -2658,6 +2678,24 @@ window.addEventListener('unhandledrejection', function(e) {
               <div style="font-size:11px;color:var(--text-faint)">Interessenten können sich eintragen – du sammelst Leads!</div>
             </div>
           </label>
+          <!-- Kontakttyp für Warteliste -->
+          <div id="teaser-waitlist-contact-type-group" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,215,0,0.2)">
+            <div style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:8px">📋 Womit sollen sich Interessenten eintragen?</div>
+            <div style="display:flex;gap:8px">
+              <label style="flex:1;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;cursor:pointer">
+                <input type="radio" name="teaser-contact-type" value="email" checked style="accent-color:var(--gold)">
+                <span style="font-size:12px;color:var(--text)">📧 E-Mail</span>
+              </label>
+              <label style="flex:1;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;cursor:pointer">
+                <input type="radio" name="teaser-contact-type" value="phone" style="accent-color:var(--gold)">
+                <span style="font-size:12px;color:var(--text)">📱 Handynummer</span>
+              </label>
+              <label style="flex:1;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 10px;cursor:pointer">
+                <input type="radio" name="teaser-contact-type" value="both" style="accent-color:var(--gold)">
+                <span style="font-size:12px;color:var(--text)">📧+📱 Beides</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- LIMITIERTE PLÄTZE (SCARCITY) -->
@@ -3867,18 +3905,23 @@ function openDetail(id) {
       ${isComingSoon ? `
         <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:12px;padding:14px;margin-bottom:16px">
           <div style="font-size:13px;color:var(--text-faint);margin-bottom:8px">
-            ${l.commitment === 'ticket' || l.commitment === 'deposit' 
-              ? '🎟️ Reserviere jetzt deinen Platz – QR-Code wird sofort generiert.' 
+            ${l.commitment === 'ticket'
+              ? '🎟️ Kaufe jetzt dein Ticket – QR-Code wird sofort generiert. Zahlung direkt via Twint/Bar.'
+              : l.commitment === 'deposit'
+              ? '💰 Anzahlung sichert deinen Platz. Restbetrag vor Ort. Zahlung via Twint/Bar.'
               : '🔔 Trage dich auf die Warteliste ein – du wirst als Erstes benachrichtigt.'}
           </div>
           ${l.spots_total ? `<div style="font-size:12px;color:var(--orange);margin-bottom:12px">⚡ Noch ${Math.max(0, (l.spots_total||50) - (l.spots_taken||0))} Plätze verfügbar</div>` : ''}
-          ${l.commitment === 'ticket' || l.commitment === 'deposit'
-            ? `<button id="book-ticket-btn-${l.id}" class="cs-ticket-btn" onclick="bookTicket('${l.id}')">🎟️ Ticket buchen${l.price_ticket > 0 ? ' · CHF ' + l.price_ticket : ' (kostenlos)'}</button>`
+          ${l.commitment === 'ticket'
+            ? `<button id="book-ticket-btn-${l.id}" class="cs-ticket-btn" onclick="bookTicket('${l.id}')">🎟️ Ticket kaufen${l.price_ticket > 0 ? ' · CHF ' + l.price_ticket : ' (kostenlos)'}</button>`
+            : l.commitment === 'deposit'
+            ? `<button id="book-ticket-btn-${l.id}" class="cs-ticket-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706)" onclick="bookTicket('${l.id}')">💰 Anzahlung leisten${l.price_ticket > 0 ? ' · CHF ' + l.price_ticket : ''}</button>`
             : `<button class="cs-waitlist-btn" onclick="joinWaitlist('${l.id}')">🔔 Auf Warteliste eintragen</button>`
           }
         </div>` : ''}
       ${!isSold && !isOwner && !isComingSoon ? renderContactSection(l) : ''}
       ${isOwner || isAdmin ? renderOwnerActions(l) : ''}
+      ${renderShareButton(l)}
       <div class="comments-section">
         <div class="comments-title">💬 Kommentare</div>
         <div id="comments-list-${l.id}"><div style="color:var(--text-faint);font-size:13px">Lade Kommentare...</div></div>
@@ -3967,9 +4010,39 @@ function renderOwnerActions(l) {
   <div class="owner-actions">
     ${!isSold ? `<button class="owner-btn btn-sold" onclick="markSold('${l.id}')">✅ Als verkauft markieren</button>` : ''}
     <button class="owner-btn btn-boost" onclick="boostListing('${l.id}')">🚀 Boost (50 Taler)</button>
-    <button class="owner-btn btn-delete" onclick="deleteListing('${l.id}')">🗑️</button>
+    <button class="owner-btn btn-delete" onclick="deleteListing('${l.id}')">🗑️ Löschen</button>
   </div>`;
 }
+
+function renderShareButton(l) {
+  const shareUrl = window.location.origin + window.location.pathname + '?listing=' + l.id;
+  const shareText = (l.title || 'Inserat') + (l.price > 0 ? ' · CHF ' + l.price : '') + ' – Uri-Markt';
+  return `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+    <button onclick="shareListingNow('${l.id}','${escHtml(l.title||'')}',${l.price||0})" style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:var(--text);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+      📤 Inserat teilen
+    </button>
+  </div>`;
+}
+
+async function shareListingNow(id, title, price) {
+  const shareUrl = window.location.origin + window.location.pathname + '?listing=' + id;
+  const shareText = title + (price > 0 ? ' · CHF ' + price : '') + ' – Uri-Markt';
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Uri-Markt: ' + title, text: shareText, url: shareUrl });
+      return;
+    } catch(e) { /* Fallback */ }
+  }
+  // Fallback: Copy to clipboard + Share-Sheet
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    showToast('🔗 Link kopiert! ' + shareUrl);
+  } catch(e) {
+    // Letzter Fallback: Prompt
+    prompt('Link kopieren:', shareUrl);
+  }
+}
+window.shareListingNow = shareListingNow;
 
 function unlockContact(id) {
   // Login-Gate: Nicht angemeldete User werden aufgefordert sich anzumelden
@@ -4144,22 +4217,118 @@ async function boostListing(id) {
 async function deleteListing(id) {
   if (!confirm('Inserat wirklich löschen?')) return;
   try {
-    const isDemo = id.startsWith('demo-');
+    const idStr = String(id);
+    const isDemo = idStr.startsWith('demo-') || idStr.startsWith('new-');
     if (!isDemo) {
-      await supaFetch(`listings?id=eq.${id}`, { method: 'DELETE' });
+      if (!currentUser) { openAuth(); return; }
+      // Erst prüfen ob User der Eigentümer ist
+      const uid = getUID();
+      const listing = allListings.find(function(l) { return String(l.id) === idStr; });
+      if (listing && listing.user_id && listing.user_id !== uid) {
+        showToast('❌ Du kannst nur deine eigenen Inserate löschen');
+        return;
+      }
+      // Supabase DELETE mit user_id Filter (RLS-konform)
+      const result = await supaFetch('listings?id=eq.' + id + '&user_id=eq.' + uid, { method: 'DELETE' });
+      // Auch zugehörige Tickets und Wartelisten-Einträge löschen
+      try {
+        await supaFetch('tickets?listing_id=eq.' + id, { method: 'DELETE' });
+        await supaFetch('waitlist?listing_id=eq.' + id, { method: 'DELETE' });
+      } catch(e2) { /* Ignorieren falls Tabellen nicht existieren */ }
     }
-    allListings = allListings.filter(x => x.id !== id);
+    allListings = allListings.filter(function(x) { return String(x.id) !== idStr; });
     closeDetail();
     renderListings();
-    showToast('🗑️ Inserat gelöscht');
+    showToast('🗑️ Inserat erfolgreich gelöscht');
   } catch(e) {
-    showToast('❌ Fehler: ' + e.message);
+    console.error('deleteListing error:', e);
+    if (e.message && e.message.includes('403')) {
+      showToast('❌ Keine Berechtigung – nur der Ersteller kann löschen');
+    } else if (e.message && e.message.includes('JWT')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu anmelden');
+      setTimeout(openAuth, 1000);
+    } else {
+      showToast('❌ Löschen fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler'));
+    }
   }
 }
 
 async function reserveSpot(id) {
   if (!currentUser) { openAuth(); return; }
-  showToast('🔔 Du wirst benachrichtigt wenn es startet!');
+  // Smart-Routing: Commitment des Listings prüfen
+  const listing = allListings.find(function(l) { return String(l.id) === String(id); });
+  if (!listing) { showToast('❌ Inserat nicht gefunden'); return; }
+  const commitment = listing.commitment || 'waitlist';
+  if (commitment === 'ticket') {
+    // Direkt Ticket buchen
+    await bookTicket(id);
+  } else if (commitment === 'deposit') {
+    // Anzahlung: Hinweis + Ticket-Buchung
+    showToast('💰 Anzahlung erforderlich · Zahlung direkt via Twint/Bar');
+    setTimeout(function() { bookTicket(id); }, 1200);
+  } else {
+    // Warteliste: Smart-Routing Dialog
+    const choice = await showCommitmentChoice(listing);
+    if (choice === 'waitlist') {
+      await joinWaitlist(id);
+    } else if (choice === 'notify') {
+      // Nur Benachrichtigung: in Supabase als notify eintragen
+      try {
+        if (!currentUser) { openAuth(); return; }
+        const uid = getUID();
+        const profile = currentProfile || {};
+        await supaFetch('waitlist', {
+          method: 'POST',
+          body: JSON.stringify({
+            listing_id: id,
+            user_id: uid,
+            user_email: currentUser.email || '',
+            user_name: profile.username || currentUser.email || '',
+            notify_only: true
+          })
+        });
+        showToast('🔔 Du wirst benachrichtigt wenn der Event startet!');
+      } catch(e) {
+        if (e.message && e.message.includes('duplicate')) {
+          showToast('ℹ️ Du wirst bereits benachrichtigt');
+        } else {
+          showToast('❌ Fehler: ' + (e.message || 'Unbekannt'));
+        }
+      }
+    }
+  }
+}
+
+// Smart Commitment Choice Dialog
+function showCommitmentChoice(listing) {
+  return new Promise(function(resolve) {
+    // Bestehende Dialoge entfernen
+    const existing = document.getElementById('commitment-choice-overlay');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'commitment-choice-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+    const spotsLeft = Math.max(0, (listing.spots_total || 50) - (listing.spots_taken || 0));
+    overlay.innerHTML = `
+      <div style="background:#1a1a1a;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;border-top:2px solid var(--gold)">
+        <div style="font-size:16px;font-weight:800;color:var(--gold);margin-bottom:6px">🎯 Was möchtest du tun?</div>
+        <div style="font-size:13px;color:var(--text-faint);margin-bottom:20px">\${escHtml(listing.title || 'Event')}\${spotsLeft < 10 ? ' · <span style="color:var(--orange)">⚡ Nur noch ' + spotsLeft + ' Plätze!</span>' : ''}</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="document.getElementById('commitment-choice-overlay').remove();window._commitmentResolve('waitlist')" style="background:linear-gradient(135deg,var(--gold),#e6a800);color:#000;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:800;cursor:pointer">
+            🔔 Auf Warteliste eintragen
+            <div style="font-size:11px;font-weight:400;margin-top:2px">Ich möchte einen Platz reservieren</div>
+          </button>
+          <button onclick="document.getElementById('commitment-choice-overlay').remove();window._commitmentResolve('notify')" style="background:rgba(255,255,255,0.08);color:var(--text);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer">
+            🔕 Nur benachrichtigen
+            <div style="font-size:11px;font-weight:400;margin-top:2px;color:var(--text-faint)">Ich möchte nur informiert werden wenn es startet</div>
+          </button>
+          <button onclick="document.getElementById('commitment-choice-overlay').remove();window._commitmentResolve(null)" style="background:transparent;color:var(--text-faint);border:none;padding:10px;font-size:13px;cursor:pointer">Abbrechen</button>
+        </div>
+      </div>
+    `;
+    window._commitmentResolve = resolve;
+    document.body.appendChild(overlay);
+  });
 }
 
 // ============================================================
@@ -4524,6 +4693,7 @@ async function submitTeaser() {
   const gemeinde = document.getElementById('teaser-gemeinde')?.value || 'Uri';
   const contact = (document.getElementById('teaser-contact')?.value || '').trim();
   const waitlistActive = document.getElementById('teaser-waitlist-toggle')?.checked ?? true;
+  const waitlistContactType = document.querySelector('input[name="teaser-contact-type"]:checked')?.value || 'email';
   const spotsTotal = parseInt(document.getElementById('teaser-spots')?.value) || 50;
   if (!title) { showToast('⚠️ Bitte Titel eingeben'); return; }
   if (!date) { showToast('⚠️ Bitte Startdatum eingeben'); return; }
@@ -4820,6 +4990,19 @@ async function joinWaitlist(listingId) {
   }
 }
 window.joinWaitlist = joinWaitlist;
+
+// Wartelisten-Toggle Handler
+function onWaitlistToggleChange(checked) {
+  const track = document.getElementById('teaser-toggle-track');
+  const thumb = document.getElementById('teaser-toggle-thumb');
+  const spotsGroup = document.getElementById('teaser-spots-group');
+  const contactTypeGroup = document.getElementById('teaser-waitlist-contact-type-group');
+  if (track) track.style.background = checked ? 'var(--gold)' : 'rgba(255,255,255,0.15)';
+  if (thumb) thumb.style.transform = checked ? 'translateX(20px)' : 'translateX(0)';
+  if (spotsGroup) spotsGroup.style.display = checked ? '' : 'none';
+  if (contactTypeGroup) contactTypeGroup.style.display = checked ? '' : 'none';
+}
+window.onWaitlistToggleChange = onWaitlistToggleChange;
 
 // Meine Tickets Modal öffnen
 async function openMyTickets() {
@@ -5282,6 +5465,38 @@ function toggleGesuchVoice() {
   btn.classList.add('recording');
   btn.innerHTML = '🔴 Aufnahme läuft... (klicken zum Stoppen)';
 }
+
+async function saveGesuchDraft() {
+  const title = document.getElementById('gesuch-title')?.value?.trim() || '';
+  const desc = document.getElementById('gesuch-desc')?.value?.trim() || '';
+  const budgetVon = document.getElementById('gesuch-budget-von')?.value || '0';
+  const budgetBis = document.getElementById('gesuch-budget-bis')?.value || '0';
+  const gemeinde = document.getElementById('gesuch-gemeinde')?.value || 'Altdorf';
+  const contact = document.getElementById('gesuch-contact')?.value?.trim() || '';
+  const draft = { title, desc, budgetVon, budgetBis, gemeinde, contact, savedAt: new Date().toISOString() };
+  localStorage.setItem('gesuch_draft', JSON.stringify(draft));
+  showToast('💾 Entwurf gespeichert! Du kannst später weitermachen.');
+}
+window.saveGesuchDraft = saveGesuchDraft;
+
+// Gesuch-Entwurf beim Öffnen des Formulars laden
+function loadGesuchDraft() {
+  const draft = localStorage.getItem('gesuch_draft');
+  if (!draft) return;
+  try {
+    const d = JSON.parse(draft);
+    if (d.title && document.getElementById('gesuch-title')) {
+      document.getElementById('gesuch-title').value = d.title || '';
+      if (document.getElementById('gesuch-desc')) document.getElementById('gesuch-desc').value = d.desc || '';
+      if (document.getElementById('gesuch-budget-von')) document.getElementById('gesuch-budget-von').value = d.budgetVon || '';
+      if (document.getElementById('gesuch-budget-bis')) document.getElementById('gesuch-budget-bis').value = d.budgetBis || '';
+      if (document.getElementById('gesuch-gemeinde')) document.getElementById('gesuch-gemeinde').value = d.gemeinde || 'Altdorf';
+      if (document.getElementById('gesuch-contact')) document.getElementById('gesuch-contact').value = d.contact || '';
+      showToast('📝 Entwurf vom ' + new Date(d.savedAt).toLocaleDateString('de-CH') + ' geladen');
+    }
+  } catch(e) {}
+}
+window.loadGesuchDraft = loadGesuchDraft;
 
 async function submitGesuch() {
   if (!currentUser) { openAuth(); return; }
