@@ -152,6 +152,11 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
 .nav-item .nav-label { font-size:10px; color:var(--text-faint); font-weight:500; transition:color 0.2s; }
 .nav-item.active .nav-label { color:var(--gold); }
 .nav-item.active .nav-icon { transform:scale(1.15); }
+.nav-profile-icon-img {
+  width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; border: 2px solid var(--gold);
+  display: block;
+}
 .nav-item.active::after {
   content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
   width:24px; height:2px; background:var(--gold); border-radius:2px;
@@ -2421,7 +2426,7 @@ window.addEventListener('unhandledrejection', function(e) {
       <span class="nav-label" data-i18n="nav_erstellen">Erstellen</span>
     </div>
     <div class="nav-item" id="nav-profile-bottom">
-      <span class="nav-icon">👤</span>
+      <span class="nav-icon" id="nav-profile-icon">👤</span>
       <span class="nav-label" data-i18n="nav_profil">Profil</span>
     </div>
   </div>
@@ -3602,8 +3607,7 @@ function unlockContact(id) {
       unlocked.style.animation = 'fadeIn 0.4s ease';
     }, 300);
   }
-  showToast('🔓 Kontakt freigeschaltet! +10 Uri-Taler');
-  addXP(10);
+  showToast('🔓 Kontakt freigeschaltet!');
 }
 
 function closeDetailIfBg(e) {
@@ -3692,8 +3696,7 @@ async function postComment(listingId) {
     });
     input.value = '';
     loadComments(listingId);
-    addXP(5);
-    showToast('💬 Kommentar gepostet! +5 Uri-Taler');
+    showToast('💬 Kommentar gepostet!');
   } catch(e) {
     showToast('❌ Fehler: ' + e.message);
   }
@@ -3772,7 +3775,6 @@ async function deleteListing(id) {
 async function reserveSpot(id) {
   if (!currentUser) { openAuth(); return; }
   showToast('🔔 Du wirst benachrichtigt wenn es startet!');
-  addXP(5);
 }
 
 // ============================================================
@@ -4050,11 +4052,10 @@ async function submitCreateModal() {
       } catch(boostErr) { console.error('Boost Taler-Abzug fehlgeschlagen:', boostErr); }
     }
 
-    addXP(20);
     closeCreateModal();
     launchConfetti();
     const boostMsg = wantBoost ? ' + Boost aktiviert!' : '';
-    showToast('🎉 Inserat veröffentlicht! +20 Uri-Taler' + boostMsg);
+    showToast('🎉 Inserat veröffentlicht!' + boostMsg);
     swipeTo(0, document.getElementById('nav-0'));
     renderListings();
     await refreshProfile();
@@ -4420,9 +4421,8 @@ async function submitGesuch() {
       allListings.unshift({ ...payload, id: 'new-' + Date.now(), created_at: new Date().toISOString() });
     }
 
-    addXP(15);
     launchConfetti();
-    showToast('🔍 Gesuch veröffentlicht! +15 Uri-Taler');
+    showToast('🔍 Gesuch veröffentlicht!');
     swipeTo(0, document.getElementById('nav-0'));
     renderListings();
     await refreshProfile();
@@ -4500,8 +4500,7 @@ async function submitListing() {
     document.getElementById('form-price').value = '';
     document.getElementById('form-contact').value = '';
 
-    addXP(20);
-    showToast('🎉 Inserat veröffentlicht! +20 Uri-Taler');
+    showToast('🎉 Inserat veröffentlicht!');
     launchConfetti();
     swipeTo(0, document.getElementById('nav-0'));
     renderListings();
@@ -4732,8 +4731,8 @@ function renderProfile() {
 
     <!-- REFERRAL -->
     <div class="pd-referral">
-      <h3>🎁 Freunde einladen & 20 Uri-Taler kassieren</h3>
-      <p>Für jeden Freund der sich über deinen Code anmeldet, erhaltet ihr beide 20 Uri-Taler extra.</p>
+      <h3>🎁 Freunde einladen & 10 Uri-Taler kassieren</h3>
+      <p>Wenn sich jemand mit deinem Code anmeldet <strong>und sein erstes Inserat schaltet</strong>, erhältst du 10 Uri-Taler.</p>
       <div class="pd-referral-box">
         <span class="pd-referral-code">${referralCode}</span>
         <button class="copy-btn" onclick="copyReferral('${referralLink}')">📋 Kopieren</button>
@@ -4750,6 +4749,8 @@ function renderProfile() {
     </div>
   `;
 
+  // Nav-Profil-Button aktualisieren
+  updateNavProfileBtn();
   // XP-Balken animiert einblenden
   requestAnimationFrame(() => {
     const fill = el.querySelector('.pd-xp-fill');
@@ -4757,6 +4758,18 @@ function renderProfile() {
   });
 }
 
+function updateNavProfileBtn() {
+  const iconEl = document.getElementById('nav-profile-icon');
+  if (!iconEl) return;
+  if (currentProfile && currentProfile.avatar_url) {
+    iconEl.innerHTML = `<img src="${currentProfile.avatar_url}" class="nav-profile-icon-img" alt="Profil">`;
+  } else if (currentProfile && currentProfile.username) {
+    const initial = (currentProfile.username || 'U').charAt(0).toUpperCase();
+    iconEl.innerHTML = `<span style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#F59E0B);color:#000;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold)">${initial}</span>`;
+  } else {
+    iconEl.innerHTML = '👤';
+  }
+}
 function renderPdGrid(tab, myListings) {
   let items = [];
   if (tab === 'angebote') {
@@ -5326,7 +5339,7 @@ function switchWalletTab(tab, btnEl) {
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-size:48px;margin-bottom:8px">🎁</div>
         <div style="font-size:16px;font-weight:800;margin-bottom:4px">Freunde einladen</div>
-        <div style="font-size:12px;color:var(--text-faint)">Registriert sich jemand mit deinem Code, erhaltet ihr beide sofort <strong style="color:var(--gold)">20 Uri-Taler</strong> extra.</div>
+        <div style="font-size:12px;color:var(--text-faint)">Wenn sich jemand mit deinem Code anmeldet und sein erstes Inserat schaltet, erhältst du <strong style="color:var(--gold)">10 Uri-Taler</strong>.</div>
       </div>
       <div style="background:rgba(255,215,0,0.08);border:2px solid var(--gold);border-radius:12px;padding:16px;text-align:center;margin-bottom:14px">
         <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Dein Referral-Code</div>
@@ -5583,9 +5596,8 @@ async function submitCmGesuch() {
       allListings.unshift({ ...payload, id: 'new-' + Date.now(), created_at: new Date().toISOString() });
     }
 
-    addXP(15);
     launchConfetti();
-    showToast('\ud83d\udd0d Gesuch ver\u00f6ffentlicht! +15 Uri-Taler');
+    showToast('🔍 Gesuch veröffentlicht!');
     closeCreateModal();
     swipeTo(0, document.getElementById('nav-0'));
     renderListings();
