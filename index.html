@@ -2115,6 +2115,33 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
 .profile-card { background: var(--surface, rgba(255,255,255,0.06)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 8px; text-align: center; transition: transform 0.3s; }
 .profile-card:hover { transform: translateY(-4px); }
 
+/* === BADGE & LEVEL SYSTEM === */
+.badge-beobachter    { background:rgba(150,150,150,0.15); color:#aaa; border:1px solid #aaa; }
+.badge-dorf-haendler { background:rgba(205,127,50,0.2); color:#CD7F32; border:1px solid #CD7F32; }
+.badge-lokal-matador { background:rgba(192,192,192,0.2); color:#C0C0C0; border:1px solid #C0C0C0; }
+.badge-kantons-legende { background:rgba(255,215,0,0.2); color:var(--gold); border:1px solid var(--gold); }
+.badge-gotthard-titan { background:rgba(100,200,255,0.15); color:#64C8FF; border:1px solid #64C8FF; box-shadow:0 0 8px rgba(100,200,255,0.4); }
+.badge-pioneer { background:rgba(255,215,0,0.25); color:var(--gold); border:1px solid var(--gold); animation:pioneerGlow 2s infinite; }
+@keyframes pioneerGlow { 0%,100%{box-shadow:0 0 4px rgba(255,215,0,0.4)} 50%{box-shadow:0 0 12px rgba(255,215,0,0.9)} }
+.level-badge-inline { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:800; letter-spacing:0.5px; white-space:nowrap; }
+.card-seller-badge { display:flex; align-items:center; gap:4px; margin-top:4px; }
+.levelup-overlay { position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.3s; }
+.levelup-overlay.open { opacity:1; pointer-events:all; }
+.levelup-modal { background:linear-gradient(135deg,#1a1a1a,#0a0a0a); border:2px solid var(--gold); border-radius:24px; padding:40px 32px; text-align:center; max-width:320px; width:90%; transform:scale(0.8); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.levelup-overlay.open .levelup-modal { transform:scale(1); }
+.levelup-emoji { font-size:64px; margin-bottom:16px; display:block; animation:levelupBounce 0.6s ease; }
+@keyframes levelupBounce { 0%{transform:scale(0)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+.levelup-title { font-size:13px; color:var(--text-faint); text-transform:uppercase; letter-spacing:2px; margin-bottom:8px; }
+.levelup-name { font-size:28px; font-weight:900; color:var(--gold); margin-bottom:12px; }
+.levelup-desc { font-size:14px; color:var(--text-dim); line-height:1.5; margin-bottom:24px; }
+.levelup-btn { background:var(--gold); color:#000; border:none; padding:14px 32px; border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; width:100%; }
+.xp-toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px); background:linear-gradient(135deg,#1a1a1a,#2a2a2a); border:1px solid var(--gold); color:var(--gold); padding:10px 20px; border-radius:20px; font-size:14px; font-weight:800; z-index:9998; opacity:0; transition:all 0.3s; pointer-events:none; white-space:nowrap; }
+.xp-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.pioneer-banner { background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,215,0,0.05)); border:1px solid var(--gold); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.pioneer-banner-icon { font-size:28px; }
+.pioneer-banner-text h4 { font-size:13px; font-weight:800; color:var(--gold); margin:0 0 2px; }
+.pioneer-banner-text p { font-size:11px; color:var(--text-faint); margin:0; }
+
 </style>
 <script>
 // ============================================================
@@ -2431,6 +2458,20 @@ window.addEventListener('unhandledrejection', function(e) {
     </div>
   </div>
 </div>
+
+<!-- LEVEL-UP MODAL -->
+<div class="levelup-overlay" id="levelup-overlay">
+  <div class="levelup-modal">
+    <span class="levelup-emoji" id="levelup-emoji">🏆</span>
+    <div class="levelup-title">Level Up!</div>
+    <div class="levelup-name" id="levelup-name">Dorf-Händler</div>
+    <div class="levelup-desc" id="levelup-desc">Du hast ein neues Level erreicht!</div>
+    <button class="levelup-btn" onclick="closeLevelUpModal()">🚀 Weiter geht's!</button>
+  </div>
+</div>
+
+<!-- XP TOAST -->
+<div class="xp-toast" id="xp-toast">+10 XP</div>
 
 <!-- LISTING DETAIL MODAL -->
 <div class="modal-overlay" id="detail-modal" onclick="closeDetailIfBg(event)">
@@ -3303,14 +3344,25 @@ function swipeTo(index, el) {
   const targetNav = el || document.getElementById('nav-' + index) || (index === 2 ? document.getElementById('nav-profile-bottom') : null);
   if (targetNav) targetNav.classList.add('active');
   if (index === 2) {
-    if (typeof renderProfile === 'function') renderProfile();
-    // Scroll Profil-Panel nach oben
+    // Profil-Panel: erst scrollen, dann rendern
     const pp = document.getElementById('profile-panel');
     if (pp) pp.scrollTop = 0;
+    if (typeof renderProfile === 'function') {
+      // Kurze Verzögerung damit die CSS-Transition fertig ist
+      setTimeout(() => {
+        renderProfile();
+        updateNavProfileBtn();
+      }, 50);
+    }
+    // Falls noch kein Profil geladen: refreshProfile aufrufen
+    if (currentUser && !currentProfile) {
+      refreshProfile();
+    }
   }
 }
 
 window.swipeTo = swipeTo;
+window.closeLevelUpModal = closeLevelUpModal;
 window.openCreateModal = openCreateModal;
 window.toggleDropdown = toggleDropdown;
 window.openAuth = openAuth;
@@ -3384,7 +3436,39 @@ async function loadListings() {
   } catch(e) {
     allListings = DEMO_LISTINGS;
   }
+  // Seller-Badges asynchron anreichern (non-blocking)
+  enrichListingsWithBadges();
   renderListings();
+}
+async function enrichListingsWithBadges() {
+  // Unique user_ids aus echten Listings holen
+  const userIds = [...new Set(allListings.filter(l => l.user_id).map(l => l.user_id))];
+  if (userIds.length === 0) return;
+  try {
+    const profiles = await supaFetch(`profiles?id=in.(${userIds.join(',')})&select=id,level_name,badge,is_pioneer`);
+    if (!Array.isArray(profiles)) return;
+    const profileMap = {};
+    profiles.forEach(p => { profileMap[p.id] = p; });
+    allListings.forEach(l => {
+      if (l.user_id && profileMap[l.user_id]) {
+        const p = profileMap[l.user_id];
+        const lvl = getLevelInfo(0); // Fallback
+        const levelInfo = Object.values({
+          'Beobachter': getLevelInfo(0),
+          'Dorf-Händler': getLevelInfo(50),
+          'Lokal-Matador': getLevelInfo(200),
+          'Kantons-Legende': getLevelInfo(500),
+          'Gotthard-Titan': getLevelInfo(1000)
+        })[['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan'].indexOf(p.level_name)] || getLevelInfo(0);
+        if (p.level_name && p.level_name !== 'Beobachter') {
+          l._sellerBadge = getBadgeHtml(levelInfo, p.is_pioneer);
+        } else if (p.is_pioneer) {
+          l._sellerBadge = '<span class="level-badge-inline badge-pioneer">🚀 Pionier</span>';
+        }
+      }
+    });
+    renderListings();
+  } catch(e) { console.log('Badge-Enrichment übersprungen:', e.message); }
 }
 
 function renderListings() {
@@ -3448,6 +3532,7 @@ function renderCard(l, i) {
       <div class="card-title">${escHtml(l.title)}</div>
       ${l.price > 0 ? `<div class="card-price">CHF ${l.price}</div>` : '<div class="card-price" style="color:var(--green)">Gratis</div>'}
       <div class="card-location">📍 ${escHtml(l.location||l.gemeinde||'Uri')}</div>
+      ${l._sellerBadge ? `<div class="card-seller-badge">${l._sellerBadge}</div>` : ''}
       ${viewers > 10 ? `<div class="card-fomo"><span class="fomo-dot"></span>🔥 ${viewers} schauen gerade</div>` : ''}
     </div>
   </div>`;
@@ -3479,6 +3564,7 @@ function openDetail(id) {
         <span class="modal-tag ${l.type==='Gesuch'?'badge-gesuch':'badge-angebot'}">${l.type==='Gesuch'?'🔍 GESUCH':'🏷️ ANGEBOT'}</span>
         ${l.is_promoted ? '<span class="modal-tag" style="background:rgba(255,215,0,0.15);color:var(--gold)">⭐ HIGHLIGHT</span>' : ''}
         ${isSold ? '<span class="modal-tag" style="background:rgba(255,68,68,0.15);color:var(--red)">✅ VERKAUFT</span>' : ''}
+        ${l._sellerBadge ? l._sellerBadge : ''}
       </div>
       <div class="modal-title">${escHtml(l.title)}</div>
       ${l.price > 0 ? `<div class="modal-price">CHF ${l.price}</div>` : '<div class="modal-price" style="color:var(--green)">Gratis</div>'}
@@ -3696,6 +3782,7 @@ async function postComment(listingId) {
     });
     input.value = '';
     loadComments(listingId);
+    addXP(5, 'Kommentar');
     showToast('💬 Kommentar gepostet!');
   } catch(e) {
     showToast('❌ Fehler: ' + e.message);
@@ -3718,7 +3805,7 @@ async function markSold(id) {
     const l = allListings.find(x => x.id === id);
     if (l) l.status = 'sold';
     launchConfetti();
-    addXP(50);
+    addXP(50, 'Verkauf');
     showToast('🎉 Glückwunsch! +50 Uri-Taler für den Verkauf!');
     closeDetail();
     renderListings();
@@ -4055,6 +4142,7 @@ async function submitCreateModal() {
     closeCreateModal();
     launchConfetti();
     const boostMsg = wantBoost ? ' + Boost aktiviert!' : '';
+    addXP(10, 'Inserat erstellt');
     showToast('🎉 Inserat veröffentlicht!' + boostMsg);
     swipeTo(0, document.getElementById('nav-0'));
     renderListings();
@@ -4421,6 +4509,7 @@ async function submitGesuch() {
       allListings.unshift({ ...payload, id: 'new-' + Date.now(), created_at: new Date().toISOString() });
     }
 
+    addXP(5, 'Gesuch erstellt');
     launchConfetti();
     showToast('🔍 Gesuch veröffentlicht!');
     swipeTo(0, document.getElementById('nav-0'));
@@ -4500,6 +4589,7 @@ async function submitListing() {
     document.getElementById('form-price').value = '';
     document.getElementById('form-contact').value = '';
 
+    addXP(10, 'Inserat erstellt');
     showToast('🎉 Inserat veröffentlicht!');
     launchConfetti();
     swipeTo(0, document.getElementById('nav-0'));
@@ -4569,19 +4659,54 @@ function getLevelInfo(xp) {
   return { name: 'Kantons-Legende', next: null, color: '#FFD700' };
 }
 
-async function addXP(amount) {
+async function addXP(amount, reason) {
   if (!currentUser || !currentProfile) return;
-  const newXP = (currentProfile.xp || 0) + amount;
-  const newCredits = (currentProfile.credits || 0) + amount;
+  const oldXP = currentProfile.xp_points || currentProfile.xp || 0;
+  const newXP = oldXP + amount;
+  const oldLevel = getLevelInfo(oldXP);
+  const newLevel = getLevelInfo(newXP);
+  // XP updaten (GETRENNT von Credits!)
+  currentProfile.xp_points = newXP;
   currentProfile.xp = newXP;
-  currentProfile.credits = newCredits;
+  currentProfile.level_name = newLevel.name;
+  currentProfile.badge = newLevel.badge;
   try {
     await supaFetch(`profiles?id=eq.${getUID()}`, {
       method: 'PATCH',
-      body: JSON.stringify({ xp: newXP, credits: newCredits })
+      body: JSON.stringify({ xp_points: newXP, xp: newXP, level_name: newLevel.name, badge: newLevel.badge })
     });
-  } catch(e) {}
+  } catch(e) { console.error('addXP Fehler:', e.message); }
+  // XP-Toast anzeigen
+  showXpToast(amount, reason);
+  // Level-Up prüfen
+  if (oldLevel.name !== newLevel.name) {
+    setTimeout(() => showLevelUpModal(newLevel), 800);
+  }
   renderProfile();
+  updateNavProfileBtn();
+}
+function showXpToast(amount, reason) {
+  const toast = document.getElementById('xp-toast');
+  if (!toast) return;
+  toast.textContent = `+${amount} XP${reason ? ' · ' + reason : ''}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+function showLevelUpModal(level) {
+  const overlay = document.getElementById('levelup-overlay');
+  const emojiEl = document.getElementById('levelup-emoji');
+  const nameEl = document.getElementById('levelup-name');
+  const descEl = document.getElementById('levelup-desc');
+  if (!overlay) return;
+  if (emojiEl) emojiEl.textContent = level.emoji;
+  if (nameEl) nameEl.textContent = level.name;
+  if (descEl) descEl.textContent = level.desc;
+  overlay.classList.add('open');
+  launchConfetti();
+}
+function closeLevelUpModal() {
+  const overlay = document.getElementById('levelup-overlay');
+  if (overlay) overlay.classList.remove('open');
 }
 
 // ============================================================
@@ -4612,8 +4737,7 @@ function renderProfile() {
   const xpNeeded = level.next ? level.next - xp : 0;
 
   // Level-Nummer
-  const LEVEL_NAMES = ['Urner Erstling','Dorf-Kenner','Kantons-Legende'];
-  const levelNum = LEVEL_NAMES.indexOf(level.name) + 1 || 1;
+  const levelNum = ['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan'].indexOf(level.name) + 1 || 1;
 
   // Inserats-Counts aus allListings
   const uid = getUID() || currentUser.id;
@@ -4658,14 +4782,20 @@ function renderProfile() {
       <div class="pd-info">
         <div class="pd-username">${displayName}</div>
         <div class="pd-level-pill" onclick="openLevelModal()">
-          <span>${level.name}</span>
+          <span>${level.emoji} ${level.name}</span>
           <span class="pd-level-num">Level ${levelNum}</span>
+          ${p.is_pioneer ? '<span class="level-badge-inline badge-pioneer" style="margin-top:2px;font-size:9px">🚀 Pionier</span>' : ''}
         </div>
       </div>
       <div class="pd-taler-card" onclick="openWalletModal()">
         <span class="pd-taler-icon">🪙</span>
         <span class="pd-taler-num">${credits}</span>
         <span class="pd-taler-lbl">Uri-Taler</span>
+      </div>
+      <div class="pd-taler-card" style="background:rgba(100,200,255,0.08);border-color:rgba(100,200,255,0.25)">
+        <span class="pd-taler-icon">⭐</span>
+        <span class="pd-taler-num" style="color:#64C8FF">${xp}</span>
+        <span class="pd-taler-lbl" style="color:rgba(100,200,255,0.7)">XP</span>
       </div>
     </div>
 
@@ -4724,6 +4854,15 @@ function renderProfile() {
       </div>
     </div>
 
+    <!-- PIONEER BANNER -->
+    ${p.is_pioneer ? `
+    <div class="pioneer-banner">
+      <div class="pioneer-banner-icon">🚀</div>
+      <div class="pioneer-banner-text">
+        <h4>Pionier der ersten Stunde!</h4>
+        <p>Du bist einer der ersten 50 User von Uri-Markt. Dieser Badge bleibt für immer.</p>
+      </div>
+    </div>` : ''}
     <!-- GRID -->
     <div class="pd-grid-wrap" id="pd-grid-wrap">
       ${renderPdGrid('angebote', myListings)}
@@ -5141,13 +5280,14 @@ window.addEventListener('DOMContentLoaded', () => {
 // PROFIL-DASHBOARD v2 – Modal-Funktionen
 // ============================================================
 
-// getLevelInfo erweitert mit minXP und nextName
+// getLevelInfo: 5 Stufen (Beobachter → Dorf-Händler → Lokal-Matador → Kantons-Legende → Gotthard-Titan)
 function getLevelInfo(xp) {
   const levels = [
-    { name: 'Urner Erstling', minXP: 0,    next: 100,  nextName: 'Dorf-Kenner',      color: '#aaa' },
-    { name: 'Dorf-Kenner',    minXP: 100,  next: 300,  nextName: 'Dorf-Haendler',    color: '#4fc3f7' },
-    { name: 'Dorf-Haendler',  minXP: 300,  next: 1000, nextName: 'Kantons-Legende',  color: '#FFD700' },
-    { name: 'Kantons-Legende',minXP: 1000, next: null, nextName: null,               color: '#FFD700' },
+    { name: 'Beobachter',       minXP: 0,    next: 50,   nextName: 'Dorf-Händler',      color: '#aaa',     emoji: '👁️',  badge: 'beobachter',     cssClass: 'badge-beobachter',     desc: 'Normale Inserate. Beobachte, lerne, starte!' },
+    { name: 'Dorf-Händler',     minXP: 50,   next: 200,  nextName: 'Lokal-Matador',     color: '#CD7F32',  emoji: '✓',   badge: 'bronze',         cssClass: 'badge-dorf-haendler',  desc: 'Bronze-Badge ✓ Geprüft. Erster Vertrauensbonus!' },
+    { name: 'Lokal-Matador',    minXP: 200,  next: 500,  nextName: 'Kantons-Legende',   color: '#C0C0C0',  emoji: '🥈',  badge: 'silver',         cssClass: 'badge-lokal-matador',  desc: 'Silber-Badge 🥈 Top-Verkäufer. Inserate stechen hervor!' },
+    { name: 'Kantons-Legende',  minXP: 500,  next: 1000, nextName: 'Gotthard-Titan',    color: '#FFD700',  emoji: '🏆',  badge: 'gold',           cssClass: 'badge-kantons-legende',desc: 'Gold-Rahmen 🏆 Trusted-Siegel. Maximales Vertrauen!' },
+    { name: 'Gotthard-Titan',   minXP: 1000, next: null, nextName: null,                color: '#64C8FF',  emoji: '💎',  badge: 'diamond',        cssClass: 'badge-gotthard-titan', desc: 'Diamant-Badge 💎 VIP. Absolute Elite in Uri!' },
   ];
   for (let i = levels.length - 1; i >= 0; i--) {
     if (xp >= levels[i].minXP) return levels[i];
@@ -5155,6 +5295,11 @@ function getLevelInfo(xp) {
   return levels[0];
 }
 function getLevel(xp) { return getLevelInfo(xp).name; }
+function getBadgeHtml(levelInfo, isPioneer) {
+  let html = `<span class="level-badge-inline ${levelInfo.cssClass}">${levelInfo.emoji} ${levelInfo.name}</span>`;
+  if (isPioneer) html += ` <span class="level-badge-inline badge-pioneer">🚀 Pionier</span>`;
+  return html;
+}
 
 // --- AVATAR MODAL ---
 function openAvatarModal() {
@@ -5596,6 +5741,7 @@ async function submitCmGesuch() {
       allListings.unshift({ ...payload, id: 'new-' + Date.now(), created_at: new Date().toISOString() });
     }
 
+    addXP(5, 'Gesuch erstellt');
     launchConfetti();
     showToast('🔍 Gesuch veröffentlicht!');
     closeCreateModal();
