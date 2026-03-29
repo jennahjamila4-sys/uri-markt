@@ -124,11 +124,12 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
    ============================================================ */
 #swipe-container {
   flex:1; display:flex; overflow:hidden;
+  width:300%;
   transition:transform 0.35s cubic-bezier(0.4,0,0.2,1);
   touch-action:pan-y;
 }
 .swipe-panel {
-  min-width:100%; height:100%;
+  min-width:33.333%; width:33.333%; height:100%;
   overflow-y:auto; overflow-x:hidden;
   scroll-behavior:smooth;
 }
@@ -3442,7 +3443,7 @@ function swipeTo(index, el) {
   const container = document.getElementById('swipe-container');
   if (!container) return;
   currentPanel = index;
-  container.style.transform = `translateX(-${index * 100}%)`;
+  container.style.transform = `translateX(-${index * 33.333}%)`;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const targetNav = el || document.getElementById('nav-' + index) || (index === 2 ? document.getElementById('nav-profile-bottom') : null);
   if (targetNav) targetNav.classList.add('active');
