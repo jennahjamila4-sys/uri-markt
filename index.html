@@ -2115,6 +2115,16 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
 .profile-card { background: var(--surface, rgba(255,255,255,0.06)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 8px; text-align: center; transition: transform 0.3s; }
 .profile-card:hover { transform: translateY(-4px); }
 
+/* === TEASER FORM === */
+#teaser-form-block .form-group { margin-bottom:16px; }
+#teaser-form-block .form-label { font-size:12px; font-weight:700; color:var(--text-dim); margin-bottom:6px; display:block; }
+#teaser-form-block .form-input, #teaser-form-block .form-textarea, #teaser-form-block .form-select {
+  width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+  border-radius:10px; padding:12px; color:#fff; font-size:14px; box-sizing:border-box;
+}
+#teaser-form-block .form-textarea { resize:none; min-height:100px; }
+#teaser-form-block .form-select option { background:#1a1a1a; }
+
 /* === BADGE & LEVEL SYSTEM === */
 .badge-beobachter    { background:rgba(150,150,150,0.15); color:#aaa; border:1px solid #aaa; }
 .badge-dorf-haendler { background:rgba(205,127,50,0.2); color:#CD7F32; border:1px solid #CD7F32; }
@@ -2292,7 +2302,7 @@ window.addEventListener('unhandledrejection', function(e) {
       <div class="type-selector">
         <button class="type-btn active" onclick="setType('Angebot',this)">🏷️ Angebot</button>
         <button class="type-btn" onclick="setType('Gesuch',this)">🔍 Gesuch</button>
-        <button class="type-btn" onclick="setType('Coming Soon',this)">🚀 Vorkündigung</button>
+        <button class="type-btn" onclick="setType('Coming Soon',this)">🚀 Vorankündigung</button>
       </div>
 
       <!-- GESUCH CHAMÄLEON BLOCK -->
@@ -2426,6 +2436,101 @@ window.addEventListener('unhandledrejection', function(e) {
           <input type="datetime-local" class="form-input" id="form-countdown">
         </div>
         <button class="submit-btn" onclick="submitListing()" id="submit-btn" data-i18n="inserat_veroeffentlichen">✨ Inserat veröffentlichen</button>
+      </div>
+
+      <!-- VORANKÜNDIGUNGS-FORMULAR (TEASER) -->
+      <div id="teaser-form-block" style="display:none">
+        <!-- HERO -->
+        <div style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));border:1px solid var(--orange);border-radius:16px;padding:16px;margin-bottom:20px;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">🚀</div>
+          <h3 style="font-size:16px;font-weight:900;color:var(--orange);margin:0 0 4px">Hype aufbauen. Warteliste füllen.</h3>
+          <p style="font-size:12px;color:var(--text-faint);margin:0">Kündige dein Event, Produkt oder Kurs an – bevor es offiziell startet.</p>
+        </div>
+
+        <!-- TITEL -->
+        <div class="form-group">
+          <label class="form-label">Titel deiner Ankündigung *</label>
+          <input type="text" class="form-input" id="teaser-title" placeholder="z.B. Uri Ski-Opening Night 2026 🎿">
+        </div>
+
+        <!-- SMART TOOLS BAR (Voice + KI) -->
+        <div style="margin-bottom:8px">
+          <label class="form-label">Beschreibung / Teaser-Text</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button type="button" id="btn-teaser-voice" onclick="startTeaserVoice()" style="flex:1;background:var(--surface);border:1px solid var(--gold);border-radius:8px;padding:8px 10px;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+              <span id="teaser-voice-icon">🎤</span> <span id="teaser-voice-label">Sprechen</span>
+            </button>
+            <button type="button" id="btn-ai-optimize" onclick="aiBoostTeaserText()" style="flex:1;background:linear-gradient(45deg,#FFD700,#FFA500);border:none;border-radius:8px;padding:8px 10px;color:#000;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+              <span>✨</span> KI Text-Booster
+            </button>
+          </div>
+          <textarea class="form-textarea" id="teaser-desc" rows="4" placeholder="Stichworte eingeben oder sprechen... z.B. 'Sommerfest im Gemeindesaal, Livemusik, Bier, 1. August'"></textarea>
+        </div>
+
+        <!-- DATUM & KATEGORIE -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">📅 Wann geht's los? *</label>
+            <input type="date" class="form-input" id="teaser-date" style="color:#fff">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">🎭 Kategorie</label>
+            <select class="form-select" id="teaser-category">
+              <option value="Event">🎉 Event / Party</option>
+              <option value="Produkt">📦 Neues Produkt</option>
+              <option value="Kurs">📚 Neuer Kurs</option>
+              <option value="Geheim">🤫 Streng Geheim</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ORT -->
+        <div class="form-group">
+          <label class="form-label">📍 Wo passiert es? (optional)</label>
+          <select class="form-select" id="teaser-gemeinde">
+            <option value="Altdorf">Altdorf</option>
+            <option value="Erstfeld">Erstfeld</option>
+            <option value="Schattdorf">Schattdorf</option>
+            <option value="Bürglen">Bürglen</option>
+            <option value="Attinghausen">Attinghausen</option>
+            <option value="Andermatt">Andermatt</option>
+            <option value="Flüelen">Flüelen</option>
+            <option value="Silenen">Silenen</option>
+            <option value="Ganz Uri">🗺️ Ganz Uri</option>
+          </select>
+        </div>
+
+        <!-- WARTELISTE TOGGLE -->
+        <div style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:14px;margin-bottom:16px">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <div style="position:relative;width:44px;height:24px;flex-shrink:0">
+              <input type="checkbox" id="teaser-waitlist-toggle" checked style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:2;width:100%;height:100%;margin:0">
+              <div id="teaser-toggle-track" style="position:absolute;inset:0;background:var(--gold);border-radius:12px;transition:background 0.2s"></div>
+              <div id="teaser-toggle-thumb" style="position:absolute;top:2px;left:2px;width:20px;height:20px;background:#000;border-radius:50%;transition:transform 0.2s;transform:translateX(20px)"></div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:800;color:var(--gold)">🔔 Warteliste aktivieren</div>
+              <div style="font-size:11px;color:var(--text-faint)">Interessenten können sich eintragen – du sammelst Leads!</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- LIMITIERTE PLÄTZE (SCARCITY) -->
+        <div class="form-group" id="teaser-spots-group">
+          <label class="form-label">🎟️ Maximale Wartelisten-Plätze <span style="color:var(--orange);font-size:10px">(Scarcity = mehr Druck!)</span></label>
+          <input type="number" class="form-input" id="teaser-spots" value="50" min="1" max="9999" placeholder="z.B. 50">
+          <div style="font-size:10px;color:var(--text-faint);margin-top:4px">💡 Limitierung erzeugt FOMO – Leute tragen sich schneller ein!</div>
+        </div>
+
+        <!-- KONTAKT -->
+        <div class="form-group">
+          <label class="form-label">Kontakt (WhatsApp/Tel/Email)</label>
+          <input type="text" class="form-input" id="teaser-contact" placeholder="z.B. https://wa.me/41791234567">
+        </div>
+
+        <button class="submit-btn" onclick="submitTeaser()" id="teaser-submit-btn" style="background:linear-gradient(135deg,var(--orange),#FF6B00)">
+          🚀 Vorankündigung veröffentlichen
+        </button>
       </div>
     </div>
 
@@ -3342,19 +3447,29 @@ function swipeTo(index, el) {
   const targetNav = el || document.getElementById('nav-' + index) || (index === 2 ? document.getElementById('nav-profile-bottom') : null);
   if (targetNav) targetNav.classList.add('active');
   if (index === 2) {
-    // Profil-Panel: erst scrollen, dann rendern
+    // Profil-Panel: scrollen
     const pp = document.getElementById('profile-panel');
     if (pp) pp.scrollTop = 0;
-    if (typeof renderProfile === 'function') {
-      // Kurze Verzögerung damit die CSS-Transition fertig ist
-      setTimeout(() => {
-        renderProfile();
-        updateNavProfileBtn();
-      }, 50);
-    }
-    // Falls noch kein Profil geladen: refreshProfile aufrufen
-    if (currentUser && !currentProfile) {
-      refreshProfile();
+    // Profil laden und rendern
+    if (currentUser) {
+      if (!currentProfile) {
+        // Profil noch nicht geladen: erst laden, dann rendern
+        refreshProfile().then(() => {
+          renderProfile();
+          updateNavProfileBtn();
+        }).catch(() => {
+          renderProfile();
+        });
+      } else {
+        // Profil bereits vorhanden: sofort rendern
+        setTimeout(() => {
+          renderProfile();
+          updateNavProfileBtn();
+        }, 50);
+      }
+    } else {
+      // Nicht eingeloggt: Login-Aufforderung zeigen
+      renderProfile();
     }
   }
 }
@@ -4188,28 +4303,190 @@ function setType(type, el) {
       normalBlock.style.display = 'block';
     }
   }
-  // TASK 2: Vorankündigung – Preis ausblenden, available-from einblenden
-  const priceGroup = document.getElementById('cm-price-group');
-  let availGroup = document.getElementById('cm-available-from-group');
-  const descEl = document.getElementById('cm-desc');
-  if (type === 'Vorankündigung') {
-    if (priceGroup) priceGroup.style.display = 'none';
-    if (!availGroup) {
-      availGroup = document.createElement('div');
-      availGroup.id = 'cm-available-from-group';
-      availGroup.className = 'konto-field';
-      availGroup.innerHTML = '<label class="konto-label" for="cm-available-from">Ab wann verfügbar?</label><input type="date" id="cm-available-from" class="konto-input" style="color:#fff;">';
-      if (priceGroup) priceGroup.parentNode.insertBefore(availGroup, priceGroup);
-    } else {
-      availGroup.style.display = 'block';
-    }
-    if (descEl) descEl.placeholder = 'Mach die Community neugierig...';
+  // Teaser-Formular ein/ausblenden
+  const teaserBlock = document.getElementById('teaser-form-block');
+  const normalBlock2 = document.getElementById('normal-form-block');
+  const gesuchBlock2 = document.getElementById('gesuch-chameleon-block');
+  if (type === 'Coming Soon' || type === 'Vorankündigung') {
+    if (teaserBlock) teaserBlock.style.display = 'block';
+    if (normalBlock2) normalBlock2.style.display = 'none';
+    if (gesuchBlock2) gesuchBlock2.style.display = 'none';
+  } else if (type === 'Gesuch') {
+    if (teaserBlock) teaserBlock.style.display = 'none';
+    if (normalBlock2) normalBlock2.style.display = 'none';
+    if (gesuchBlock2) gesuchBlock2.style.display = 'block';
   } else {
-    if (priceGroup) priceGroup.style.display = 'block';
-    if (availGroup) availGroup.style.display = 'none';
-    if (descEl) descEl.placeholder = 'Beschreibe dein Angebot detailliert...';
+    if (teaserBlock) teaserBlock.style.display = 'none';
+    if (normalBlock2) normalBlock2.style.display = 'block';
+    if (gesuchBlock2) gesuchBlock2.style.display = 'none';
   }
 }
+
+// ============================================================
+// VORANKÜNDIGUNG TEASER SUBMIT + VOICE + KI-BOOSTER
+// ============================================================
+async function submitTeaser() {
+  if (!currentUser) { openAuth(); return; }
+  const _userId = getUID() || currentUser?.id;
+  if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
+  const title = (document.getElementById('teaser-title')?.value || '').trim();
+  const desc = (document.getElementById('teaser-desc')?.value || '').trim();
+  const date = document.getElementById('teaser-date')?.value || '';
+  const category = document.getElementById('teaser-category')?.value || 'Event';
+  const gemeinde = document.getElementById('teaser-gemeinde')?.value || 'Uri';
+  const contact = (document.getElementById('teaser-contact')?.value || '').trim();
+  const waitlistActive = document.getElementById('teaser-waitlist-toggle')?.checked ?? true;
+  const spotsTotal = parseInt(document.getElementById('teaser-spots')?.value) || 50;
+  if (!title) { showToast('⚠️ Bitte Titel eingeben'); return; }
+  if (!date) { showToast('⚠️ Bitte Startdatum eingeben'); return; }
+  const btn = document.getElementById('teaser-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Wird veröffentlicht...'; }
+  try {
+    const payload = {
+      user_id: _userId,
+      title,
+      description: desc,
+      price: 0,
+      type: 'Coming Soon',
+      status: 'coming_soon',
+      location: gemeinde,
+      gemeinde,
+      category,
+      contact_info: contact,
+      is_promoted: false,
+      emoji: category === 'Event' ? '🎉' : category === 'Produkt' ? '📦' : category === 'Kurs' ? '📚' : '🤫',
+      viewers: Math.floor(Math.random() * 5 + 1),
+      available_from: date,
+      waitlist_active: waitlistActive,
+      spots_total: spotsTotal,
+      spots_taken: 0,
+      countdown: new Date(date).toISOString()
+    };
+    const data = await supaFetch('listings', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data) && data.length > 0) {
+      allListings.unshift(data[0]);
+    } else {
+      allListings.unshift({ ...payload, id: 'teaser-' + Date.now(), created_at: new Date().toISOString() });
+    }
+    // Formular zurücksetzen
+    ['teaser-title','teaser-desc','teaser-date','teaser-contact'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    addXP(10, 'Vorankündigung erstellt');
+    launchConfetti();
+    showToast('🚀 Vorankündigung veröffentlicht!');
+    closeCreateModal();
+    renderListings();
+  } catch(e) {
+    const errMsg = e.message || '';
+    if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else {
+      showToast('❌ Fehler: ' + errMsg, 'error');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Vorankündigung veröffentlichen'; }
+  }
+}
+
+// Voice-to-Text für Teaser
+let teaserRecognition = null;
+function startTeaserVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { showToast('⚠️ Voice nicht unterstützt (Chrome empfohlen)', 'error'); return; }
+  const btn = document.getElementById('btn-teaser-voice');
+  const iconEl = document.getElementById('teaser-voice-icon');
+  const labelEl = document.getElementById('teaser-voice-label');
+  if (teaserRecognition) {
+    teaserRecognition.stop(); teaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+    return;
+  }
+  teaserRecognition = new SpeechRecognition();
+  teaserRecognition.lang = 'de-CH';
+  teaserRecognition.continuous = false;
+  teaserRecognition.interimResults = false;
+  if (iconEl) iconEl.textContent = '🔴';
+  if (labelEl) labelEl.textContent = 'Hört zu...';
+  if (btn) btn.style.borderColor = '#ff4444';
+  teaserRecognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    const desc = document.getElementById('teaser-desc');
+    if (desc) desc.value = (desc.value ? desc.value + ' ' : '') + text;
+  };
+  teaserRecognition.onend = () => {
+    teaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+  };
+  teaserRecognition.onerror = (e) => {
+    teaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+    if (e.error !== 'no-speech') showToast('⚠️ Mikrofon-Fehler: ' + e.error, 'error');
+  };
+  teaserRecognition.start();
+}
+
+// KI Text-Booster (Frontend-Simulation)
+async function aiBoostTeaserText() {
+  const descEl = document.getElementById('teaser-desc');
+  const titleEl = document.getElementById('teaser-title');
+  const btn = document.getElementById('btn-ai-optimize');
+  if (!descEl) return;
+  const raw = descEl.value.trim();
+  if (!raw) { showToast('⚠️ Bitte zuerst Stichworte eingeben', 'error'); return; }
+  // Loading-State
+  if (btn) { btn.textContent = '⏳ Optimiere...'; btn.disabled = true; }
+  await new Promise(r => setTimeout(r, 1500));
+  // KI-Simulation: Text in Teaser umwandeln
+  const title = titleEl?.value?.trim() || '';
+  const categoryEl = document.getElementById('teaser-category');
+  const cat = categoryEl?.value || 'Event';
+  const catEmojis = { Event: '🎉🔥', Produkt: '📦✨', Kurs: '📚🚀', Geheim: '🤫💎' };
+  const emojis = catEmojis[cat] || '🚀✨';
+  const boosted = `${emojis} Mach dich bereit!
+
+${raw}
+
+🔥 Das wird unvergesslich – sichere dir jetzt deinen Platz!
+
+🔔 Trage dich in die Warteliste ein und sei unter den Ersten!`;
+  descEl.value = boosted;
+  if (btn) { btn.textContent = '✨ KI Text-Booster'; btn.disabled = false; }
+  showToast('✨ Text wurde von der KI optimiert!');
+}
+
+// Toggle-Checkbox visuell
+document.addEventListener('DOMContentLoaded', () => {
+  const toggle = document.getElementById('teaser-waitlist-toggle');
+  const track = document.getElementById('teaser-toggle-track');
+  const thumb = document.getElementById('teaser-toggle-thumb');
+  const spotsGroup = document.getElementById('teaser-spots-group');
+  if (toggle) {
+    const updateToggle = () => {
+      if (toggle.checked) {
+        if (track) track.style.background = 'var(--gold)';
+        if (thumb) thumb.style.transform = 'translateX(20px)';
+        if (spotsGroup) spotsGroup.style.display = 'block';
+      } else {
+        if (track) track.style.background = 'rgba(255,255,255,0.1)';
+        if (thumb) thumb.style.transform = 'translateX(0)';
+        if (spotsGroup) spotsGroup.style.display = 'none';
+      }
+    };
+    toggle.addEventListener('change', updateToggle);
+    updateToggle();
+  }
+});
+window.submitTeaser = submitTeaser;
+window.startTeaserVoice = startTeaserVoice;
+window.aiBoostTeaserText = aiBoostTeaserText;
 
 // ============================================================
 // CHAMÄLEON-GESUCH-FORMULAR – categoryConfig
