@@ -4008,21 +4008,24 @@ function setCreateType(type, el) {
   document.querySelectorAll('#create-modal .type-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   const cg = document.getElementById('cm-countdown-group');
-  if (cg) cg.style.display = type === 'Coming Soon' ? 'block' : 'none';
-  // Bug 3 Fix: Chamäleon-Gesuch-Formular im Ricardo-Modal ein-/ausblenden
+  if (cg) cg.style.display = 'none'; // Countdown nur im Teaser-Block
   const cmGesuchBlock = document.getElementById('cm-gesuch-chameleon-block');
   const cmNormalBlock = document.getElementById('cm-normal-form-block');
+  const cmTeaserBlock = document.getElementById('cm-teaser-form-block');
   const publishBtn = document.getElementById('publish-btn');
-  if (cmGesuchBlock && cmNormalBlock) {
-    if (type === 'Gesuch') {
-      cmGesuchBlock.style.display = 'block';
-      cmNormalBlock.style.display = 'none';
-      if (publishBtn) { publishBtn.textContent = '\ud83d\udd0d GESUCH VER\u00d6FFENTLICHEN'; publishBtn.setAttribute('onclick', 'submitCmGesuch()'); }
-    } else {
-      cmGesuchBlock.style.display = 'none';
-      cmNormalBlock.style.display = 'block';
-      if (publishBtn) { publishBtn.textContent = 'VER\u00d6FFENTLICHEN'; publishBtn.setAttribute('onclick', 'submitCreateModal()'); }
-    }
+  // Alle Blöcke ausblenden
+  if (cmGesuchBlock) cmGesuchBlock.style.display = 'none';
+  if (cmNormalBlock) cmNormalBlock.style.display = 'none';
+  if (cmTeaserBlock) cmTeaserBlock.style.display = 'none';
+  if (type === 'Gesuch') {
+    if (cmGesuchBlock) cmGesuchBlock.style.display = 'block';
+    if (publishBtn) { publishBtn.textContent = '🔍 GESUCH VERÖFFENTLICHEN'; publishBtn.setAttribute('onclick', 'submitCmGesuch()'); }
+  } else if (type === 'Coming Soon') {
+    if (cmTeaserBlock) cmTeaserBlock.style.display = 'block';
+    if (publishBtn) { publishBtn.textContent = '🚀 VORANKÜNDIGUNG VERÖFFENTLICHEN'; publishBtn.setAttribute('onclick', 'submitCmTeaser()'); }
+  } else {
+    if (cmNormalBlock) cmNormalBlock.style.display = 'block';
+    if (publishBtn) { publishBtn.textContent = 'VERÖFFENTLICHEN'; publishBtn.setAttribute('onclick', 'submitCreateModal()'); }
   }
 }
 
@@ -4486,6 +4489,248 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 window.submitTeaser = submitTeaser;
+
+// submitCmTeaser: Vorankündigung aus dem Create-Modal
+async function submitCmTeaser() {
+  if (!currentUser) { openAuth(); return; }
+  const _userId = getUID() || currentUser?.id;
+  if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
+  const title = (document.getElementById('cm-teaser-title')?.value || '').trim();
+  const desc = (document.getElementById('cm-teaser-desc')?.value || '').trim();
+  const date = document.getElementById('cm-teaser-date')?.value || '';
+  const category = document.getElementById('cm-teaser-category')?.value || 'Event';
+  const gemeinde = document.getElementById('cm-teaser-gemeinde')?.value || 'Uri';
+  const contact = (document.getElementById('cm-teaser-contact')?.value || '').trim();
+  const waitlistActive = document.getElementById('cm-teaser-waitlist')?.checked ?? true;
+  const spotsTotal = parseInt(document.getElementById('cm-teaser-spots')?.value) || 50;
+  if (!title) { showToast('⚠️ Bitte Titel eingeben'); return; }
+  if (!date) { showToast('⚠️ Bitte Startdatum eingeben'); return; }
+  const btn = document.getElementById('publish-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Wird veröffentlicht...'; }
+  try {
+    const payload = {
+      user_id: _userId,
+      title,
+      description: desc,
+      price: 0,
+      type: 'Coming Soon',
+      status: 'coming_soon',
+      location: gemeinde,
+      gemeinde,
+      category,
+      contact_info: contact,
+      is_promoted: false,
+      emoji: category === 'Event' ? '🎉' : category === 'Produkt' ? '📦' : category === 'Kurs' ? '📚' : '🤫',
+      viewers: Math.floor(Math.random() * 5 + 1),
+      available_from: date,
+      waitlist_active: waitlistActive,
+      spots_total: spotsTotal,
+      spots_taken: 0
+    };
+    const data = await supaFetch('listings', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data) && data.length > 0) {
+      allListings.unshift(data[0]);
+    } else {
+      allListings.unshift({ ...payload, id: 'cm-teaser-' + Date.now(), created_at: new Date().toISOString() });
+    }
+    addXP(10, 'Vorankündigung erstellt');
+    launchConfetti();
+    showToast('🚀 Vorankündigung veröffentlicht!');
+    closeCreateModal();
+    renderListings();
+  } catch(e) {
+    const errMsg = e.message || '';
+    if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else {
+      showToast('❌ Fehler: ' + errMsg, 'error');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 VORANKÜNDIGUNG VERÖFFENTLICHEN'; }
+  }
+}
+window.submitCmTeaser = submitCmTeaser;
+
+// Voice für Create-Modal Teaser
+let cmTeaserRecognition = null;
+function startCmTeaserVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { showToast('⚠️ Voice nicht unterstützt (Chrome empfohlen)', 'error'); return; }
+  const iconEl = document.getElementById('cm-teaser-voice-icon');
+  const labelEl = document.getElementById('cm-teaser-voice-label');
+  const btn = document.getElementById('btn-cm-teaser-voice');
+  if (cmTeaserRecognition) {
+    cmTeaserRecognition.stop(); cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+    return;
+  }
+  cmTeaserRecognition = new SpeechRecognition();
+  cmTeaserRecognition.lang = 'de-CH';
+  cmTeaserRecognition.continuous = false;
+  cmTeaserRecognition.interimResults = false;
+  if (iconEl) iconEl.textContent = '🔴';
+  if (labelEl) labelEl.textContent = 'Hört zu...';
+  if (btn) btn.style.borderColor = '#ff4444';
+  cmTeaserRecognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    const desc = document.getElementById('cm-teaser-desc');
+    if (desc) desc.value = (desc.value ? desc.value + ' ' : '') + text;
+  };
+  cmTeaserRecognition.onend = () => {
+    cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+  };
+  cmTeaserRecognition.onerror = (e) => {
+    cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+  };
+  cmTeaserRecognition.start();
+}
+window.startCmTeaserVoice = startCmTeaserVoice;
+
+// KI-Booster für Create-Modal Teaser
+async function aiBoostCmTeaserText() {
+  const descEl = document.getElementById('cm-teaser-desc');
+  if (!descEl) return;
+  const raw = descEl.value.trim();
+  if (!raw) { showToast('⚠️ Bitte zuerst Stichworte eingeben', 'error'); return; }
+  const catEl = document.getElementById('cm-teaser-category');
+  const cat = catEl?.value || 'Event';
+  const catEmojis = { Event: '🎉🔥', Produkt: '📦✨', Kurs: '📚🚀', Geheim: '🤫💎' };
+  const emojis = catEmojis[cat] || '🚀✨';
+  await new Promise(r => setTimeout(r, 1200));
+  descEl.value = emojis + ' Mach dich bereit!\n\n' + raw + '\n\n🔥 Das wird unvergesslich – sichere dir jetzt deinen Platz!\n\n🔔 Trage dich in die Warteliste ein und sei unter den Ersten!';
+  showToast('✨ Text wurde von der KI optimiert!');
+}
+window.aiBoostCmTeaserText = aiBoostCmTeaserText;
+
+// submitCmTeaser: Vorankündigung aus dem Create-Modal
+async function submitCmTeaser() {
+  if (!currentUser) { openAuth(); return; }
+  const _userId = getUID() || currentUser?.id;
+  if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
+  const title = (document.getElementById('cm-teaser-title')?.value || '').trim();
+  const desc = (document.getElementById('cm-teaser-desc')?.value || '').trim();
+  const date = document.getElementById('cm-teaser-date')?.value || '';
+  const category = document.getElementById('cm-teaser-category')?.value || 'Event';
+  const gemeinde = document.getElementById('cm-teaser-gemeinde')?.value || 'Uri';
+  const contact = (document.getElementById('cm-teaser-contact')?.value || '').trim();
+  const waitlistActive = document.getElementById('cm-teaser-waitlist')?.checked ?? true;
+  const spotsTotal = parseInt(document.getElementById('cm-teaser-spots')?.value) || 50;
+  if (!title) { showToast('⚠️ Bitte Titel eingeben'); return; }
+  if (!date) { showToast('⚠️ Bitte Startdatum eingeben'); return; }
+  const btn = document.getElementById('publish-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Wird veröffentlicht...'; }
+  try {
+    const payload = {
+      user_id: _userId,
+      title,
+      description: desc,
+      price: 0,
+      type: 'Coming Soon',
+      status: 'coming_soon',
+      location: gemeinde,
+      gemeinde,
+      category,
+      contact_info: contact,
+      is_promoted: false,
+      emoji: category === 'Event' ? '🎉' : category === 'Produkt' ? '📦' : category === 'Kurs' ? '📚' : '🤫',
+      viewers: Math.floor(Math.random() * 5 + 1),
+      available_from: date,
+      waitlist_active: waitlistActive,
+      spots_total: spotsTotal,
+      spots_taken: 0
+    };
+    const data = await supaFetch('listings', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data) && data.length > 0) {
+      allListings.unshift(data[0]);
+    } else {
+      allListings.unshift({ ...payload, id: 'cm-teaser-' + Date.now(), created_at: new Date().toISOString() });
+    }
+    addXP(10, 'Vorankündigung erstellt');
+    launchConfetti();
+    showToast('🚀 Vorankündigung veröffentlicht!');
+    closeCreateModal();
+    renderListings();
+  } catch(e) {
+    const errMsg = e.message || '';
+    if (errMsg.includes('JWT') || errMsg.includes('401') || errMsg.includes('403')) {
+      showToast('❌ Sitzung abgelaufen – bitte neu einloggen', 'error');
+      doLogout(); openAuth();
+    } else {
+      showToast('❌ Fehler: ' + errMsg, 'error');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 VORANKÜNDIGUNG VERÖFFENTLICHEN'; }
+  }
+}
+window.submitCmTeaser = submitCmTeaser;
+
+// Voice für Create-Modal Teaser
+let cmTeaserRecognition = null;
+function startCmTeaserVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { showToast('⚠️ Voice nicht unterstützt (Chrome empfohlen)', 'error'); return; }
+  const iconEl = document.getElementById('cm-teaser-voice-icon');
+  const labelEl = document.getElementById('cm-teaser-voice-label');
+  const btn = document.getElementById('btn-cm-teaser-voice');
+  if (cmTeaserRecognition) {
+    cmTeaserRecognition.stop(); cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+    return;
+  }
+  cmTeaserRecognition = new SpeechRecognition();
+  cmTeaserRecognition.lang = 'de-CH';
+  cmTeaserRecognition.continuous = false;
+  cmTeaserRecognition.interimResults = false;
+  if (iconEl) iconEl.textContent = '🔴';
+  if (labelEl) labelEl.textContent = 'Hört zu...';
+  if (btn) btn.style.borderColor = '#ff4444';
+  cmTeaserRecognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    const desc = document.getElementById('cm-teaser-desc');
+    if (desc) desc.value = (desc.value ? desc.value + ' ' : '') + text;
+  };
+  cmTeaserRecognition.onend = () => {
+    cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+  };
+  cmTeaserRecognition.onerror = (e) => {
+    cmTeaserRecognition = null;
+    if (iconEl) iconEl.textContent = '🎤';
+    if (labelEl) labelEl.textContent = 'Sprechen';
+    if (btn) btn.style.borderColor = 'var(--gold)';
+  };
+  cmTeaserRecognition.start();
+}
+window.startCmTeaserVoice = startCmTeaserVoice;
+
+// KI-Booster für Create-Modal Teaser
+async function aiBoostCmTeaserText() {
+  const descEl = document.getElementById('cm-teaser-desc');
+  if (!descEl) return;
+  const raw = descEl.value.trim();
+  if (!raw) { showToast('⚠️ Bitte zuerst Stichworte eingeben', 'error'); return; }
+  const catEl = document.getElementById('cm-teaser-category');
+  const cat = catEl?.value || 'Event';
+  const catEmojis = { Event: '🎉🔥', Produkt: '📦✨', Kurs: '📚🚀', Geheim: '🤫💎' };
+  const emojis = catEmojis[cat] || '🚀✨';
+  await new Promise(r => setTimeout(r, 1200));
+  descEl.value = emojis + ' Mach dich bereit!\n\n' + raw + '\n\n🔥 Das wird unvergesslich – sichere dir jetzt deinen Platz!\n\n🔔 Trage dich in die Warteliste ein und sei unter den Ersten!';
+  showToast('✨ Text wurde von der KI optimiert!');
+}
+window.aiBoostCmTeaserText = aiBoostCmTeaserText;
 window.startTeaserVoice = startTeaserVoice;
 window.aiBoostTeaserText = aiBoostTeaserText;
 
@@ -6788,6 +7033,81 @@ window.switchDashTab = switchDashTab;
       </div>
 
       </div><!-- END cm-normal-form-block -->
+
+      <!-- VORANKUENDIGUNGS-FORMULAR im Create-Modal -->
+      <div id="cm-teaser-form-block" style="display:none; padding:0 4px">
+        <div style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));border:1px solid var(--orange);border-radius:16px;padding:16px;margin-bottom:20px;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">&#x1F680;</div>
+          <h3 style="font-size:16px;font-weight:900;color:var(--orange);margin:0 0 4px">Hype aufbauen. Warteliste f&#252;llen.</h3>
+          <p style="font-size:12px;color:var(--text-faint);margin:0">K&#252;ndige dein Event, Produkt oder Kurs an &#8211; bevor es offiziell startet.</p>
+        </div>
+        <div class="konto-field">
+          <label class="konto-label">Titel der Ank&#252;ndigung *</label>
+          <input type="text" class="konto-input" id="cm-teaser-title" placeholder="z.B. Uri Ski-Opening Night 2026">
+        </div>
+        <div class="konto-field">
+          <label class="konto-label">Beschreibung / Teaser-Text</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <button type="button" id="btn-cm-teaser-voice" onclick="startCmTeaserVoice()" style="flex:1;background:#1a1a1a;border:1px solid var(--gold);border-radius:8px;padding:8px 10px;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+              <span id="cm-teaser-voice-icon">&#x1F3A4;</span> <span id="cm-teaser-voice-label">Sprechen</span>
+            </button>
+            <button type="button" onclick="aiBoostCmTeaserText()" style="flex:1;background:linear-gradient(45deg,#FFD700,#FFA500);border:none;border-radius:8px;padding:8px 10px;color:#000;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+              &#x2728; KI Text-Booster
+            </button>
+          </div>
+          <textarea class="konto-input" id="cm-teaser-desc" rows="4" style="resize:none;min-height:100px" placeholder="Stichworte eingeben oder sprechen..."></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div class="konto-field" style="margin:0">
+            <label class="konto-label">&#x1F4C5; Wann geht's los? *</label>
+            <input type="date" class="konto-input" id="cm-teaser-date" style="color:#fff">
+          </div>
+          <div class="konto-field" style="margin:0">
+            <label class="konto-label">&#x1F3AD; Kategorie</label>
+            <select class="konto-input" id="cm-teaser-category" style="color:#fff">
+              <option value="Event">&#x1F389; Event / Party</option>
+              <option value="Produkt">&#x1F4E6; Neues Produkt</option>
+              <option value="Kurs">&#x1F4DA; Neuer Kurs</option>
+              <option value="Geheim">&#x1F92B; Streng Geheim</option>
+            </select>
+          </div>
+        </div>
+        <div class="konto-field">
+          <label class="konto-label">&#x1F4CD; Gemeinde</label>
+          <select class="konto-input" id="cm-teaser-gemeinde" style="color:#fff">
+            <option value="Altdorf">Altdorf</option>
+            <option value="Erstfeld">Erstfeld</option>
+            <option value="Schattdorf">Schattdorf</option>
+            <option value="Buerglen">B&#252;rglen</option>
+            <option value="Attinghausen">Attinghausen</option>
+            <option value="Andermatt">Andermatt</option>
+            <option value="Fluelen">Fl&#252;elen</option>
+            <option value="Silenen">Silenen</option>
+            <option value="Ganz Uri">&#x1F5FA;&#xFE0F; Ganz Uri</option>
+          </select>
+        </div>
+        <div style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:12px;padding:14px;margin-bottom:16px">
+          <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+            <div style="position:relative;width:44px;height:24px;flex-shrink:0">
+              <input type="checkbox" id="cm-teaser-waitlist" checked style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:2;width:100%;height:100%;margin:0">
+              <div style="position:absolute;inset:0;background:var(--gold);border-radius:12px"></div>
+              <div style="position:absolute;top:2px;left:22px;width:20px;height:20px;background:#000;border-radius:50%"></div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:800;color:var(--gold)">&#x1F514; Warteliste aktivieren</div>
+              <div style="font-size:11px;color:var(--text-faint)">Interessenten k&#246;nnen sich eintragen &#8211; du sammelst Leads!</div>
+            </div>
+          </label>
+        </div>
+        <div class="konto-field">
+          <label class="konto-label">&#x1F39F;&#xFE0F; Max. Wartelisten-Pl&#228;tze <span style="color:var(--orange);font-size:10px">(Scarcity!)</span></label>
+          <input type="number" class="konto-input" id="cm-teaser-spots" value="50" min="1" max="9999">
+        </div>
+        <div class="konto-field">
+          <label class="konto-label">Kontakt (WhatsApp/Tel/Email)</label>
+          <input type="text" class="konto-input" id="cm-teaser-contact" placeholder="z.B. https://wa.me/41791234567">
+        </div>
+      </div><!-- END cm-teaser-form-block -->
 
     </div>
     <div class="create-modal-footer">
