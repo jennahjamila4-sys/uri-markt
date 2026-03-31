@@ -3190,7 +3190,25 @@ function startApp() {
   if (oo) oo.classList.add('hidden');
   if (appEl) appEl.style.display = 'flex';
   localStorage.setItem('uri_onboarded', '1');
-  loadListings();
+  loadListings().then(() => {
+    // URL-Parameter: ?listing=ID → Inserat direkt öffnen (für Share-Links)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedListingId = urlParams.get('listing');
+    if (sharedListingId) {
+      // Kurze Verzögerung damit Listings geladen sind
+      setTimeout(() => {
+        const listing = allListings.find(l => String(l.id) === String(sharedListingId));
+        if (listing) {
+          openDetail(listing.id);
+        } else {
+          // Direkt von Supabase laden falls nicht im Cache
+          supaFetch('listings?id=eq.' + sharedListingId + '&select=*').then(data => {
+            if (data && data.length > 0) openDetail(data[0].id, data[0]);
+          }).catch(() => {});
+        }
+      }, 800);
+    }
+  });
   checkSession().then(() => {
     loadNotifications();
     updateAuthUI();
@@ -3466,8 +3484,40 @@ function switchAuthTab(tab, el) {
 
 
 async function forgotPassword() {
-  const email = document.getElementById('login-email')?.value?.trim() || document.getElementById('reg-email')?.value?.trim();
-  if (!email) { showToast('Bitte zuerst E-Mail eingeben', 'error'); return; }
+  // E-Mail aus Login-Feld lesen, oder per Dialog abfragen
+  let email = (document.getElementById('login-email')?.value?.trim()) || 
+              (document.getElementById('reg-email')?.value?.trim());
+  if (!email) {
+    // Zeige ein kleines Eingabe-Overlay für die E-Mail
+    email = await new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+      const box = document.createElement('div');
+      box.style.cssText = 'background:var(--card);border-radius:20px;padding:28px 24px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.5)';
+      box.innerHTML = '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">🔑 Passwort zurücksetzen</div>' +
+        '<div style="font-size:13px;color:var(--text-faint);margin-bottom:18px">Gib deine E-Mail-Adresse ein. Wir senden dir einen Reset-Link.</div>' +
+        '<input type="email" id="forgot-email-input" placeholder="deine@email.ch" style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;box-sizing:border-box;margin-bottom:14px">';
+      const sendBtn = document.createElement('button');
+      sendBtn.textContent = '📧 Reset-Link senden';
+      sendBtn.style.cssText = 'width:100%;background:var(--gold);color:#000;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:8px';
+      sendBtn.onclick = () => {
+        const v = document.getElementById('forgot-email-input').value.trim();
+        if (v) { overlay.remove(); resolve(v); }
+        else { document.getElementById('forgot-email-input').style.borderColor = '#ef4444'; }
+      };
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Abbrechen';
+      cancelBtn.style.cssText = 'width:100%;background:transparent;border:none;color:var(--text-faint);font-size:13px;cursor:pointer';
+      cancelBtn.onclick = () => { overlay.remove(); resolve(null); };
+      box.appendChild(sendBtn);
+      box.appendChild(cancelBtn);
+      overlay.appendChild(box);
+      overlay.id = 'forgot-overlay';
+      document.body.appendChild(overlay);
+      setTimeout(() => document.getElementById('forgot-email-input')?.focus(), 100);
+    });
+    if (!email) return;
+  }
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
       method: 'POST',
@@ -3869,8 +3919,8 @@ function getCategoryEmoji(cat) {
 // ============================================================
 // DETAIL MODAL
 // ============================================================
-function openDetail(id) {
-  const l = allListings.find(x => x.id == id || x.id === id);
+function openDetail(id, directListing) {
+  const l = directListing || allListings.find(x => x.id == id || x.id === id);
   if (!l) return;
   const modal = document.getElementById('detail-modal');
   const content = document.getElementById('detail-content');
@@ -3897,6 +3947,18 @@ function openDetail(id) {
         <span class="modal-fomo-text">🔥 ${viewers} Personen schauen gerade auf dieses Inserat</span>
       </div>
       ${l.description ? `<div class="modal-desc">${escHtml(l.description)}</div>` : ''}
+      ${l.smart_data ? (() => {
+        try {
+          const sd = JSON.parse(l.smart_data);
+          const entries = Object.entries(sd).filter(([k,v]) => v && String(v).trim());
+          if (!entries.length) return '';
+          return '<div style="background:linear-gradient(135deg,rgba(255,193,7,0.08),rgba(255,193,7,0.03));border:1px solid rgba(255,193,7,0.25);border-radius:14px;padding:14px 16px;margin:10px 0">' +
+            '<div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase">✨ Produkt-Details</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            entries.map(([k,v]) => '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--text-faint);margin-bottom:2px">' + escHtml(k) + '</div><div style="font-size:13px;font-weight:700;color:var(--text)">' + escHtml(String(v)) + '</div></div>').join('') +
+            '</div></div>';
+        } catch(e) { return ''; }
+      })() : ''}
       ${isComingSoon && (l.countdown || l.available_from) ? `
         <div class="cs-countdown" style="margin-bottom:16px;display:inline-block">
           <div class="cs-countdown-label">STARTET IN</div>
@@ -4043,6 +4105,18 @@ async function shareListingNow(id, title, price) {
   }
 }
 window.shareListingNow = shareListingNow;
+// Audit: Alle neuen Funktionen als window-Exports registrieren
+if (typeof onTeaserCommitmentChange === 'function') window.onTeaserCommitmentChange = onTeaserCommitmentChange;
+if (typeof onWaitlistToggleChange === 'function') window.onWaitlistToggleChange = onWaitlistToggleChange;
+if (typeof bookTicket === 'function') window.bookTicket = bookTicket;
+if (typeof joinWaitlist === 'function') window.joinWaitlist = joinWaitlist;
+if (typeof openMyTickets === 'function') window.openMyTickets = openMyTickets;
+if (typeof openQrScanner === 'function') window.openQrScanner = openQrScanner;
+if (typeof initiateDeal === 'function') window.initiateDeal = initiateDeal;
+if (typeof confirmDeal === 'function') window.confirmDeal = confirmDeal;
+if (typeof saveGesuchDraft === 'function') window.saveGesuchDraft = saveGesuchDraft;
+if (typeof showCommitmentChoice === 'function') window.showCommitmentChoice = showCommitmentChoice;
+if (typeof closeCoffeeModal === 'function') window.closeCoffeeModal = closeCoffeeModal;
 
 function unlockContact(id) {
   // Login-Gate: Nicht angemeldete User werden aufgefordert sich anzumelden
@@ -4583,8 +4657,8 @@ async function submitCreateModal() {
   try {
     // Smart Matrix Daten sammeln und an Beschreibung anhängen
     const smartData = (typeof getSmartMatrixData === 'function') ? getSmartMatrixData() : {};
-    const smartStr = Object.entries(smartData).map(([k,v]) => k + ': ' + v).join(' | ');
-    const fullDesc = smartStr ? desc + '\n\n--- Smart-Details ---\n' + smartStr : desc;
+    // Smart-Daten werden als JSON-Feld gespeichert (nicht als Rohtext in Beschreibung)
+    const fullDesc = desc;
 
     const payload = {
       user_id: _userId,
@@ -4604,6 +4678,10 @@ async function submitCreateModal() {
       price_model: createSelectedPriceModel,
       delivery_versand: versand,
       delivery_abholung: abholung,
+      image_url: (window._uploadedPhotos && window._uploadedPhotos['main']) || null,
+      image_detail: (window._uploadedPhotos && window._uploadedPhotos['detail']) || null,
+      image_mangel: (window._uploadedPhotos && window._uploadedPhotos['mangel']) || null,
+      smart_data: Object.keys(smartData).length > 0 ? JSON.stringify(smartData) : null,
     };
     if (countdown) payload.countdown = new Date(countdown).toISOString();
     // TASK 1+2: Auktion End-Datum
