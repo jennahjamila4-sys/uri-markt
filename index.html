@@ -2308,8 +2308,19 @@ window.addEventListener('error', function(e) {
   return false;
 });
 window.addEventListener('unhandledrejection', function(e) {
-  console.error('URI-MARKT Promise Error:', e.reason);
-  e.preventDefault(); // Verhindert Konsolen-Crash
+  const reason = e.reason;
+  // Auth-Fehler (400/401) sind erwartet – nicht als roter Fehler loggen
+  if (reason && reason.status && (reason.status === 400 || reason.status === 401)) {
+    e.preventDefault();
+    return;
+  }
+  // Netzwerkfehler still ignorieren
+  if (reason && reason.message && (reason.message.includes('NetworkError') || reason.message.includes('Failed to fetch'))) {
+    e.preventDefault();
+    return;
+  }
+  console.warn('URI-MARKT Promise Warning:', reason?.message || reason);
+  e.preventDefault();
 });
 </script>
 </head>
@@ -3061,7 +3072,15 @@ async function tryRefreshToken() {
       headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: currentUser.refresh_token })
     });
-    if (!res.ok) return false;
+    // 400/401 = Token abgelaufen – kein Fehler, nur Session beenden
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      // Nur loggen wenn unerwarteter Fehler (nicht 400/401)
+      if (res.status !== 400 && res.status !== 401) {
+        console.warn('Token-Refresh unerwarteter Fehler:', res.status);
+      }
+      return false;
+    }
     const data = await res.json();
     if (data.access_token) {
       currentUser = { ...currentUser, ...data };
@@ -3070,6 +3089,7 @@ async function tryRefreshToken() {
     }
     return false;
   } catch(e) {
+    // Netzwerkfehler – still ignorieren
     return false;
   }
 }
@@ -3082,7 +3102,15 @@ async function supaAuth(action, body) {
     body: JSON.stringify(body)
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || data.msg || 'Auth error');
+  if (!res.ok) {
+    // 400/401 sind erwartete Auth-Fehler (falsche Credentials, abgelaufene Tokens)
+    // Diese werden NICHT als console.error geloggt – nur als normaler throw
+    const errMsg = data.error_description || data.msg || data.message || data.error || 'Auth error';
+    const err = new Error(errMsg);
+    err.status = res.status;
+    err.code = data.error_code || data.code || '';
+    throw err;
+  }
   return data;
 }
 
@@ -3243,7 +3271,7 @@ async function checkSession() {
       await refreshProfile();
       updateAuthUI();
     } catch(e) {
-      console.error('Session check error:', e);
+      // Session-Fehler still ignorieren (abgelaufene Tokens sind normal)
       localStorage.removeItem('uri_session');
       currentUser = null;
     }
@@ -3519,19 +3547,29 @@ async function forgotPassword() {
     if (!email) return;
   }
   try {
+    showToast('⏳ Sende Reset-Link...');
     const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
       method: 'POST',
       headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, redirectTo: 'https://uri-markt-8dus.vercel.app' })
     });
     if (res.ok) {
-      showToast('✅ Reset-Link wurde an ' + email + ' gesendet', 'success');
+      showToast('✅ Reset-Link wurde an ' + email + ' gesendet! Bitte prüfe deinen Posteingang (und Spam-Ordner).', 'success');
       closeAuth();
     } else {
-      showToast('Fehler beim Senden – bitte prüfe die E-Mail', 'error');
+      const errData = await res.json().catch(() => ({}));
+      const errCode = errData?.error_code || '';
+      if (res.status === 429 || errCode.includes('rate') || errCode.includes('limit')) {
+        showToast('⏱️ Zu viele Anfragen. Bitte warte 1 Stunde und versuche es erneut.', 'error');
+      } else if (errCode === 'user_not_found' || res.status === 404) {
+        // Sicherheit: Kein Hinweis ob E-Mail existiert
+        showToast('✅ Falls diese E-Mail registriert ist, erhältst du einen Reset-Link.', 'success');
+      } else {
+        showToast('❌ Fehler beim Senden. Bitte versuche es später erneut.', 'error');
+      }
     }
   } catch(e) {
-    showToast('Netzwerkfehler', 'error');
+    showToast('❌ Netzwerkfehler – bitte Internetverbindung prüfen', 'error');
   }
 }
 // ============================================================
@@ -3576,11 +3614,23 @@ async function doResetPassword() {
     if (res.ok) {
       showToast('✅ Passwort erfolgreich geändert! Bitte melde dich an.', 'success');
       closeResetPwModal();
+      // Session bereinigen damit User sich neu anmelden muss
+      currentUser = null;
+      localStorage.removeItem('uri_session');
       // Kurze Verzögerung, dann Auth-Modal öffnen
-      setTimeout(() => openAuth(), 800);
+      setTimeout(() => { updateAuthUI(); openAuth(); }, 800);
     } else {
-      const errMsg = data?.message || data?.error_description || 'Fehler beim Speichern';
-      showToast('❌ ' + errMsg, 'error');
+      const errCode = data?.error_code || data?.code || '';
+      const errMsg = data?.message || data?.error_description || data?.msg || 'Fehler beim Speichern';
+      if (res.status === 401 || errCode === 'invalid_token' || errMsg.includes('expired')) {
+        showToast('⏱️ Der Reset-Link ist abgelaufen. Bitte fordere einen neuen an.', 'error');
+        closeResetPwModal();
+        setTimeout(() => forgotPassword(), 500);
+      } else if (errMsg.includes('password') && errMsg.includes('length')) {
+        showToast('⚠️ Passwort muss mindestens 6 Zeichen haben.', 'error');
+      } else {
+        showToast('❌ ' + errMsg, 'error');
+      }
     }
   } catch(e) {
     showToast('❌ Netzwerkfehler: ' + e.message, 'error');
@@ -3620,16 +3670,20 @@ async function doLogin() {
     loadListings();
   } catch(e) {
     let msg = e.message || 'Login fehlgeschlagen';
-    if (msg.includes('429') || msg.includes('Too Many') || msg.includes('rate limit')) {
-      showToast('🚫 Zu viele Versuche. Bitte warte einen Moment.', 'error');
-    } else if (msg.includes('Invalid login') || msg.includes('Invalid email or password')) {
-      showToast('❌ Falsche E-Mail oder falsches Passwort.');
+    const status = e.status || 0;
+    const code = e.code || '';
+    if (status === 429 || msg.includes('Too Many') || msg.includes('rate limit')) {
+      showToast('🚫 Zu viele Versuche. Bitte warte einige Minuten.', 'error');
+    } else if (code === 'invalid_credentials' || msg.includes('Invalid login') || msg.includes('Invalid email or password') || msg.includes('invalid_credentials')) {
+      showToast('❌ Falsche E-Mail oder falsches Passwort.', 'error');
+    } else if (msg.includes('Email not confirmed') || code === 'email_not_confirmed') {
+      showToast('📧 Bitte bestätige zuerst deine E-Mail-Adresse.', 'error');
+    } else if (msg.includes('NetworkError') || msg.includes('Failed to fetch')) {
+      showToast('📡 Keine Internetverbindung.', 'error');
     } else {
-      showToast('❌ ' + msg);
+      showToast('❌ ' + msg, 'error');
     }
   }
-}
-
 async function doRegister() {
   const username = document.getElementById('reg-username').value.trim();
   const email = document.getElementById('reg-email').value.trim();
