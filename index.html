@@ -2,7 +2,22 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<script> navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then(r => r.forEach(w => w.unregister())); window.location.href.indexOf('?v=')===-1 && (window.location.href+=(window.location.href.indexOf('?')>-1?'&':'?')+'v='+Date.now()); </script>
+<script>
+navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then(r => r.forEach(w => w.unregister()));
+(function() {
+  var hash = window.location.hash;
+  var isSupabaseCallback = hash && (
+    hash.indexOf('access_token') !== -1 ||
+    hash.indexOf('type=recovery') !== -1 ||
+    hash.indexOf('type=signup') !== -1 ||
+    hash.indexOf('error=') !== -1
+  );
+  var isPKCE = window.location.search.indexOf('code=') !== -1;
+  if (!isSupabaseCallback && !isPKCE && window.location.href.indexOf('?v=') === -1) {
+    window.location.href += (window.location.href.indexOf('?') > -1 ? '&' : '?') + 'v=' + Date.now();
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#000000">
 <meta name="description" content="Kaufen, Verkaufen und Events im Kanton Uri – Dein lokaler Dorfplatz">
@@ -2840,15 +2855,25 @@ window.addEventListener('unhandledrejection', function(e) {
     <div class="auth-close" onclick="closeResetPwModal()">✕</div>
     <h2>🔑 Neues Passwort</h2>
     <p>Gib dein neues Passwort ein. Mindestens 6 Zeichen.</p>
-    <div class="form-group">
-      <label class="form-label" for="new-password">Neues Passwort</label>
-      <input type="password" class="form-input" id="new-password" placeholder="Mindestens 6 Zeichen">
+    <div id="reset-token-error" style="display:none;background:rgba(255,68,68,0.12);border:1px solid rgba(255,68,68,0.4);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;color:#ff6b6b;line-height:1.5">
+      ⏱️ <strong>Link abgelaufen.</strong><br>
+      Supabase-Links sind 1 Stunde gültig.<br>
+      <button onclick="closeResetPwModal();setTimeout(()=>forgotPassword&&forgotPassword(),300)"
+        style="margin-top:10px;background:var(--gold);color:#000;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px">
+        🔄 Neuen Reset-Link anfordern
+      </button>
     </div>
-    <div class="form-group" style="margin-top:12px">
-      <label class="form-label" for="new-password-confirm">Passwort bestätigen</label>
-      <input type="password" class="form-input" id="new-password-confirm" placeholder="Passwort wiederholen">
+    <div id="reset-form-fields">
+      <div class="form-group">
+        <label class="form-label" for="new-password">Neues Passwort</label>
+        <input type="password" class="form-input" id="new-password" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+      </div>
+      <div class="form-group" style="margin-top:12px">
+        <label class="form-label" for="new-password-confirm">Passwort bestätigen</label>
+        <input type="password" class="form-input" id="new-password-confirm" placeholder="Passwort wiederholen" autocomplete="new-password">
+      </div>
+      <button class="submit-btn" style="margin-top:20px" onclick="doResetPassword()">✅ Passwort speichern</button>
     </div>
-    <button class="submit-btn" style="margin-top:20px" onclick="doResetPassword()">Passwort speichern</button>
   </div>
 </div>
 <!-- TOAST -->
@@ -3587,7 +3612,10 @@ function closeResetPwModal() {
   document.getElementById('new-password').value = '';
   document.getElementById('new-password-confirm').value = '';
   recoveryAccessToken = null;
-  // Hash aus URL entfernen
+  const errEl = document.getElementById('reset-token-error');
+  const formEl = document.getElementById('reset-form-fields');
+  if (errEl) errEl.style.display = 'none';
+  if (formEl) formEl.style.display = 'block';
   if (window.location.hash) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
@@ -3638,19 +3666,54 @@ async function doResetPassword() {
 }
 
 function checkRecoveryToken() {
-  // Supabase sendet Recovery-Token als URL-Hash:
-  // #access_token=...&refresh_token=...&type=recovery
   const hash = window.location.hash;
-  if (!hash) return;
-  const params = new URLSearchParams(hash.substring(1));
-  const type = params.get('type');
-  const accessToken = params.get('access_token');
-  if (type === 'recovery' && accessToken) {
-    recoveryAccessToken = accessToken;
-    // Hash aus URL entfernen (sauber)
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-    // Reset-Modal öffnen
-    openResetPwModal();
+  if (hash && hash.length > 1) {
+    const params = new URLSearchParams(hash.substring(1));
+    const type = params.get('type');
+    const accessToken = params.get('access_token');
+    const errorCode = params.get('error');
+    if (errorCode) {
+      history.replaceState(null, '', window.location.pathname);
+      showToast('❌ Link ungültig oder abgelaufen. Bitte neuen anfordern.', 'error');
+      setTimeout(() => forgotPassword && forgotPassword(), 1000);
+      return;
+    }
+    if (type === 'recovery' && accessToken) {
+      recoveryAccessToken = accessToken;
+      history.replaceState(null, '', window.location.pathname);
+      closeAuth && closeAuth();
+      setTimeout(() => openResetPwModal(), 300);
+      return;
+    }
+  }
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  const type2 = urlParams.get('type');
+  if (code && type2 === 'recovery') {
+    _exchangePKCECode(code);
+  }
+}
+
+async function _exchangePKCECode(code) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auth_code: code })
+    });
+    const data = await res.json();
+    if (res.ok && data.access_token) {
+      recoveryAccessToken = data.access_token;
+      history.replaceState(null, '', window.location.pathname);
+      closeAuth && closeAuth();
+      setTimeout(() => openResetPwModal(), 300);
+    } else {
+      history.replaceState(null, '', window.location.pathname);
+      showToast('❌ Link abgelaufen. Bitte neuen Reset anfordern.', 'error');
+      setTimeout(() => forgotPassword && forgotPassword(), 1000);
+    }
+  } catch(e) {
+    showToast('❌ Netzwerkfehler beim Token-Austausch', 'error');
   }
 }
 
