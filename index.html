@@ -7791,6 +7791,14 @@ async function confirmPurchase(listingId, paymentMethod) {
     return;
   }
 
+  // Demo-Listings: nur Modal zeigen, kein Supabase-Insert
+  const isDemo = String(listingId).startsWith('demo-');
+  if (isDemo) {
+    const demoPrice = parseFloat(listing.price) || 0;
+    _showBuyerConfirmedModal(listing, paymentMethod, demoPrice);
+    return;
+  }
+
   const price = parseFloat(listing.price) || 0;
   const commission = Math.round(price * 0.10 * 100) / 100;
   const buyerContact = currentProfile?.phone
