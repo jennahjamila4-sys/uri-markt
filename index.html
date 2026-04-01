@@ -3536,7 +3536,72 @@ function switchAuthTab(tab, el) {
 }
 
 
+// Cooldown-Tracking für Passwort-Reset (verhindert Rate-Limit-Spam)
+const PW_RESET_COOLDOWN_KEY = 'uri_pw_reset_cooldown';
+const PW_RESET_COOLDOWN_MS = 60 * 1000; // 60 Sekunden Frontend-Cooldown
+
+function _getPwResetCooldownRemaining() {
+  const last = parseInt(localStorage.getItem(PW_RESET_COOLDOWN_KEY) || '0', 10);
+  const elapsed = Date.now() - last;
+  return Math.max(0, PW_RESET_COOLDOWN_MS - elapsed);
+}
+
+function _showRateLimitOverlay(waitSeconds, email) {
+  // Entferne altes Overlay falls vorhanden
+  document.getElementById('rate-limit-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'rate-limit-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--card);border-radius:20px;padding:28px 24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:center';
+  let remaining = waitSeconds;
+  box.innerHTML = `
+    <div style="font-size:36px;margin-bottom:12px">⏱️</div>
+    <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px">Zu viele Anfragen</div>
+    <div style="font-size:13px;color:var(--text-faint);margin-bottom:20px;line-height:1.6">
+      Supabase erlaubt nur wenige Reset-E-Mails pro Stunde.<br>
+      Bitte warte kurz und versuche es erneut.
+    </div>
+    <div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:12px;padding:16px;margin-bottom:20px">
+      <div style="font-size:12px;color:var(--gold);font-weight:700;letter-spacing:1px;margin-bottom:4px">WARTE NOCH</div>
+      <div id="rl-countdown" style="font-size:32px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums">${remaining}s</div>
+    </div>
+    <div id="rl-retry-btn-wrap" style="display:none">
+      <button onclick="document.getElementById('rate-limit-overlay').remove();forgotPassword()"
+        style="width:100%;background:var(--gold);color:#000;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:8px">
+        🔄 Jetzt erneut versuchen
+      </button>
+    </div>
+    <button onclick="document.getElementById('rate-limit-overlay').remove()"
+      style="width:100%;background:transparent;border:none;color:var(--text-faint);font-size:13px;cursor:pointer;padding:8px">
+      Schliessen
+    </button>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  // Countdown-Timer
+  const timer = setInterval(() => {
+    remaining--;
+    const el = document.getElementById('rl-countdown');
+    if (el) el.textContent = remaining + 's';
+    if (remaining <= 0) {
+      clearInterval(timer);
+      const retryWrap = document.getElementById('rl-retry-btn-wrap');
+      if (retryWrap) retryWrap.style.display = 'block';
+      const cdEl = document.getElementById('rl-countdown');
+      if (cdEl) cdEl.textContent = '✅ Bereit!';
+    }
+  }, 1000);
+}
+
 async function forgotPassword() {
+  // Prüfe Frontend-Cooldown
+  const cooldownRemaining = _getPwResetCooldownRemaining();
+  if (cooldownRemaining > 0) {
+    _showRateLimitOverlay(Math.ceil(cooldownRemaining / 1000));
+    return;
+  }
+
   // E-Mail aus Login-Feld lesen, oder per Dialog abfragen
   let email = (document.getElementById('login-email')?.value?.trim()) || 
               (document.getElementById('reg-email')?.value?.trim());
@@ -3579,18 +3644,24 @@ async function forgotPassword() {
       body: JSON.stringify({ email, redirectTo: 'https://uri-markt-8dus.vercel.app' })
     });
     if (res.ok) {
+      // Cooldown setzen nach erfolgreichem Senden
+      localStorage.setItem(PW_RESET_COOLDOWN_KEY, Date.now().toString());
       showToast('✅ Reset-Link wurde an ' + email + ' gesendet! Bitte prüfe deinen Posteingang (und Spam-Ordner).', 'success');
       closeAuth();
     } else {
       const errData = await res.json().catch(() => ({}));
-      const errCode = errData?.error_code || '';
-      if (res.status === 429 || errCode.includes('rate') || errCode.includes('limit')) {
-        showToast('⏱️ Zu viele Anfragen. Bitte warte 1 Stunde und versuche es erneut.', 'error');
-      } else if (errCode === 'user_not_found' || res.status === 404) {
+      const errCode = (errData?.error_code || errData?.msg || errData?.message || '').toLowerCase();
+      if (res.status === 429 || errCode.includes('rate') || errCode.includes('limit') || errCode.includes('too many')) {
+        // Cooldown setzen und Overlay anzeigen
+        localStorage.setItem(PW_RESET_COOLDOWN_KEY, Date.now().toString());
+        _showRateLimitOverlay(60);
+      } else if (errCode.includes('user_not_found') || res.status === 404) {
         // Sicherheit: Kein Hinweis ob E-Mail existiert
+        localStorage.setItem(PW_RESET_COOLDOWN_KEY, Date.now().toString());
         showToast('✅ Falls diese E-Mail registriert ist, erhältst du einen Reset-Link.', 'success');
+        closeAuth();
       } else {
-        showToast('❌ Fehler beim Senden. Bitte versuche es später erneut.', 'error');
+        showToast('❌ Fehler: ' + (errData?.message || errData?.msg || 'Unbekannter Fehler') + ' – bitte später erneut versuchen.', 'error');
       }
     }
   } catch(e) {
