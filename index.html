@@ -2837,7 +2837,6 @@ window.addEventListener('unhandledrejection', function(e) {
 
 <!-- NOTIFICATIONS PANEL -->
 <div id="notif-panel">
-  <div style="font-weight:700;font-size:14px;margin-bottom:10px">🔔 Benachrichtigungen</div>
   <div id="notif-list"></div>
 </div>
 
@@ -7559,57 +7558,251 @@ function _showDealConfirmedAlert(notif) {
 // DEAL-FLOW — KÄUFER: Kaufabsicht
 // ============================================================
 async function initiatePurchase(listingId) {
-  if (!currentUser) { showToast('⚠️ Bitte einloggen', 'error'); openAuth(); return; }
-  const listing = allListings.find(l => String(l.id) === String(listingId));
-  if (!listing) { showToast('❌ Inserat nicht gefunden', 'error'); return; }
-  if (listing.user_id === getUID()) { showToast('⚠️ Eigenes Inserat nicht kaufbar', 'error'); return; }
+  if (!currentUser) {
+    showToast('⚠️ Bitte einloggen um zu kaufen', 'error');
+    openAuth();
+    return;
+  }
+
+  // Robustes Lookup: String UND Number vergleichen
+  const listing = (allListings || []).find(l =>
+    String(l.id) === String(listingId)
+  );
+  if (!listing) {
+    showToast('❌ Inserat nicht gefunden – bitte neu laden', 'error');
+    return;
+  }
+  if (listing.user_id === getUID()) {
+    showToast('⚠️ Du kannst dein eigenes Inserat nicht kaufen', 'error');
+    return;
+  }
 
   document.getElementById('purchase-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'purchase-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:flex-end;justify-content:center';
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0',
+    'background:rgba(0,0,0,0.94)',
+    'z-index:99999',
+    'display:flex',
+    'align-items:flex-end',
+    'justify-content:center',
+    'backdrop-filter:blur(4px)'
+  ].join(';');
+
   const price = parseFloat(listing.price) || 0;
-  const commission = Math.round(price * 0.10 * 100) / 100;
+  const listingId_safe = String(listing.id).replace(/'/g, "\'");
+
+  // Wie viele haben das Inserat gespeichert? (FOMO Zahl)
+  let saverCount = 0;
+  try {
+    const saves = await supaFetch(
+      'saves?listing_id=eq.' + listing.id + '&select=id'
+    );
+    saverCount = Array.isArray(saves) ? saves.length : 0;
+  } catch(e) { saverCount = 0; }
+
+  const fomoText = saverCount > 0
+    ? `👀 ${saverCount} ${saverCount === 1 ? 'Person hat' : 'Personen haben'} diesen Artikel gespeichert`
+    : '🔥 Dieser Artikel ist sehr gefragt';
+
   overlay.innerHTML = `
-    <div style="background:#111;border-radius:20px 20px 0 0;padding:28px 20px 48px;width:100%;max-width:480px;border-top:2px solid var(--gold)">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:20px;font-weight:900;color:var(--gold)">🛒 Kaufanfrage senden</div>
-        <div style="font-size:13px;color:var(--text-faint);margin-top:4px">${(listing.title||'').replace(/</g,'&lt;')}</div>
+    <div style="
+      background:#0d0d0d;
+      border-radius:24px 24px 0 0;
+      padding:0 0 48px 0;
+      width:100%;
+      max-width:480px;
+      border-top:2px solid var(--gold);
+      box-shadow:0 -8px 40px rgba(255,215,0,0.15);
+      overflow:hidden;
+    ">
+
+      <!-- DRAG HANDLE -->
+      <div style="display:flex;justify-content:center;padding:12px 0 4px">
+        <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px"></div>
       </div>
-      <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:14px;padding:16px;margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-          <span style="color:var(--text-faint)">Kaufpreis</span>
-          <span style="font-weight:800">CHF ${price.toFixed(2)}</span>
+
+      <!-- ARTIKEL HEADER -->
+      <div style="padding:16px 20px 0">
+        <div style="
+          display:flex;align-items:center;gap:12px;
+          background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.08);
+          border-radius:14px;padding:12px 14px;margin-bottom:16px
+        ">
+          <div style="font-size:28px">🏷️</div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#fff;line-height:1.2">
+              ${(listing.title||'Artikel').replace(/</g,'&lt;')}
+            </div>
+            <div style="font-size:22px;font-weight:900;color:var(--gold);margin-top:2px">
+              CHF ${price.toFixed(2)}
+            </div>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-faint)">
-          <span>10% Provision – zahlt Verkäufer aus Wallet</span>
-          <span style="color:var(--gold)">CHF ${commission.toFixed(2)}</span>
+
+        <!-- FOMO SOCIAL PROOF -->
+        <div style="
+          background:rgba(255,68,68,0.08);
+          border:1px solid rgba(255,68,68,0.25);
+          border-radius:10px;
+          padding:10px 14px;
+          margin-bottom:16px;
+          display:flex;align-items:center;gap:8px
+        ">
+          <span style="font-size:16px">⚡</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#ff6b6b">
+              ${fomoText}
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px">
+              Sichere dir den Artikel – bevor es jemand anderes tut
+            </div>
+          </div>
         </div>
+
+        <!-- CALL TO ACTION TEXT -->
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:17px;font-weight:900;color:#fff;margin-bottom:4px">
+            Wie möchtest du bezahlen?
+          </div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5">
+            Zahlung direkt mit dem Verkäufer · Sicher & lokal
+          </div>
+        </div>
+
+        <!-- ZAHLUNGSOPTIONEN -->
+        <div style="display:grid;gap:10px;margin-bottom:12px">
+
+          <button
+            id="btn-twint-${listingId_safe}"
+            onclick="confirmPurchase('${listingId_safe}','twint')"
+            style="
+              padding:18px 16px;
+              background:linear-gradient(135deg,rgba(0,229,255,0.15),rgba(0,229,255,0.05));
+              border:2px solid #00E5FF;
+              border-radius:14px;
+              color:#00E5FF;
+              font-weight:800;
+              cursor:pointer;
+              font-size:15px;
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              transition:all 0.15s;
+              -webkit-tap-highlight-color:rgba(0,229,255,0.2)
+            "
+          >
+            <span>📱 Mit TWINT bezahlen</span>
+            <span style="font-size:12px;opacity:0.7">Sofort ·  beliebt</span>
+          </button>
+
+          <button
+            id="btn-cash-${listingId_safe}"
+            onclick="confirmPurchase('${listingId_safe}','cash')"
+            style="
+              padding:18px 16px;
+              background:linear-gradient(135deg,rgba(0,230,118,0.12),rgba(0,230,118,0.04));
+              border:2px solid #00e676;
+              border-radius:14px;
+              color:#00e676;
+              font-weight:800;
+              cursor:pointer;
+              font-size:15px;
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              -webkit-tap-highlight-color:rgba(0,230,118,0.2)
+            "
+          >
+            <span>💵 Bar bezahlen</span>
+            <span style="font-size:12px;opacity:0.7">Übergabe vor Ort</span>
+          </button>
+
+          <button
+            id="btn-card-${listingId_safe}"
+            onclick="confirmPurchase('${listingId_safe}','card')"
+            style="
+              padding:16px;
+              background:rgba(255,255,255,0.04);
+              border:1px solid rgba(255,255,255,0.18);
+              border-radius:14px;
+              color:rgba(255,255,255,0.7);
+              font-weight:700;
+              cursor:pointer;
+              font-size:14px;
+              -webkit-tap-highlight-color:rgba(255,255,255,0.1)
+            "
+          >
+            💳 Überweisung / andere Methode
+          </button>
+        </div>
+
+        <!-- VERTRAUEN -->
+        <div style="
+          display:flex;justify-content:center;gap:20px;
+          font-size:11px;color:rgba(255,255,255,0.35);
+          padding-top:4px
+        ">
+          <span>🔒 Sicher</span>
+          <span>🤝 Lokal</span>
+          <span>✅ Verifiziert</span>
+        </div>
+
+        <button
+          onclick="document.getElementById('purchase-overlay').remove()"
+          style="
+            width:100%;margin-top:14px;padding:13px;
+            background:transparent;border:none;
+            color:rgba(255,255,255,0.3);cursor:pointer;font-size:13px
+          "
+        >
+          Abbrechen
+        </button>
       </div>
-      <div style="font-size:12px;color:var(--text-faint);text-align:center;margin-bottom:16px;line-height:1.7">
-        💡 Verbindliche Kaufabsicht.<br>Zahlung direkt mit Verkäufer (Bar/TWINT).<br>Nach Bestätigung werden Kontakte freigeschaltet.
-      </div>
-      <div style="display:grid;gap:10px">
-        <button onclick="confirmPurchase('${listing.id}','twint')" style="padding:16px;background:rgba(0,229,255,0.1);border:2px solid #00E5FF;border-radius:14px;color:#00E5FF;font-weight:800;cursor:pointer;font-size:15px">📱 Zahlung via TWINT (direkt mit Verkäufer)</button>
-        <button onclick="confirmPurchase('${listing.id}','cash')" style="padding:16px;background:rgba(0,230,118,0.08);border:2px solid #00e676;border-radius:14px;color:#00e676;font-weight:800;cursor:pointer;font-size:15px">💵 Bar bezahlen (Übergabe vor Ort)</button>
-        <button onclick="confirmPurchase('${listing.id}','card')" style="padding:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);border-radius:14px;color:#fff;font-weight:800;cursor:pointer;font-size:15px">💳 Überweisung / andere</button>
-      </div>
-      <button onclick="document.getElementById('purchase-overlay').remove()" style="width:100%;margin-top:12px;padding:13px;background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:var(--text-faint);cursor:pointer">Abbrechen</button>
     </div>`;
+
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 async function confirmPurchase(listingId, paymentMethod) {
+  // Robustes Lookup
+  const listing = (allListings || []).find(l =>
+    String(l.id) === String(listingId)
+  );
+
+  // Button visuell sperren (verhindert Doppelklick)
+  const btnId = 'btn-' + paymentMethod + '-' + String(listingId).replace(/'/g,"\'");
+  const btn = document.getElementById(btnId);
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.textContent = '⏳ Wird verarbeitet...';
+  }
+
   document.getElementById('purchase-overlay')?.remove();
-  const listing = allListings.find(l => String(l.id) === String(listingId));
-  if (!listing) return;
+
+  if (!listing) {
+    showToast('❌ Inserat nicht gefunden', 'error');
+    return;
+  }
+
   const price = parseFloat(listing.price) || 0;
   const commission = Math.round(price * 0.10 * 100) / 100;
-  const buyerContact = currentProfile?.phone || currentProfile?.email || '';
-  const payLabel = {twint:'TWINT',cash:'Bar vor Ort',card:'Überweisung'}[paymentMethod]||paymentMethod;
+  const buyerContact = currentProfile?.phone
+    || currentProfile?.email || '';
+  const payLabel = {
+    twint: 'TWINT',
+    cash: 'Bar vor Ort',
+    card: 'Überweisung'
+  }[paymentMethod] || paymentMethod;
+
   try {
-    showToast('⏳ Kaufabsicht wird gesendet...', 'info');
+    // 1. Transaktion speichern
     await supaFetch('transactions', {
       method: 'POST',
       body: JSON.stringify({
@@ -7625,46 +7818,193 @@ async function confirmPurchase(listingId, paymentMethod) {
         buyer_contact: buyerContact
       })
     });
+
+    // 2. Listing reservieren
     await supaFetch('listings?id=eq.' + listingId, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'reserved' })
     });
+
+    // 3. Verkäufer In-App Notification (triggert Realtime)
     await supaFetch('notifications', {
       method: 'POST',
       body: JSON.stringify({
         user_id: listing.user_id,
-        title: '🛒 Neue Kaufanfrage!',
-        message: (currentProfile?.username||'Jemand') + ' möchte "' + (listing.title||'') + '" kaufen – ' + payLabel + ' – CHF ' + price.toFixed(2) + '. Öffne Kaufanfragen und bestätige!',
+        title: '🛒 Jemand will kaufen!',
+        message: (currentProfile?.username || 'Jemand')
+          + ' möchte "' + (listing.title || '') + '" kaufen'
+          + ' (' + payLabel + ', CHF ' + price.toFixed(2) + ').'
+          + ' Bestätige jetzt unter Kaufanfragen!',
         type: 'purchase_request',
         listing_id: String(listingId)
       })
     });
+
     await loadListings();
-    _showBuyerConfirmedModal(listing, paymentMethod, commission);
+
+    // 4. Bestätigungs-Modal für Käufer
+    _showBuyerConfirmedModal(listing, paymentMethod, price);
+
   } catch(e) {
-    showToast('❌ Fehler: ' + e.message, 'error');
+    showToast('❌ Fehler beim Senden: ' + e.message, 'error');
   }
 }
 
-function _showBuyerConfirmedModal(listing, paymentMethod, commission) {
+function _showBuyerConfirmedModal(listing, paymentMethod, price) {
   document.getElementById('buyer-confirmed-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'buyer-confirmed-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
-  const payLabel = {twint:'📱 TWINT',cash:'💵 Bar vor Ort',card:'💳 Überweisung'}[paymentMethod]||paymentMethod;
+  overlay.style.cssText = [
+    'position:fixed', 'inset:0',
+    'background:rgba(0,0,0,0.94)',
+    'z-index:99999',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'padding:20px',
+    'backdrop-filter:blur(6px)'
+  ].join(';');
+
+  const payEmoji = {twint:'📱',cash:'💵',card:'💳'}[paymentMethod]||'💰';
+  const payLabel = {
+    twint:'TWINT direkt mit dem Verkäufer',
+    cash:'Bar bei der Übergabe',
+    card:'Per Überweisung'
+  }[paymentMethod] || paymentMethod;
+
+  // 48h Deadline berechnen
+  const deadline = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const deadlineStr = deadline.toLocaleDateString('de-CH', {
+    weekday:'long', day:'numeric', month:'long'
+  }) + ', ' + deadline.toLocaleTimeString('de-CH', {
+    hour:'2-digit', minute:'2-digit'
+  }) + ' Uhr';
+
+  // price als Number sicherstellen
+  const priceNum = parseFloat(price) || 0;
+
   overlay.innerHTML = `
-    <div style="background:#111;border-radius:20px;padding:32px 24px;width:100%;max-width:400px;text-align:center;border:1px solid var(--gold)">
-      <div style="font-size:48px;margin-bottom:12px">✅</div>
-      <div style="font-size:20px;font-weight:900;color:var(--gold);margin-bottom:8px">Kaufabsicht gesendet!</div>
-      <div style="font-size:14px;color:var(--text-faint);line-height:1.7;margin-bottom:20px">
-        Der Verkäufer wurde benachrichtigt.<br>Sobald er bestätigt, werden eure Kontaktdaten gegenseitig freigeschaltet.<br><br>
-        <strong style="color:var(--text)">Zahlung: ${payLabel}</strong>
+    <div style="
+      background:#0d0d0d;
+      border-radius:24px;
+      padding:32px 24px 28px;
+      width:100%;
+      max-width:400px;
+      border:1px solid rgba(0,230,118,0.4);
+      box-shadow:0 0 40px rgba(0,230,118,0.15);
+      text-align:center;
+    ">
+
+      <!-- SUCCESS ANIMATION -->
+      <div style="
+        width:72px;height:72px;
+        background:linear-gradient(135deg,#00e676,#00c853);
+        border-radius:50%;
+        display:flex;align-items:center;justify-content:center;
+        font-size:32px;
+        margin:0 auto 20px;
+        box-shadow:0 4px 24px rgba(0,230,118,0.4);
+      ">✓</div>
+
+      <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px">
+        Anfrage gesendet! 🎉
       </div>
-      <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:10px;padding:12px;font-size:12px;color:var(--text-faint);margin-bottom:20px">
-        ℹ️ Die 10% Provision (CHF ${commission.toFixed(2)}) zahlt der Verkäufer automatisch aus seinem Wallet nach Bestätigung.
+      <div style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:24px">
+        Der Verkäufer wurde sofort benachrichtigt.
       </div>
-      <button onclick="document.getElementById('buyer-confirmed-overlay').remove()" style="width:100%;padding:14px;background:var(--gold);border:none;border-radius:12px;color:#000;font-weight:900;cursor:pointer;font-size:16px">Verstanden ✓</button>
+
+      <!-- ARTIKEL + PREIS -->
+      <div style="
+        background:rgba(255,255,255,0.04);
+        border:1px solid rgba(255,255,255,0.08);
+        border-radius:14px;
+        padding:14px 16px;
+        margin-bottom:16px;
+        text-align:left;
+      ">
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:4px">
+          Deine Anfrage
+        </div>
+        <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:2px">
+          ${(listing.title||'Artikel').replace(/</g,'&lt;')}
+        </div>
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">
+          CHF ${priceNum.toFixed(2)}
+        </div>
+      </div>
+
+      <!-- ZAHLUNG -->
+      <div style="
+        background:rgba(255,255,255,0.03);
+        border-radius:12px;
+        padding:12px 16px;
+        margin-bottom:16px;
+        text-align:left;
+        display:flex;align-items:center;gap:10px
+      ">
+        <span style="font-size:24px">${payEmoji}</span>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4)">
+            Zahlungsmethode
+          </div>
+          <div style="font-size:14px;font-weight:700;color:#fff">
+            ${payLabel}
+          </div>
+        </div>
+      </div>
+
+      <!-- 48H DEADLINE -->
+      <div style="
+        background:rgba(255,152,0,0.08);
+        border:1px solid rgba(255,152,0,0.3);
+        border-radius:12px;
+        padding:12px 16px;
+        margin-bottom:20px;
+        text-align:left;
+      ">
+        <div style="font-size:12px;font-weight:700;color:#ff9800;margin-bottom:4px">
+          ⏰ Verkäufer hat 48h Zeit
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5">
+          Bestätigung bis spätestens:<br>
+          <strong style="color:rgba(255,255,255,0.7)">${deadlineStr}</strong>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:6px">
+          Danach wird die Anfrage automatisch storniert und das Inserat wieder freigegeben.
+        </div>
+      </div>
+
+      <!-- NÄCHSTE SCHRITTE -->
+      <div style="
+        font-size:12px;
+        color:rgba(255,255,255,0.35);
+        line-height:1.7;
+        margin-bottom:24px;
+        text-align:left;
+      ">
+        📲 Du erhältst eine Benachrichtigung sobald der Verkäufer antwortet.<br>
+        🤝 Nach Bestätigung werden eure Kontaktdaten gegenseitig freigeschaltet.
+      </div>
+
+      <button
+        onclick="document.getElementById('buyer-confirmed-overlay').remove()"
+        style="
+          width:100%;
+          padding:15px;
+          background:var(--gold);
+          border:none;
+          border-radius:14px;
+          color:#000;
+          font-weight:900;
+          cursor:pointer;
+          font-size:16px;
+          box-shadow:0 4px 20px rgba(255,215,0,0.3);
+        "
+      >
+        Alles klar, ich warte ✓
+      </button>
     </div>`;
+
   document.body.appendChild(overlay);
 }
 
