@@ -7676,7 +7676,6 @@ async function initiatePurchase(listingId) {
         <div style="display:grid;gap:10px;margin-bottom:12px">
 
           <button
-            id="btn-twint-${listingId_safe}"
             onclick="confirmPurchase('${listingId_safe}','twint')"
             style="
               padding:18px 16px;
@@ -7699,7 +7698,6 @@ async function initiatePurchase(listingId) {
           </button>
 
           <button
-            id="btn-cash-${listingId_safe}"
             onclick="confirmPurchase('${listingId_safe}','cash')"
             style="
               padding:18px 16px;
@@ -7721,7 +7719,6 @@ async function initiatePurchase(listingId) {
           </button>
 
           <button
-            id="btn-card-${listingId_safe}"
             onclick="confirmPurchase('${listingId_safe}','card')"
             style="
               padding:16px;
@@ -7770,32 +7767,32 @@ async function initiatePurchase(listingId) {
 }
 
 async function confirmPurchase(listingId, paymentMethod) {
-  // Robustes Lookup
+  // 1. Listing suchen — VOR allem anderen
   const listing = (allListings || []).find(l =>
     String(l.id) === String(listingId)
   );
 
-  // Button visuell sperren (verhindert Doppelklick)
-  const btnId = 'btn-' + paymentMethod + '-' + String(listingId).replace(/'/g,"\'");
-  const btn = document.getElementById(btnId);
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = '0.5';
-    btn.textContent = '⏳ Wird verarbeitet...';
-  }
-
+  // 2. Overlay erst NACH Lookup entfernen
   document.getElementById('purchase-overlay')?.remove();
 
   if (!listing) {
-    showToast('❌ Inserat nicht gefunden', 'error');
+    showToast('❌ Inserat nicht gefunden – Seite neu laden', 'error');
     return;
   }
 
-  // Demo-Listings: nur Modal zeigen, kein Supabase-Insert
-  const isDemo = String(listingId).startsWith('demo-');
-  if (isDemo) {
+  // 3. Demo-Listing: Nur Modal zeigen, kein Supabase
+  if (String(listingId).startsWith('demo-')
+    || String(listingId).startsWith('new-')
+    || String(listingId).startsWith('teaser-')) {
     const demoPrice = parseFloat(listing.price) || 0;
     _showBuyerConfirmedModal(listing, paymentMethod, demoPrice);
+    return;
+  }
+
+  // 4. Eingeloggt?
+  if (!currentUser || !getUID()) {
+    showToast('⚠️ Bitte einloggen', 'error');
+    openAuth();
     return;
   }
 
@@ -7809,14 +7806,17 @@ async function confirmPurchase(listingId, paymentMethod) {
     card: 'Überweisung'
   }[paymentMethod] || paymentMethod;
 
+  // 5. Ladeindikator
+  showToast('⏳ Kaufanfrage wird gesendet...', 'info');
+
   try {
-    // 1. Transaktion speichern
+    // 6. Transaktion speichern
     await supaFetch('transactions', {
       method: 'POST',
       body: JSON.stringify({
         listing_id: String(listingId),
         buyer_id: getUID(),
-        seller_id: listing.user_id,
+        seller_id: listing.user_id || null,
         amount: price,
         commission: commission,
         payment_method: paymentMethod,
@@ -7827,34 +7827,47 @@ async function confirmPurchase(listingId, paymentMethod) {
       })
     });
 
-    // 2. Listing reservieren
+    // 7. Listing reservieren
     await supaFetch('listings?id=eq.' + listingId, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'reserved' })
     });
 
-    // 3. Verkäufer In-App Notification (triggert Realtime)
-    await supaFetch('notifications', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: listing.user_id,
-        title: '🛒 Jemand will kaufen!',
-        message: (currentProfile?.username || 'Jemand')
-          + ' möchte "' + (listing.title || '') + '" kaufen'
-          + ' (' + payLabel + ', CHF ' + price.toFixed(2) + ').'
-          + ' Bestätige jetzt unter Kaufanfragen!',
-        type: 'purchase_request',
-        listing_id: String(listingId)
-      })
-    });
+    // 8. Verkäufer benachrichtigen
+    if (listing.user_id) {
+      await supaFetch('notifications', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: listing.user_id,
+          title: '🛒 Jemand will kaufen!',
+          message: (currentProfile?.username || 'Jemand')
+            + ' möchte "'
+            + (listing.title || '')
+            + '" kaufen ('
+            + payLabel + ', CHF ' + price.toFixed(2)
+            + '). Bestätige unter Kaufanfragen!',
+          type: 'purchase_request',
+          listing_id: String(listingId)
+        })
+      });
+    }
 
+    // 9. Feed neu laden + Bestätigungs-Modal
     await loadListings();
-
-    // 4. Bestätigungs-Modal für Käufer
     _showBuyerConfirmedModal(listing, paymentMethod, price);
 
   } catch(e) {
-    showToast('❌ Fehler beim Senden: ' + e.message, 'error');
+    // Fehlertext für User verständlich machen
+    let msg = e.message || 'Unbekannter Fehler';
+    if (msg.includes('transactions')) {
+      msg = 'Datenbank nicht bereit. Bitte Admin kontaktieren.';
+    } else if (msg.includes('403') || msg.includes('401')) {
+      msg = 'Bitte neu einloggen.';
+      doLogout && doLogout();
+      openAuth && openAuth();
+    }
+    showToast('❌ ' + msg, 'error');
+    console.error('confirmPurchase Fehler:', e);
   }
 }
 
