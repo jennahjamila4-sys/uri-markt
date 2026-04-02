@@ -3270,18 +3270,27 @@ function startApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedListingId = urlParams.get('listing');
     if (sharedListingId) {
-      // Kurze Verzögerung damit Listings geladen sind
-      setTimeout(() => {
-        const listing = allListings.find(l => String(l.id) === String(sharedListingId));
-        if (listing) {
-          openDetail(listing.id);
+      const tryOpenShared = async (attemptsLeft) => {
+        const found = (allListings || []).find(l =>
+          String(l.id) === String(sharedListingId)
+        );
+        if (found) { openDetail(found.id, found); return; }
+        try {
+          const data = await supaFetch(
+            'listings?id=eq.' + sharedListingId + '&select=*'
+          );
+          if (data && data.length > 0) {
+            openDetail(data[0].id, data[0]);
+            return;
+          }
+        } catch(e) { /* ignorieren */ }
+        if (attemptsLeft > 0) {
+          setTimeout(() => tryOpenShared(attemptsLeft - 1), 700);
         } else {
-          // Direkt von Supabase laden falls nicht im Cache
-          supaFetch('listings?id=eq.' + sharedListingId + '&select=*').then(data => {
-            if (data && data.length > 0) openDetail(data[0].id, data[0]);
-          }).catch(() => {});
+          showToast('❌ Inserat nicht gefunden oder gelöscht.', 'error');
         }
-      }, 800);
+      };
+      setTimeout(() => tryOpenShared(5), 500);
     }
   });
   checkSession().then(() => {
@@ -4214,6 +4223,25 @@ function openDetail(id, directListing) {
   const viewers = l.viewers || Math.floor(Math.random() * 20 + 5);
 
   content.innerHTML = `
+    <div style="
+      display:flex;align-items:center;
+      padding:10px 16px 0;
+      position:sticky;top:0;z-index:10;
+      background:linear-gradient(to bottom,
+        rgba(13,13,13,1) 70%, transparent);
+    ">
+      <button onclick="closeDetail()"
+        style="
+          display:flex;align-items:center;gap:6px;
+          background:rgba(255,255,255,0.08);
+          border:1px solid rgba(255,255,255,0.15);
+          color:#fff;border-radius:20px;
+          padding:8px 16px;cursor:pointer;
+          font-size:13px;font-weight:700;
+        ">
+        ← Zurück
+      </button>
+    </div>
     <div class="modal-img-placeholder">${l.emoji || getCategoryEmoji(l.category)}</div>
     <div class="modal-body">
       <div class="modal-tags">
@@ -4403,22 +4431,77 @@ function renderShareButton(l) {
 }
 
 async function shareListingNow(id, title, price) {
-  const shareUrl = window.location.origin + window.location.pathname + '?listing=' + id;
-  const shareText = title + (price > 0 ? ' · CHF ' + price : '') + ' – Uri-Markt';
+  // Saubere URL: ohne ?v= Parameter
+  const cleanPath = window.location.pathname.replace(/\/$/, '');
+  const shareUrl = window.location.origin + cleanPath
+    + '?listing=' + id;
+  const shareText = (title || 'Inserat')
+    + (price > 0 ? ' · CHF ' + price : '')
+    + ' – Uri-Markt';
+
+  // Natives Share-Sheet (iOS Safari, Android Chrome)
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Uri-Markt: ' + title, text: shareText, url: shareUrl });
+      await navigator.share({
+        title: 'Uri-Markt: ' + (title || 'Inserat'),
+        text: shareText,
+        url: shareUrl
+      });
       return;
-    } catch(e) { /* Fallback */ }
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+    }
   }
-  // Fallback: Copy to clipboard + Share-Sheet
+
+  // Fallback 1: Clipboard API
   try {
     await navigator.clipboard.writeText(shareUrl);
-    showToast('🔗 Link kopiert! ' + shareUrl);
-  } catch(e) {
-    // Letzter Fallback: Prompt
-    prompt('Link kopieren:', shareUrl);
-  }
+    showToast('🔗 Link kopiert! Einfügen zum Teilen.', 'success');
+    return;
+  } catch(e) { /* weiter */ }
+
+  // Fallback 2: Sichtbares Input-Feld zum manuellen Kopieren
+  document.getElementById('share-input-overlay')?.remove();
+  const div = document.createElement('div');
+  div.id = 'share-input-overlay';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `
+    <div style="background:#111;border:1px solid var(--gold);
+      border-radius:16px;padding:20px;width:100%;max-width:400px">
+      <div style="font-size:15px;font-weight:800;color:var(--gold);
+        margin-bottom:12px">🔗 Link zum Teilen</div>
+      <input id="share-url-input" value="${shareUrl}"
+        readonly
+        style="width:100%;padding:12px;background:#000;
+        border:1px solid rgba(255,255,255,0.2);
+        border-radius:10px;color:#fff;font-size:13px;
+        margin-bottom:12px"
+        onclick="this.select()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="
+          document.getElementById('share-url-input').select();
+          document.execCommand('copy');
+          showToast('✅ Kopiert!','success');
+          document.getElementById('share-input-overlay').remove();"
+          style="padding:12px;background:var(--gold);border:none;
+          border-radius:10px;color:#000;font-weight:900;cursor:pointer">
+          📋 Kopieren
+        </button>
+        <button onclick="document.getElementById('share-input-overlay').remove()"
+          style="padding:12px;background:rgba(255,255,255,0.05);
+          border:1px solid rgba(255,255,255,0.2);border-radius:10px;
+          color:#fff;font-weight:700;cursor:pointer">
+          Schliessen
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click', e => {
+    if(e.target === div) div.remove();
+  });
+  setTimeout(() => {
+    document.getElementById('share-url-input')?.select();
+  }, 100);
 }
 window.shareListingNow = shareListingNow;
 // Audit: Alle neuen Funktionen als window-Exports registrieren
@@ -7864,23 +7947,19 @@ async function confirmPurchase(listingId, paymentMethod) {
       body: JSON.stringify({ status: 'reserved' })
     });
 
-    // 8. Verkäufer benachrichtigen
+    // 8. Verkäufer benachrichtigen (via sichere RPC)
     if (listing.user_id) {
-      await supaFetch('notifications', {
-        method: 'POST',
-        body: JSON.stringify({
-          user_id: listing.user_id,
-          title: '🛒 Jemand will kaufen!',
-          message: (currentProfile?.username || 'Jemand')
-            + ' möchte "'
-            + (listing.title || '')
-            + '" kaufen ('
-            + payLabel + ', CHF ' + price.toFixed(2)
-            + '). Bestätige unter Kaufanfragen!',
-          type: 'purchase_request',
-          listing_id: String(listingId)
-        })
-      });
+      await sendNotification(
+        listing.user_id,
+        '🛒 Jemand will kaufen!',
+        (currentProfile?.username || 'Jemand')
+          + ' möchte "' + (listing.title || '')
+          + '" kaufen (' + payLabel
+          + ', CHF ' + price.toFixed(2)
+          + '). Bestätige jetzt unter Kaufanfragen!',
+        'purchase_request',
+        listingId
+      );
     }
 
     // 9. Feed neu laden + Bestätigungs-Modal
@@ -8108,7 +8187,16 @@ async function _loadSellerTx(listingId) {
             <div style="font-size:12px;font-weight:700;color:${color};background:${color}22;padding:4px 10px;border-radius:20px">${label}</div>
           </div>
           <div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">${pLabel} · ${date}</div>
-          ${tx.buyer_contact ? `<div style="font-size:12px;color:var(--text-faint);margin-bottom:4px">Käufer-Kontakt: <strong style="color:var(--gold)">${tx.buyer_contact}</strong></div>` : ''}
+          ${(tx.status === 'confirmed' || tx.status === 'completed') && tx.buyer_contact
+            ? `<div style="font-size:12px;color:var(--green);margin-bottom:6px">
+                ✅ Kontakt (freigeschaltet):
+                <strong style="color:var(--gold)">${tx.buyer_contact}</strong>
+               </div>`
+            : tx.status === 'pending'
+            ? `<div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">
+                🔒 Kontakt wird nach Bestätigung freigeschaltet
+               </div>`
+            : ''}
           ${tx.status === 'pending' ? `
             <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:10px;padding:10px;margin:10px 0;font-size:12px;color:var(--text-faint)">
               ⚠️ Bei Bestätigung werden automatisch <strong style="color:var(--gold)">${comm} Uri-Taler</strong> von deinem Wallet abgezogen.
@@ -8162,16 +8250,14 @@ async function respondToTx(txId, action) {
       const txRes = await supaFetch('transactions?id=eq.' + txId);
       const tx = Array.isArray(txRes) ? txRes[0] : txRes;
       if (tx?.buyer_id) {
-        await supaFetch('notifications', {
-          method: 'POST',
-          body: JSON.stringify({
-            user_id: tx.buyer_id,
-            title: '🎉 Kaufanfrage bestätigt!',
-            message: 'Super! Deine Kaufanfrage wurde bestätigt. Kontakt des Verkäufers: ' + sellerContact + '. Besprecht die Übergabe direkt.',
-            type: 'tx_confirmed',
-            listing_id: tx.listing_id
-          })
-        });
+        await sendNotification(
+          tx.buyer_id,
+          '🎉 Kaufanfrage bestätigt!',
+          'Deine Kaufanfrage wurde bestätigt. '
+            + 'Kontaktiert euch für die Übergabe.',
+          'tx_confirmed',
+          tx.listing_id
+        );
       }
       showToast('✅ Bestätigt! ' + res.commission_charged + ' Taler abgezogen. Käufer wurde benachrichtigt.', 'success');
       await refreshProfile && refreshProfile();
@@ -8181,10 +8267,13 @@ async function respondToTx(txId, action) {
       const tx = Array.isArray(txRes) ? txRes[0] : txRes;
       if (tx) {
         await supaFetch('listings?id=eq.' + tx.listing_id, { method: 'PATCH', body: JSON.stringify({ status: 'active' }) });
-        await supaFetch('notifications', {
-          method: 'POST',
-          body: JSON.stringify({ user_id: tx.buyer_id, title: '❌ Kaufanfrage abgelehnt', message: 'Der Verkäufer hat die Anfrage abgelehnt. Das Inserat ist wieder verfügbar.', type: 'tx_rejected', listing_id: tx.listing_id })
-        });
+        await sendNotification(
+          tx.buyer_id,
+          '❌ Kaufanfrage abgelehnt',
+          'Der Verkäufer hat abgelehnt. Das Inserat ist wieder verfügbar.',
+          'tx_rejected',
+          tx.listing_id
+        );
       }
       showToast('Kaufanfrage abgelehnt.', 'info');
     } else if (action === 'completed') {
@@ -8194,10 +8283,13 @@ async function respondToTx(txId, action) {
       if (tx) {
         await supaFetch('listings?id=eq.' + tx.listing_id, { method: 'PATCH', body: JSON.stringify({ status: 'sold', sold_at: new Date().toISOString() }) });
         typeof addXP === 'function' && addXP(50, 'Verkauf abgeschlossen');
-        await supaFetch('notifications', {
-          method: 'POST',
-          body: JSON.stringify({ user_id: tx.buyer_id, title: '🏆 Deal abgeschlossen!', message: 'Glückwunsch! Der Kauf wurde bestätigt. Hinterlasse jetzt eine Bewertung!', type: 'tx_completed', listing_id: tx.listing_id, transaction_id: txId })
-        });
+        await sendNotification(
+          tx.buyer_id,
+          '🏆 Deal abgeschlossen!',
+          'Glückwunsch! Der Kauf ist abgeschlossen. Hinterlasse jetzt eine Bewertung!',
+          'tx_completed',
+          tx.listing_id
+        );
         setTimeout(() => { openReviewModal(txId, tx.buyer_id, tx.listing_id); }, 800);
       }
       showToast('🏆 Deal abgeschlossen! +50 XP', 'success');
@@ -8393,6 +8485,28 @@ async function saveEditListing(listingId) {
 
 // Window-Exports für alle neuen Funktionen
 window.initRealtimeNotifications = initRealtimeNotifications;
+// ============================================================
+// SICHERE NOTIFICATION HELPER — via RPC statt direktem INSERT
+// ============================================================
+async function sendNotification(recipientId, title, message, type, listingId) {
+  if (!recipientId) return;
+  try {
+    await supaFetch('rpc/send_notification', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_recipient_id: recipientId,
+        p_title: title,
+        p_message: message,
+        p_type: type || 'info',
+        p_listing_id: listingId ? String(listingId) : null
+      })
+    });
+  } catch(e) {
+    // Notification-Fehler bricht NIE den Hauptflow ab
+    console.warn('Notification nicht gesendet:', e.message);
+  }
+}
+window.sendNotification = sendNotification;
 window.initiatePurchase = initiatePurchase;
 window.confirmPurchase = confirmPurchase;
 window.openSellerDashboard = openSellerDashboard;
