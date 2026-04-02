@@ -2312,6 +2312,29 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
   margin-top: 12px;
 }
 
+#error-panel {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.93);
+  z-index:999999;
+  align-items:flex-end;
+  justify-content:center;
+  padding:20px;
+}
+#error-panel.show {
+  display:flex;
+}
+#error-panel-box {
+  background:#1a0a0a;
+  border:2px solid #ff4444;
+  border-radius:20px 20px 0 0;
+  padding:24px 20px 40px;
+  width:100%;
+  max-width:480px;
+  max-height:80vh;
+  overflow-y:auto;
+}
 </style>
 <script>
 // ============================================================
@@ -4833,14 +4856,17 @@ async function handlePhotoUpload(input, slot) {
   // Zu Supabase Storage hochladen (falls eingeloggt)
   if (!currentUser) return;
   try {
-    const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const ext = file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
     const uid = getUID() || 'anon';
-    const path = 'listings/' + uid + '_' + Date.now() + '_' + slot + '.' + ext;
+    // Pfad: uid/timestamp_slot.ext (uid als Ordner fuer RLS-Policy)
+    const path = uid + '/' + Date.now() + '_' + slot + '.' + ext;
+    // Access-Token korrekt aus Session holen
+    const accessToken = getToken() || SUPABASE_KEY;
     const uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/listings/' + path, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + (currentUser.access_token || currentUser.session?.access_token || ''),
+        'Authorization': 'Bearer ' + accessToken,
         'Content-Type': file.type || 'image/jpeg',
         'x-upsert': 'true'
       },
@@ -4848,7 +4874,6 @@ async function handlePhotoUpload(input, slot) {
     });
     if (uploadRes.ok) {
       const publicUrl = SUPABASE_URL + '/storage/v1/object/public/listings/' + path;
-      // URL für spätere Verwendung beim Speichern des Inserats speichern
       if (!window._uploadedPhotos) window._uploadedPhotos = {};
       window._uploadedPhotos[slot] = publicUrl;
       // Vorschau-Bild mit echter URL aktualisieren
@@ -4857,10 +4882,16 @@ async function handlePhotoUpload(input, slot) {
         const img = slotEl.querySelector('img');
         if (img) img.dataset.url = publicUrl;
       }
+      console.log('Foto hochgeladen:', publicUrl);
+    } else {
+      const errText = await uploadRes.text();
+      console.warn('Upload fehlgeschlagen:', uploadRes.status, errText);
+      showToast('⚠️ Foto-Upload fehlgeschlagen (' + uploadRes.status + '). Inserat wird ohne Foto gespeichert.', 4000);
     }
   } catch(e) {
-    // Fehler beim Upload – Vorschau bleibt trotzdem sichtbar
+    // Fehler beim Upload - Vorschau bleibt trotzdem sichtbar
     console.warn('Photo upload error:', e.message);
+    showToast('⚠️ Foto-Upload fehlgeschlagen. Inserat wird ohne Foto gespeichert.', 4000);
   }
 }
 
@@ -7866,6 +7897,7 @@ async function confirmPurchase(listingId, paymentMethod) {
       doLogout && doLogout();
       openAuth && openAuth();
     }
+    if (typeof showErrorPanel === 'function') showErrorPanel('Kaufflow Fehler: ' + msg, e);
     showToast('❌ ' + msg, 'error');
     console.error('confirmPurchase Fehler:', e);
   }
@@ -8373,6 +8405,109 @@ window.openEditListing = openEditListing;
 window.saveEditListing = saveEditListing;
 
 window.switchDashTab = switchDashTab;
+
+// ============================================================
+// GLOBALES ERROR-PANEL
+// ============================================================
+
+function showErrorPanel(message, detail) {
+  const panel = document.getElementById('error-panel');
+  const msgEl = document.getElementById('error-panel-message');
+  const detailEl = document.getElementById('error-panel-detail');
+  if (!panel || !msgEl || !detailEl) return;
+
+  msgEl.textContent = message || 'Unbekannter Fehler';
+
+  let detailText = '';
+  if (detail) {
+    if (typeof detail === 'string') {
+      detailText = detail;
+    } else if (detail instanceof Error) {
+      detailText = detail.message;
+      if (detail.stack) detailText += '\n\n' + detail.stack;
+    } else {
+      try { detailText = JSON.stringify(detail, null, 2); }
+      catch(e2) { detailText = String(detail); }
+    }
+  }
+  detailText += '\n\nZeit: ' + new Date().toLocaleString('de-CH');
+  detailText += '\nURL: ' + window.location.href;
+  detailText += '\nUser: ' + (typeof getUID === 'function' ? (getUID() || 'nicht eingeloggt') : 'unbekannt');
+
+  detailEl.textContent = detailText;
+  panel.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeErrorPanel() {
+  const panel = document.getElementById('error-panel');
+  if (panel) panel.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+async function copyErrorText() {
+  const msg = document.getElementById('error-panel-message')?.textContent || '';
+  const detail = document.getElementById('error-panel-detail')?.textContent || '';
+  const full = '=== URI-MARKT FEHLER ===\n' + msg + '\n\n' + detail;
+  try {
+    await navigator.clipboard.writeText(full);
+    showToast('Fehler in Zwischenablage kopiert!', 2000);
+  } catch(e) {
+    const el = document.getElementById('error-panel-detail');
+    if (el) {
+      const range = document.createRange();
+      range.selectNode(el);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+      showToast('Text ist markiert - jetzt manuell kopieren', 3000);
+    }
+  }
+}
+
+window.showErrorPanel = showErrorPanel;
+window.closeErrorPanel = closeErrorPanel;
+window.copyErrorText = copyErrorText;
+
+// Globaler JS-Fehler-Handler
+window.addEventListener('error', function(event) {
+  const msg = event.message || 'JavaScript Fehler';
+  const detail = (event.filename
+    ? 'Datei: ' + event.filename + '\nZeile: ' + event.lineno
+    : '') + (event.error ? '\n\n' + event.error.stack : '');
+  showErrorPanel('Fehler: ' + msg, detail);
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+  const err = event.reason;
+  const msg = (err && err.message) ? err.message : String(err);
+  // Nur echte Fehler zeigen, nicht 400/401 Auth-Checks
+  if (msg && !msg.includes('400') && !msg.includes('JWT') && !msg.includes('Invalid login')) {
+    showErrorPanel('Netzwerk/API Fehler: ' + msg, err);
+  }
+});
+
+// showToast erweitern: type='error' oeffnet auch Error-Panel
+(function() {
+  const _origShowToast = showToast;
+  window.showToast = function(msg, typeOrDuration, duration) {
+    const isError = typeOrDuration === 'error';
+    const ms = typeof typeOrDuration === 'number'
+      ? typeOrDuration
+      : (duration || (isError ? 6000 : 3000));
+    // Original-Toast aufrufen
+    if (typeof _origShowToast === 'function') {
+      _origShowToast(msg, ms);
+    }
+    // Bei Fehlern: Error-Panel oeffnen
+    if (isError && msg && msg.length > 5) {
+      showErrorPanel(msg, null);
+    }
+  };
+})();
+
+window.showErrorPanel = showErrorPanel;
+window.closeErrorPanel = closeErrorPanel;
+window.copyErrorText = copyErrorText;
 </script>
 
 <!-- MEIN KAUFEN MODAL -->
@@ -9166,5 +9301,55 @@ window.switchDashTab = switchDashTab;
   </div>
 </div>
 
+
+<div id="error-panel">
+  <div id="error-panel-box">
+    <div style="display:flex;justify-content:space-between;
+      align-items:center;margin-bottom:16px">
+      <div style="color:#ff4444;font-size:17px;font-weight:900">
+        &#10060; Fehler-Details
+      </div>
+      <button onclick="closeErrorPanel()"
+        style="background:rgba(255,255,255,0.1);border:none;
+        color:#fff;border-radius:50%;width:36px;height:36px;
+        cursor:pointer;font-size:18px;flex-shrink:0">&#x2715;</button>
+    </div>
+
+    <div id="error-panel-message"
+      style="font-size:15px;font-weight:700;color:#ff6b6b;
+      margin-bottom:12px;line-height:1.5">
+    </div>
+
+    <div id="error-panel-detail"
+      style="font-family:monospace;font-size:12px;
+      color:rgba(255,255,255,0.6);background:rgba(0,0,0,0.4);
+      border-radius:10px;padding:12px;
+      word-break:break-all;line-height:1.6;
+      margin-bottom:16px;white-space:pre-wrap">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button onclick="copyErrorText()"
+        style="padding:12px;background:rgba(255,215,0,0.1);
+        border:2px solid var(--gold);border-radius:12px;
+        color:var(--gold);font-weight:700;cursor:pointer;
+        font-size:14px">
+        &#x1F4CB; Fehler kopieren
+      </button>
+      <button onclick="closeErrorPanel()"
+        style="padding:12px;background:rgba(255,255,255,0.05);
+        border:1px solid rgba(255,255,255,0.2);border-radius:12px;
+        color:#fff;font-weight:700;cursor:pointer;font-size:14px">
+        Schliessen
+      </button>
+    </div>
+
+    <div style="margin-top:14px;font-size:11px;
+      color:rgba(255,255,255,0.3);text-align:center;line-height:1.6">
+      Kopiere den Fehler und schicke ihn an den Entwickler.<br>
+      Dann kannst du normal weitermachen.
+    </div>
+  </div>
+</div>
 </body>
 </html>
