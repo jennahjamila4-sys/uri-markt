@@ -4979,12 +4979,16 @@ async function handlePhotoUpload(input, slot) {
     } else {
       const errText = await uploadRes.text();
       console.warn('Upload fehlgeschlagen:', uploadRes.status, errText);
-      showToast('⚠️ Foto-Upload fehlgeschlagen (' + uploadRes.status + '). Inserat wird ohne Foto gespeichert.', 4000);
+      let errMsg = 'Foto-Upload fehlgeschlagen (HTTP ' + uploadRes.status + ').';
+      if (uploadRes.status === 400) errMsg += ' Storage Bucket nicht konfiguriert.';
+      if (uploadRes.status === 403) errMsg += ' Keine Berechtigung - bitte neu einloggen.';
+      if (uploadRes.status === 404) errMsg += ' Storage Bucket "listings" existiert nicht.';
+      showErrorPanel('Foto-Upload: ' + errMsg, 'Status: ' + uploadRes.status + '\nAntwort: ' + errText.substring(0,200));
     }
   } catch(e) {
     // Fehler beim Upload - Vorschau bleibt trotzdem sichtbar
     console.warn('Photo upload error:', e.message);
-    showToast('⚠️ Foto-Upload fehlgeschlagen. Inserat wird ohne Foto gespeichert.', 4000);
+    showErrorPanel('Foto-Upload Fehler: ' + e.message, e);
   }
 }
 
@@ -7499,10 +7503,44 @@ function closeModalIfBg(e, id) {
 
 // --- RENDERING LOGIC ---
 
-function renderKaufenContent(tab) {
+async function renderKaufenContent(tab) {
   const container = document.getElementById('kaufen-content');
-  // For now, show empty state as requested
-  container.innerHTML = `<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=600&auto=format&fit=crop" style="width:100%; height:160px; object-fit:cover; border-radius:16px; margin-bottom:16px; filter:brightness(0.8)"><p style="font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:20px;"><strong>Die besten Deals sind schnell weg! ⏳</strong><br>Erspare dir teure Neukäufe. Entdecke exklusive lokale Schätze, bevor deine Nachbarn schneller sind!</p><button class="submit-btn" onclick="closeModal('mein-kaufen-modal'); swipeTo(0)">👀 Zeig mir die Deals!</button></div>`;
+  if (!currentUser) {
+    container.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center"><p style="color:var(--text-dim);margin-bottom:16px">Bitte anmelden um deine K\u00e4ufe zu sehen.</p><button class="submit-btn" onclick="openAuth()">Anmelden</button></div>';
+    return;
+  }
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">Laden...</div>';
+  try {
+    const txs = await supaFetch('transactions?buyer_id=eq.' + getUID() + '&order=created_at.desc&limit=20');
+    if (!txs || txs.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=600&auto=format&fit=crop" style="width:100%;height:160px;object-fit:cover;border-radius:16px;margin-bottom:16px;filter:brightness(0.8)"><p style="font-size:14px;color:var(--text-dim);line-height:1.6;margin-bottom:20px"><strong>Die besten Deals sind schnell weg!</strong><br>Erspare dir teure Neuk\u00e4ufe. Entdecke exklusive lokale Sch\u00e4tze!</p><button class="submit-btn" onclick="closeModal(&apos;mein-kaufen-modal&apos;); swipeTo(0)">Zeig mir die Deals!</button></div>';
+      return;
+    }
+    const totalDeals = txs.length;
+    const activeDeals = txs.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
+    const totalCHF = txs.filter(t => t.status === 'completed').reduce((s, t) => s + (t.amount || 0), 0);
+    const statusColors = {pending:'#f59e0b',confirmed:'#10b981',completed:'#6366f1',rejected:'#ef4444',cancelled:'#9ca3af'};
+    const statusLabels = {pending:'Ausstehend',confirmed:'Bestätigt',completed:'Abgeschlossen',rejected:'Abgelehnt',cancelled:'Abgebrochen'};
+    let html = '<div style="display:flex;gap:8px;padding:12px 16px;background:var(--surface);border-radius:16px;margin-bottom:16px">'
+      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--gold)">' + totalDeals + '</div><div style="font-size:10px;color:var(--text-dim)">Deals</div></div>'
+      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--green)">' + activeDeals + '</div><div style="font-size:10px;color:var(--text-dim)">Aktiv</div></div>'
+      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--blue)">CHF ' + totalCHF.toFixed(0) + '</div><div style="font-size:10px;color:var(--text-dim)">Gespart</div></div>'
+      + '</div>';
+    txs.forEach(tx => {
+      const listing = allListings.find(l => l.id == tx.listing_id) || {};
+      const color = statusColors[tx.status] || '#9ca3af';
+      const label = statusLabels[tx.status] || tx.status;
+      html += '<div class="listing-list-item" onclick="openDetail(\'' + tx.listing_id + '\'" style="cursor:pointer;margin-bottom:8px">'
+        + '<div class="listing-list-img">' + (listing.emoji || '\u{1F4E6}') + '</div>'
+        + '<div style="flex:1"><div style="font-size:13px;font-weight:700">' + (listing.title || 'Inserat #' + tx.listing_id) + '</div>'
+        + '<div style="font-size:10px;color:var(--text-dim)">' + new Date(tx.created_at).toLocaleDateString('de-CH') + '</div></div>'
+        + '<div style="text-align:right"><div style="font-size:13px;font-weight:900;color:var(--gold)">CHF ' + (tx.amount || 0) + '</div>'
+        + '<div style="font-size:9px;font-weight:700;color:' + color + '">' + label + '</div></div></div>';
+    });
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Fehler: ' + e.message + '</div>';
+  }
 }
 
 function renderVerkaufenContent(tab) {
