@@ -2317,10 +2317,14 @@ html, body { height:100%; overflow:hidden; background:#000; font-family:'Inter',
   position:fixed;
   inset:0;
   background:rgba(0,0,0,0.93);
-  z-index:999999;
+  z-index:2147483647;
   align-items:flex-end;
   justify-content:center;
   padding:20px;
+}
+#error-panel-box {
+  position:relative;
+  z-index:2147483647;
 }
 #error-panel.show {
   display:flex;
@@ -3270,27 +3274,47 @@ function startApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const sharedListingId = urlParams.get('listing');
     if (sharedListingId) {
-      const tryOpenShared = async (attemptsLeft) => {
-        const found = (allListings || []).find(l =>
+      // Remove ?listing= from URL immediately (clean URL)
+      const cleanUrl = window.location.origin
+        + window.location.pathname;
+      history.replaceState(null, '', cleanUrl);
+
+      // Try to open listing
+      const tryOpenSharedListing = async (attemptsLeft) => {
+        // Check allListings first (fastest)
+        const inMemory = (allListings || []).find(l =>
           String(l.id) === String(sharedListingId)
         );
-        if (found) { openDetail(found.id, found); return; }
+        if (inMemory) {
+          openDetail(inMemory.id, inMemory);
+          return;
+        }
+        // Load directly from Supabase (bypasses empty allListings)
         try {
           const data = await supaFetch(
-            'listings?id=eq.' + sharedListingId + '&select=*'
+            'listings?id=eq.' + encodeURIComponent(sharedListingId)
+            + '&select=*'
           );
           if (data && data.length > 0) {
+            // Add to allListings so detail render works
+            if (!allListings.find(l => String(l.id) === String(data[0].id))) {
+              allListings.unshift(data[0]);
+            }
             openDetail(data[0].id, data[0]);
             return;
           }
-        } catch(e) { /* ignorieren */ }
+        } catch(e) {
+          console.warn('Share link load attempt failed:', e.message);
+        }
+        // Retry
         if (attemptsLeft > 0) {
-          setTimeout(() => tryOpenShared(attemptsLeft - 1), 700);
+          setTimeout(() => tryOpenSharedListing(attemptsLeft - 1), 800);
         } else {
-          showToast('❌ Inserat nicht gefunden oder gelöscht.', 'error');
+          showToast('❌ Inserat nicht gefunden oder bereits gelöscht.', 'error');
         }
       };
-      setTimeout(() => tryOpenShared(5), 500);
+      // Wait 600ms for app init, then try up to 6 times
+      setTimeout(() => tryOpenSharedListing(6), 600);
     }
   });
   checkSession().then(() => {
@@ -4431,77 +4455,63 @@ function renderShareButton(l) {
 }
 
 async function shareListingNow(id, title, price) {
-  // Saubere URL: ohne ?v= Parameter
-  const cleanPath = window.location.pathname.replace(/\/$/, '');
-  const shareUrl = window.location.origin + cleanPath
-    + '?listing=' + id;
+  // Build clean URL without ?v= cache-busting parameter
+  const origin = window.location.origin;
+  const path = window.location.pathname.replace(/\/$/, '');
+  const shareUrl = origin + path + '?listing=' + encodeURIComponent(id);
+  const shareTitle = 'Uri-Markt: ' + (title || 'Inserat');
   const shareText = (title || 'Inserat')
     + (price > 0 ? ' · CHF ' + price : '')
-    + ' – Uri-Markt';
+    + ' – Der lokale Marktplatz im Kanton Uri';
 
-  // Natives Share-Sheet (iOS Safari, Android Chrome)
+  // iOS / Android native share sheet
   if (navigator.share) {
     try {
-      await navigator.share({
-        title: 'Uri-Markt: ' + (title || 'Inserat'),
-        text: shareText,
-        url: shareUrl
-      });
+      await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
       return;
     } catch(e) {
-      if (e.name === 'AbortError') return;
+      if (e.name === 'AbortError') return; // user cancelled
     }
   }
 
-  // Fallback 1: Clipboard API
+  // Desktop: clipboard API
   try {
     await navigator.clipboard.writeText(shareUrl);
-    showToast('🔗 Link kopiert! Einfügen zum Teilen.', 'success');
+    showToast('🔗 Link kopiert! Jetzt einfügen und teilen.', 'success');
     return;
-  } catch(e) { /* weiter */ }
+  } catch(e) { /* fall through to manual copy */ }
 
-  // Fallback 2: Sichtbares Input-Feld zum manuellen Kopieren
+  // Final fallback: visible input field
   document.getElementById('share-input-overlay')?.remove();
   const div = document.createElement('div');
   div.id = 'share-input-overlay';
-  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:20px';
   div.innerHTML = `
-    <div style="background:#111;border:1px solid var(--gold);
-      border-radius:16px;padding:20px;width:100%;max-width:400px">
-      <div style="font-size:15px;font-weight:800;color:var(--gold);
-        margin-bottom:12px">🔗 Link zum Teilen</div>
-      <input id="share-url-input" value="${shareUrl}"
+    <div style="background:#111;border:2px solid var(--gold);border-radius:18px;padding:22px;width:100%;max-width:400px">
+      <div style="font-size:16px;font-weight:900;color:var(--gold);margin-bottom:14px">
+        🔗 Link zum Teilen
+      </div>
+      <input id="share-url-input"
+        value="${shareUrl}"
         readonly
-        style="width:100%;padding:12px;background:#000;
-        border:1px solid rgba(255,255,255,0.2);
-        border-radius:10px;color:#fff;font-size:13px;
-        margin-bottom:12px"
-        onclick="this.select()">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button onclick="
-          document.getElementById('share-url-input').select();
-          document.execCommand('copy');
-          showToast('✅ Kopiert!','success');
-          document.getElementById('share-input-overlay').remove();"
-          style="padding:12px;background:var(--gold);border:none;
-          border-radius:10px;color:#000;font-weight:900;cursor:pointer">
+        onclick="this.select()"
+        style="width:100%;padding:12px;background:#000;border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:#fff;font-size:12px;margin-bottom:14px;word-break:break-all">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button
+          onclick="const i=document.getElementById('share-url-input');i.select();document.execCommand('copy');showToast('✅ Link kopiert!','success');document.getElementById('share-input-overlay').remove();"
+          style="padding:13px;background:var(--gold);border:none;border-radius:12px;color:#000;font-weight:900;cursor:pointer">
           📋 Kopieren
         </button>
-        <button onclick="document.getElementById('share-input-overlay').remove()"
-          style="padding:12px;background:rgba(255,255,255,0.05);
-          border:1px solid rgba(255,255,255,0.2);border-radius:10px;
-          color:#fff;font-weight:700;cursor:pointer">
+        <button
+          onclick="document.getElementById('share-input-overlay').remove()"
+          style="padding:13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:#fff;cursor:pointer;font-weight:700">
           Schliessen
         </button>
       </div>
     </div>`;
   document.body.appendChild(div);
-  div.addEventListener('click', e => {
-    if(e.target === div) div.remove();
-  });
-  setTimeout(() => {
-    document.getElementById('share-url-input')?.select();
-  }, 100);
+  div.addEventListener('click', e => { if(e.target===div) div.remove(); });
+  setTimeout(() => document.getElementById('share-url-input')?.select(), 150);
 }
 window.shareListingNow = shareListingNow;
 // Audit: Alle neuen Funktionen als window-Exports registrieren
