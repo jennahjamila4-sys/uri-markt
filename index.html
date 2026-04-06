@@ -6800,10 +6800,10 @@ async function loadNotifications() {
       const cfg = NOTIF_CONFIG[n.type] || NOTIF_CONFIG.info;
       const isUnread = !n.is_read;
       const timeStr = timeAgo(n.created_at);
-      const lid = (n.listing_id || '').replace(/'/g, '');
-      const rid = (n.related_id || '').replace(/'/g, '');
-      const nid = (n.id || '').replace(/'/g, '');
-      const ntype = (n.type || 'info').replace(/'/g, '');
+      const lid = String(n.listing_id || '').replace(/'/g, '');
+      const rid = String(n.related_id || '').replace(/'/g, '');
+      const nid = String(n.id || '').replace(/'/g, '');
+      const ntype = String(n.type || 'info').replace(/'/g, '');
       return '<div class="notif-item ' + (isUnread ? 'unread' : '') + '" onclick="handleNotifClick(&apos;' + nid + '&apos;,&apos;' + ntype + '&apos;,&apos;' + lid + '&apos;,&apos;' + rid + '&apos;)" data-id="' + nid + '">'
         + '<div class="notif-icon">' + cfg.icon + '</div>'
         + '<div class="notif-body">'
@@ -7902,10 +7902,10 @@ function _showNotifBanner(notif, cfg) {
   banner.className = 'notif-floating-banner';
   banner.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:2px solid var(--gold);border-radius:14px;padding:12px 16px;min-width:280px;max-width:340px;z-index:99999;cursor:pointer;box-shadow:0 4px 24px rgba(255,215,0,0.3);display:flex;align-items:center;gap:10px;';
   const actionLabel = cfg.actionLabel || 'Ansehen &rarr;';
-  const lid = (notif.listing_id || '').replace(/'/g, '');
-  const rid = (notif.related_id || '').replace(/'/g, '');
-  const nid = (notif.id || '').replace(/'/g, '');
-  const ntype = (notif.type || 'info').replace(/'/g, '');
+  const lid = String(notif.listing_id || '').replace(/'/g, '');
+  const rid = String(notif.related_id || '').replace(/'/g, '');
+  const nid = String(notif.id || '').replace(/'/g, '');
+  const ntype = String(notif.type || 'info').replace(/'/g, '');
   banner.innerHTML = '<span style="font-size:24px">' + cfg.icon + '</span>'
     + '<div style="flex:1;min-width:0">'
     + '<div style="font-size:13px;font-weight:800;color:var(--gold)">' + escHtml(notif.title || '') + '</div>'
