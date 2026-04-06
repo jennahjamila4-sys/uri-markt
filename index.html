@@ -3348,7 +3348,9 @@ async function checkSession() {
       }
       await refreshProfile();
       updateAuthUI();
-      initRealtimeNotifications && initRealtimeNotifications();
+      setTimeout(function() {
+        initRealtimeNotifications && initRealtimeNotifications();
+      }, 1000);
     } catch(e) {
       // Session-Fehler still ignorieren (abgelaufene Tokens sind normal)
       localStorage.removeItem('uri_session');
@@ -3852,7 +3854,9 @@ async function doLogin() {
     closeAuth();
     await refreshProfile();
     updateAuthUI();
-    initRealtimeNotifications && initRealtimeNotifications();
+    setTimeout(function() {
+      initRealtimeNotifications && initRealtimeNotifications();
+    }, 500);
     showToast('✅ Willkommen zurück!');
     loadListings();
   } catch(e) {
@@ -7105,7 +7109,7 @@ window.addEventListener('DOMContentLoaded', () => {
       checkRecoveryToken();
       // Start Realtime after session loaded
       if (typeof initRealtimeNotifications === 'function') {
-        setTimeout(initRealtimeNotifications, 800);
+        setTimeout(initRealtimeNotifications, 1200);
       }
     });
   }
@@ -7838,8 +7842,27 @@ function switchDashTab(tab, btn) {
 // ============================================================
 function initRealtimeNotifications() {
   const client = window.supabase || window._supabaseClient;
-  if (!currentUser || !client) {
-    console.warn('Realtime skipped: no user or no supabase client');
+
+  // If client not ready yet: retry up to 10x with 500ms gap
+  if (!client) {
+    console.warn('Supabase client not ready, retrying in 500ms...');
+    let retries = 0;
+    const retryInterval = setInterval(function() {
+      retries++;
+      const c = window.supabase || window._supabaseClient;
+      if (c && currentUser) {
+        clearInterval(retryInterval);
+        initRealtimeNotifications();
+      } else if (retries >= 10) {
+        clearInterval(retryInterval);
+        console.warn('Realtime: Supabase client never became ready');
+      }
+    }, 500);
+    return;
+  }
+
+  if (!currentUser) {
+    console.warn('Realtime skipped: no user logged in');
     return;
   }
   if (window._notifChannel) {
