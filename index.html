@@ -4316,7 +4316,6 @@ function openDetail(id, directListing) {
             : `<button class="cs-waitlist-btn" onclick="joinWaitlist('${l.id}')">🔔 Auf Warteliste eintragen</button>`
           }
         </div>` : ''}
-      ${!isSold && !isOwner && !isComingSoon ? renderContactSection(l) : ''}
       ${currentUser && l.user_id !== getUID() && l.status !== 'sold' && l.status !== 'reserved' && !isComingSoon ? `
         <button onclick="initiatePurchase('${l.id}')"
           style="width:100%;padding:16px;background:var(--gold);border:none;
@@ -9562,7 +9561,7 @@ window.copyErrorText = copyErrorText;
           <input type="number" class="konto-input" id="cm-teaser-price" value="0" min="0" step="0.50" placeholder="z.B. 25">
           <div style="font-size:11px;color:var(--text-faint);margin-top:4px" id="cm-teaser-stripe-hint" style="display:none">
             ⚠️ Zahlung erfolgt aktuell direkt (Twint/Bar). Stripe-Integration folgt.
-            <br><a href="mailto:kontakt@uri-markt.ch?subject=Stripe-Feature" style="color:var(--primary)">💬 Wünschst du diese Funktion? Schreib uns!</a>
+            <br><a href="/cdn-cgi/l/email-protection#c1aaaeafb5a0aab581b4b3a8ecaca0b3aab5efa2a9feb2b4a3aba4a2b5fc92b5b3a8b1a4ec87a4a0b5b4b3a4" style="color:var(--primary)">💬 Wünschst du diese Funktion? Schreib uns!</a>
           </div>
           <!-- HEADCOUNT-GRUPPE (nur bei headcount) -->
           <div id="cm-teaser-headcount-group" style="display:none;margin-top:12px">
@@ -9734,9 +9733,4 @@ window.copyErrorText = copyErrorText;
     <div style="margin-top:14px;font-size:11px;
       color:rgba(255,255,255,0.3);text-align:center;line-height:1.6">
       Kopiere den Fehler und schicke ihn an den Entwickler.<br>
-      Dann kannst du normal weitermachen.
-    </div>
-  </div>
-</div>
-</body>
-</html>
+      Dann kannst d
