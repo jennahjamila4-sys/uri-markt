@@ -7675,80 +7675,223 @@ function closeModalIfBg(e, id) {
 
 async function renderKaufenContent(tab) {
   const container = document.getElementById('kaufen-content');
+  if (!container) return;
   if (!currentUser) {
-    container.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center"><p style="color:var(--text-dim);margin-bottom:16px">Bitte anmelden um deine K\u00e4ufe zu sehen.</p><button class="submit-btn" onclick="openAuth()">Anmelden</button></div>';
+    container.innerHTML = '<div style="padding:20px;text-align:center"><p style="color:var(--text-dim);margin-bottom:16px">Bitte anmelden.</p><button class="submit-btn" onclick="openAuth()">Anmelden</button></div>';
     return;
   }
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">Laden...</div>';
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">⏳ Lade...</div>';
   try {
-    const txs = await supaFetch('transactions?buyer_id=eq.' + getUID() + '&order=created_at.desc&limit=20');
-    if (!txs || txs.length === 0) {
-      container.innerHTML = '<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1607083206968-13611e3d76db?q=80&w=600&auto=format&fit=crop" style="width:100%;height:160px;object-fit:cover;border-radius:16px;margin-bottom:16px;filter:brightness(0.8)"><p style="font-size:14px;color:var(--text-dim);line-height:1.6;margin-bottom:20px"><strong>Die besten Deals sind schnell weg!</strong><br>Erspare dir teure Neuk\u00e4ufe. Entdecke exklusive lokale Sch\u00e4tze!</p><button class="submit-btn" onclick="closeModal(&apos;mein-kaufen-modal&apos;); swipeTo(0)">Zeig mir die Deals!</button></div>';
+    const txs = await supaFetch(
+      'transactions?buyer_id=eq.' + getUID()
+      + '&order=created_at.desc&limit=30'
+    );
+    const list = Array.isArray(txs) ? txs : [];
+
+    if (list.length === 0) {
+      container.innerHTML = '<div style="padding:24px;text-align:center">'
+        + '<div style="font-size:48px;margin-bottom:12px">🎯</div>'
+        + '<div style="font-size:17px;font-weight:900;color:var(--gold);margin-bottom:8px">Noch kein Deal!</div>'
+        + '<p style="font-size:13px;color:var(--text-faint);line-height:1.6;margin-bottom:20px">'
+        + 'Die besten Deals sind schnell weg. ⏳<br>Deine Nachbarn kaufen bereits!</p>'
+        + '<button class="submit-btn" onclick="closeModal(\'mein-kaufen-modal\');swipeTo(0)">👀 Deals entdecken</button>'
+        + '</div>';
       return;
     }
-    const totalDeals = txs.length;
-    const activeDeals = txs.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
-    const totalCHF = txs.filter(t => t.status === 'completed').reduce((s, t) => s + (t.amount || 0), 0);
-    const statusColors = {pending:'#f59e0b',confirmed:'#10b981',completed:'#6366f1',rejected:'#ef4444',cancelled:'#9ca3af'};
-    const statusLabels = {pending:'Ausstehend',confirmed:'Bestätigt',completed:'Abgeschlossen',rejected:'Abgelehnt',cancelled:'Abgebrochen'};
-    let html = '<div style="display:flex;gap:8px;padding:12px 16px;background:var(--surface);border-radius:16px;margin-bottom:16px">'
-      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--gold)">' + totalDeals + '</div><div style="font-size:10px;color:var(--text-dim)">Deals</div></div>'
-      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--green)">' + activeDeals + '</div><div style="font-size:10px;color:var(--text-dim)">Aktiv</div></div>'
-      + '<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900;color:var(--blue)">CHF ' + totalCHF.toFixed(0) + '</div><div style="font-size:10px;color:var(--text-dim)">Gespart</div></div>'
+
+    const completed = list.filter(t => t.status === 'completed').length;
+    const pending = list.filter(t => t.status === 'pending' || t.status === 'confirmed').length;
+    const totalSaved = list.filter(t => t.status === 'completed')
+      .reduce((s,t) => s + parseFloat(t.amount||0), 0);
+
+    const sColors = {
+      pending:'#f59e0b', confirmed:'#10b981',
+      completed:'#6366f1', rejected:'#ef4444', cancelled:'#9ca3af'
+    };
+    const sLabels = {
+      pending:'⏳ Warte auf Verkäufer',
+      confirmed:'✅ Bestätigt – Übergabe vereinbaren',
+      completed:'🏆 Abgeschlossen',
+      rejected:'❌ Abgelehnt',
+      cancelled:'🚫 Storniert'
+    };
+    const pLabels = {cash:'💵 Bar',twint:'📱 TWINT',card:'💳 Karte'};
+
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;'
+      + 'background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);'
+      + 'border-radius:14px;padding:14px;margin-bottom:16px;text-align:center">'
+      + '<div><div style="font-size:22px;font-weight:900;color:var(--gold)">'
+      + completed + '</div><div style="font-size:10px;color:var(--text-faint)">Deals 🏆</div></div>'
+      + '<div><div style="font-size:22px;font-weight:900;color:#f59e0b">'
+      + pending + '</div><div style="font-size:10px;color:var(--text-faint)">Aktiv ⚡</div></div>'
+      + '<div><div style="font-size:18px;font-weight:900;color:var(--green)">CHF '
+      + totalSaved.toFixed(0) + '</div><div style="font-size:10px;color:var(--text-faint)">Gespart 💰</div></div>'
       + '</div>';
-    txs.forEach(tx => {
-      const listing = allListings.find(l => l.id == tx.listing_id) || {};
-      const color = statusColors[tx.status] || '#9ca3af';
-      const label = statusLabels[tx.status] || tx.status;
-      html += '<div class="listing-list-item" onclick="openDetail(\'' + tx.listing_id + '\'" style="cursor:pointer;margin-bottom:8px">'
-        + '<div class="listing-list-img">' + (listing.emoji || '\u{1F4E6}') + '</div>'
-        + '<div style="flex:1"><div style="font-size:13px;font-weight:700">' + (listing.title || 'Inserat #' + tx.listing_id) + '</div>'
-        + '<div style="font-size:10px;color:var(--text-dim)">' + new Date(tx.created_at).toLocaleDateString('de-CH') + '</div></div>'
-        + '<div style="text-align:right"><div style="font-size:13px;font-weight:900;color:var(--gold)">CHF ' + (tx.amount || 0) + '</div>'
-        + '<div style="font-size:9px;font-weight:700;color:' + color + '">' + label + '</div></div></div>';
+
+    if (pending > 0) {
+      html += '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);'
+        + 'border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;'
+        + 'color:#f59e0b;font-weight:700">⚡ ' + pending
+        + ' Anfrage' + (pending > 1 ? 'n warten' : ' wartet')
+        + ' auf Bestätigung</div>';
+    }
+
+    list.forEach(function(tx) {
+      const listing = allListings.find(function(l) {
+        return String(l.id) === String(tx.listing_id);
+      }) || {};
+      const color = sColors[tx.status] || '#9ca3af';
+      const label = sLabels[tx.status] || tx.status;
+      const pLabel = pLabels[tx.payment_method] || (tx.payment_method || '');
+      const date = new Date(tx.created_at).toLocaleDateString('de-CH');
+      const price = parseFloat(tx.amount || 0);
+      const txId = String(tx.id || '');
+      const listingId = String(tx.listing_id || '');
+      const sellerId = String(tx.seller_id || '');
+
+      html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);'
+        + 'border-radius:14px;padding:14px;margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+        + '<div style="font-size:14px;font-weight:800">'
+        + (listing.title || ('Inserat #' + listingId)) + '</div>'
+        + '<div style="font-size:13px;font-weight:900;color:var(--gold)">CHF ' + price.toFixed(2) + '</div>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+        + '<span style="font-size:11px;color:var(--text-faint)">' + pLabel + ' · ' + date + '</span>'
+        + '<span style="font-size:11px;font-weight:700;color:' + color + '">' + label + '</span>'
+        + '</div>';
+
+      if ((tx.status === 'confirmed' || tx.status === 'completed') && tx.seller_contact) {
+        html += '<div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);'
+          + 'border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--green)">'
+          + '✅ Verkäufer-Kontakt: <strong>' + tx.seller_contact + '</strong></div>';
+      }
+
+      if (tx.status === 'pending') {
+        html += '<button onclick="closeModal(\'mein-kaufen-modal\')" '
+          + 'style="width:100%;padding:10px;background:rgba(245,158,11,0.1);border:1px solid #f59e0b;'
+          + 'border-radius:10px;color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px">'
+          + '⏳ Warte auf Bestätigung</button>';
+      } else if (tx.status === 'completed') {
+        html += '<button onclick="openReviewModal(\'' + txId + '\',\'' + sellerId + '\',\'' + listingId + '\')" '
+          + 'style="width:100%;padding:10px;background:rgba(255,215,0,0.1);border:1px solid var(--gold);'
+          + 'border-radius:10px;color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">'
+          + '⭐ Bewertung schreiben</button>';
+      } else if (tx.status === 'confirmed') {
+        html += '<div style="font-size:12px;font-weight:700;color:var(--green);'
+          + 'padding:8px;text-align:center">🤝 Übergabe vereinbaren!</div>';
+      }
+
+      html += '</div>';
     });
+
     container.innerHTML = html;
   } catch(e) {
-    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Fehler: ' + e.message + '</div>';
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">❌ ' + e.message + '</div>';
   }
 }
 
-function renderVerkaufenContent(tab) {
+async function renderVerkaufenContent(tab) {
   const container = document.getElementById('verkaufen-content');
-  if (!currentUser) return;
-  
-  let filtered = allListings.filter(l => l.user_id === getUID());
-  
-  if (tab === 'aktiv') filtered = filtered.filter(l => l.status === 'active');
-  else if (tab === 'verkauft') filtered = filtered.filter(l => l.status === 'sold');
-  else if (tab === 'entwuerfe') filtered = []; // Mock drafts
+  if (!container || !currentUser) return;
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)">⏳ Lade...</div>';
 
-  if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="padding:20px"><img src="https://images.unsplash.com/photo-1558227691-41ea78d1f631?q=80&w=600&auto=format&fit=crop" style="width:100%; height:160px; object-fit:cover; border-radius:16px; margin-bottom:16px; filter:brightness(0.8)"><p style="font-size:14px; color:var(--text-dim); line-height:1.6; margin-bottom:20px;"><strong>Dein Schrank und Keller sind Goldminen! 💰</strong><br>Während du zögerst, verdienen andere Urner bereits an Dingen, die sie nicht mehr brauchen. Spüre die Erleichterung, alten Ballast loszuwerden. Mach ihn in unter 60 Sekunden zu Cash!</p><button class="submit-btn" onclick="closeModal('mein-verkaufen-modal'); swipeTo(1)">➕ Jetzt befreien & kassieren</button></div>`;
-    return;
-  } 
+  try {
+    const txs = await supaFetch(
+      'transactions?seller_id=eq.' + getUID()
+      + '&order=created_at.desc&limit=30'
+    );
+    const txList = Array.isArray(txs) ? txs : [];
+    const earned = txList.filter(t => t.status === 'completed')
+      .reduce((s,t) => s + parseFloat(t.amount||0) * 0.9, 0);
+    const pendingDeals = txList.filter(t =>
+      t.status === 'pending' || t.status === 'confirmed'
+    ).length;
 
-  let html = '';
-  if (tab === 'verkauft') {
-    html += '<div class="bg-gold/10 p-3 rounded-xl text-[10px] text-gold font-bold mb-4">💡 Erfolgsprovision: 10% in Uri-Talern abgezogen</div>';
+    let myListings = allListings.filter(l => l.user_id === getUID());
+    if (tab === 'aktiv') {
+      myListings = myListings.filter(l =>
+        l.status === 'active' || l.status === 'reserved'
+      );
+    } else if (tab === 'verkauft') {
+      myListings = myListings.filter(l => l.status === 'sold');
+    }
+
+    const totalListings = allListings.filter(l => l.user_id === getUID()).length;
+    const soldCount = allListings.filter(l =>
+      l.user_id === getUID() && l.status === 'sold'
+    ).length;
+
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;'
+      + 'background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);'
+      + 'border-radius:14px;padding:14px;margin-bottom:16px;text-align:center">'
+      + '<div><div style="font-size:20px;font-weight:900;color:var(--gold)">'
+      + soldCount + '</div><div style="font-size:10px;color:var(--text-faint)">Verkauft 💰</div></div>'
+      + '<div><div style="font-size:20px;font-weight:900;color:#f59e0b">'
+      + pendingDeals + '</div><div style="font-size:10px;color:var(--text-faint)">Offen ⚡</div></div>'
+      + '<div><div style="font-size:16px;font-weight:900;color:var(--green)">CHF '
+      + earned.toFixed(0) + '</div><div style="font-size:10px;color:var(--text-faint)">Verdient 🏆</div></div>'
+      + '</div>';
+
+    if (pendingDeals > 0) {
+      html += '<div onclick="openMeinVerkaufen && openMeinVerkaufen()" '
+        + 'style="background:rgba(255,215,0,0.1);border:2px solid var(--gold);'
+        + 'border-radius:12px;padding:12px 16px;margin-bottom:14px;cursor:pointer;'
+        + 'display:flex;justify-content:space-between;align-items:center">'
+        + '<div>'
+        + '<div style="font-size:13px;font-weight:900;color:var(--gold)">🛒 ' + pendingDeals + ' Kaufanfrage' + (pendingDeals > 1 ? 'n' : '') + '</div>'
+        + '<div style="font-size:11px;color:var(--text-faint)">Jetzt bestätigen und Taler verdienen</div>'
+        + '</div>'
+        + '<div style="font-size:20px">→</div></div>';
+    }
+
+    if (myListings.length === 0) {
+      html += '<div style="padding:24px;text-align:center">'
+        + '<div style="font-size:48px;margin-bottom:12px">📦</div>'
+        + '<div style="font-size:17px;font-weight:900;color:var(--gold);margin-bottom:8px">'
+        + (tab === 'verkauft' ? 'Noch nichts verkauft' : 'Keine aktiven Inserate') + '</div>'
+        + '<p style="font-size:13px;color:var(--text-faint);line-height:1.6;margin-bottom:20px">'
+        + 'Dein Keller ist eine Goldmine! 💰<br>Erstelle dein erstes Inserat in 60 Sekunden.</p>'
+        + '<button class="submit-btn" onclick="closeModal(\'mein-verkaufen-modal\');openCreateModal()">➕ Inserat erstellen</button>'
+        + '</div>';
+      container.innerHTML = html;
+      return;
+    }
+
+    const statusBadge = {
+      active: '<span style="color:var(--green);font-size:10px;font-weight:700">● AKTIV</span>',
+      reserved: '<span style="color:#f59e0b;font-size:10px;font-weight:700">● RESERVIERT</span>',
+      sold: '<span style="color:var(--red);font-size:10px;font-weight:700">● VERKAUFT</span>'
+    };
+
+    myListings.forEach(function(l) {
+      const badge = statusBadge[l.status] || '';
+      const lid = String(l.id || '');
+      html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);'
+        + 'border-radius:14px;padding:14px;margin-bottom:10px">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        + '<div style="font-size:28px">' + (l.emoji || '📦') + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (l.title || '') + '</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;margin-top:2px">'
+        + '<span style="font-size:13px;font-weight:900;color:var(--gold)">CHF ' + (l.price || 0) + '</span>'
+        + badge + '</div></div></div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        + '<button onclick="openDetail(\'' + lid + '\')" '
+        + 'style="padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);'
+        + 'border-radius:10px;color:#fff;font-weight:700;cursor:pointer;font-size:12px">'
+        + '👁️ Ansehen</button>'
+        + '<button onclick="openSellerDashboard(\'' + lid + '\')" '
+        + 'style="padding:10px;background:rgba(255,215,0,0.1);border:1px solid var(--gold);'
+        + 'border-radius:10px;color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">'
+        + '📊 Anfragen</button>'
+        + '</div></div>';
+    });
+
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">❌ ' + e.message + '</div>';
   }
-
-  filtered.forEach(l => {
-    html += `
-      <div class="listing-list-item" onclick="openDetail('${l.id}')">
-        <div class="listing-list-img">${l.emoji || '📦'}</div>
-        <div class="flex-1">
-          <div class="text-sm font-bold">${l.title}</div>
-          <div class="text-[10px] text-text-faint">${new Date(l.created_at).toLocaleDateString()}</div>
-        </div>
-        <div class="text-right">
-          <div class="text-sm font-black text-gold">CHF ${l.price}</div>
-          <div class="text-[10px] uppercase font-bold text-text-dim">${l.status}</div>
-        </div>
-      </div>
-    `;
-  });
-  container.innerHTML = html;
 }
 
 function renderTransactions() {
@@ -8583,7 +8726,12 @@ async function respondToTx(txId, action) {
       }
     }
     document.getElementById('seller-dashboard-overlay')?.remove();
+    // Reload listings so feed shows correct status immediately
     await loadListings();
+    // Refresh seller modal if open
+    if (typeof renderVerkaufenContent === 'function') {
+      renderVerkaufenContent('aktiv');
+    }
   } catch(e) {
     showToast('❌ Fehler: ' + e.message, 'error');
   }
@@ -8656,15 +8804,16 @@ async function submitReview(txId, reviewedUserId, listingId) {
     if (!res.success) { showToast('❌ ' + (res.error||'Fehler'), 'error'); return; }
     document.getElementById('review-modal-overlay')?.remove();
     typeof addXP === 'function' && addXP(5, 'Bewertung geschrieben');
-    await supaFetch('notifications', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: reviewedUserId,
-        title: '⭐ Neue Bewertung!',
-        message: (currentProfile?.username||'Jemand') + ' hat dir ' + rating + ' Sterne gegeben.' + (comment ? ' "' + comment.substring(0,60) + '"' : '') + ' +10 XP!',
-        type: 'new_review'
-      })
-    });
+    await sendNotification(
+      reviewedUserId,
+      '⭐ Neue Bewertung!',
+      (currentProfile?.username||'Jemand')
+        + ' hat dir ' + rating + ' Sterne gegeben.'
+        + (comment ? ' "' + comment.substring(0,60) + '"' : '')
+        + ' +10 XP!',
+      'new_review',
+      listingId
+    );
     launchConfetti && launchConfetti();
     showToast('✅ Bewertung gesendet! +5 XP. Neuer Schnitt: ' + parseFloat(res.new_avg||0).toFixed(1) + ' ⭐', 'success');
     await refreshProfile && refreshProfile();
