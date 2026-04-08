@@ -3165,6 +3165,11 @@ async function supaFetch(path, options = {}, _retry = false) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || `HTTP ${res.status}`);
     }
+    if (res.status === 204 || options.method === 'DELETE') {
+      const bodyText = await res.text().catch(() => '');
+      if (!bodyText) return { success: true };
+      try { return JSON.parse(bodyText); } catch(e) { return { success: true }; }
+    }
     const text = await res.text();
     return text ? JSON.parse(text) : [];
   } catch(e) {
@@ -4435,12 +4440,58 @@ function renderContactSection(l) {
 
 function renderOwnerActions(l) {
   const isSold = l.status === 'sold' || l.status === 'verkauft';
+  const isReserved = l.status === 'reserved';
+  const lid = String(l.id || '').replace(/'/g,'');
+
+  if (isSold) {
+    return `
+      <div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.2);
+        border-radius:14px;padding:14px;text-align:center;margin-top:8px">
+        <div style="font-size:28px;margin-bottom:6px">🏆</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">Erfolgreich verkauft!</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:4px;margin-bottom:10px">
+          Dieser Artikel hat einen neuen Besitzer gefunden.
+        </div>
+        <button onclick="deleteListing('${lid}')"
+          style="padding:8px 16px;background:rgba(255,68,68,0.1);
+          border:1px solid rgba(255,68,68,0.3);border-radius:8px;
+          color:var(--red);font-size:11px;font-weight:700;cursor:pointer">
+          🗑️ Inserat entfernen
+        </button>
+      </div>`;
+  }
+
+  if (isReserved) {
+    return `
+      <div style="background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.3);
+        border-radius:14px;padding:16px;margin-top:8px">
+        <div style="font-size:13px;font-weight:800;color:var(--orange);margin-bottom:6px">
+          ⏳ Kaufanfrage läuft
+        </div>
+        <div style="font-size:11px;color:var(--text-faint);margin-bottom:12px;line-height:1.5">
+          Ein Käufer hat Interesse bekundet. Sobald du bestätigst und die Übergabe stattfindet,
+          wird der Artikel automatisch als verkauft markiert und du erhältst +50 XP.
+        </div>
+        <button onclick="openSellerDashboard('${lid}')"
+          style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,215,0,0.05));
+          border:2px solid var(--gold);border-radius:12px;
+          color:var(--gold);font-weight:800;cursor:pointer;font-size:13px">
+          📊 Kaufanfragen verwalten & bestätigen →
+        </button>
+      </div>`;
+  }
+
+  // Active listing: only boost and delete
+  // NO "Als verkauft markieren" — XP only via real transaction
   return `
-  <div class="owner-actions">
-    ${!isSold ? `<button class="owner-btn btn-sold" onclick="markSold('${l.id}')">✅ Als verkauft markieren</button>` : ''}
-    <button class="owner-btn btn-boost" onclick="boostListing('${l.id}')">🚀 Boost (50 Taler)</button>
-    <button class="owner-btn btn-delete" onclick="deleteListing('${l.id}')">🗑️ Löschen</button>
-  </div>`;
+    <div class="owner-actions">
+      <button class="owner-btn btn-boost" onclick="boostListing('${lid}')">
+        🚀 Boost (50 Taler)
+      </button>
+      <button class="owner-btn btn-delete" onclick="deleteListing('${lid}')">
+        🗑️ Löschen
+      </button>
+    </div>`;
 }
 
 function renderShareButton(l) {
@@ -4658,27 +4709,13 @@ async function postComment(listingId) {
 // ============================================================
 // LISTING ACTIONS
 // ============================================================
-async function markSold(id) {
-  if (!currentUser) { showToast('⚠️ Bitte anmelden'); return; }
-  try {
-    const isDemo = id.startsWith('demo-');
-    if (!isDemo) {
-      await supaFetch(`listings?id=eq.${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'sold' })
-      });
-    }
-    const l = allListings.find(x => x.id === id);
-    if (l) l.status = 'sold';
-    launchConfetti();
-    addXP(50, 'Verkauf');
-    showToast('🎉 Glückwunsch! +50 Uri-Taler für den Verkauf!');
-    closeDetail();
-    renderListings();
-  } catch(e) {
-    showToast('❌ Fehler: ' + e.message);
-  }
+// markSold disabled — XP only via complete_transaction RPC
+function markSold(id) {
+  showToast('ℹ️ Verkäufe werden automatisch nach Käufer-Bestätigung abgeschlossen.', 'info');
 }
+function markSoldSafe(id) { return markSold(id); }
+window.markSold = markSold;
+window.markSoldSafe = markSoldSafe;
 
 async function boostListing(id) {
   if (!currentUser) { showToast('⚠️ Bitte anmelden'); return; }
@@ -6436,12 +6473,11 @@ function renderProfile() {
   const el = document.getElementById('profile-content');
   if (!el) return;
   if (!currentUser || !currentProfile) {
-    el.innerHTML = `
-      <div style="text-align:center;padding:60px 20px;color:var(--text-faint)">
-        <div style="font-size:48px;margin-bottom:16px">👤</div>
-        <p>Melde dich an um dein Profil zu sehen</p>
-        <button class="auth-btn" style="margin-top:16px" onclick="openAuth()">Jetzt anmelden</button>
-      </div>`;
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-faint)">'
+      + '<div style="font-size:48px;margin-bottom:16px">👤</div>'
+      + '<p>Melde dich an um dein Profil zu sehen</p>'
+      + '<button class="auth-btn" style="margin-top:16px" onclick="openAuth()">Jetzt anmelden</button>'
+      + '</div>';
     return;
   }
 
@@ -6449,48 +6485,30 @@ function renderProfile() {
   const xp = p.xp_points || p.xp || 0;
   const credits = p.credits || 0;
   const level = getLevelInfo(xp);
-
-  // XP-Fortschritt berechnen
   const xpMin = level.minXP || 0;
   const xpMax = level.next || (xpMin + 100);
   const xpPct = level.next ? Math.min(((xp - xpMin) / (xpMax - xpMin)) * 100, 100) : 100;
   const xpNeeded = level.next ? level.next - xp : 0;
+  const levelNum = ['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan']
+    .indexOf(level.name) + 1 || 1;
 
-  // Level-Nummer
-  const levelNum = ['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan'].indexOf(level.name) + 1 || 1;
-
-  // Inserats-Counts aus allListings
   const uid = getUID() || currentUser.id;
   const myListings = allListings.filter(l => l.user_id === uid);
-  const angeboteCount = myListings.filter(l => (l.type === 'Angebot' || l.type === 'Coming Soon') && l.status !== 'sold' && l.status !== 'verkauft').length;
-  const gesucheCount = myListings.filter(l => l.type === 'Gesuch').length;
-  const verkauftCount = myListings.filter(l => l.status === 'sold' || l.status === 'verkauft').length;
+  const activeListings = myListings.filter(l => l.status === 'active');
+  const reservedListings = myListings.filter(l => l.status === 'reserved');
+  const soldListings = myListings.filter(l => l.status === 'sold' || l.status === 'verkauft');
+  const gesucheListings = myListings.filter(l => l.type === 'Gesuch');
 
-  // Motivationstext (Mockup-Style)
-  let motivText = '';
-  if (level.next) {
-    const articlesNeeded = Math.ceil(xpNeeded / 25);
-    const nextName = level.nextName || 'Kantons-Legende';
-    motivText = `Du bist <span class="hl-gold">${level.name}</span>. Verkaufe noch <span class="hl-red">${articlesNeeded} Artikel</span> (oder sammle <span class="hl-red">${xpNeeded} XP</span>), um zur <span class="hl-gold">${nextName}</span> aufzusteigen und neue Funktionen freizuschalten!`;
-  } else {
-    motivText = `🏆 Du bist <span class="hl-gold">Kantons-Legende</span>! Du hast das höchste Level erreicht. Echter Urner Marktplatz-Pionier!`;
-  }
-
-  const daysToNext = level.next ? Math.ceil(xpNeeded / 10) : 0;
   const displayName = escHtml(p.username || p.full_name || 'Urner');
   const initial = displayName.charAt(0).toUpperCase();
   const avatarHtml = p.avatar_url
-    ? `<img src="${escHtml(p.avatar_url)}" alt="Avatar">`
-    : `<span>${initial}</span>`;
-
-  const referralCode = p.referral_code || 'URI' + (uid || '').substring(0,6).toUpperCase();
-  const referralLink = `${window.location.origin}?ref=${referralCode}`;
-
-  // Ring-Prozent als CSS-Variable
-  const ringPct = Math.round(xpPct * 3.6); // 0-360 Grad
+    ? '<img src="' + escHtml(p.avatar_url) + '" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+    : '<span style="font-size:28px;font-weight:900">' + initial + '</span>';
+  const referralCode = p.referral_code || ('URI' + (uid || '').substring(0,6).toUpperCase());
+  const referralLink = window.location.origin + '?ref=' + referralCode;
 
   el.innerHTML = `
-    <!-- HEADER: Avatar + Info + Taler-Karte -->
+    <!-- HEADER -->
     <div class="pd-header">
       <div class="pd-avatar-wrap" onclick="openAvatarModal()">
         <div class="pd-avatar" style="--ring-pct:${Math.round(xpPct)}%">
@@ -6504,8 +6522,9 @@ function renderProfile() {
         <div class="pd-level-pill" onclick="openLevelModal()">
           <span>${level.emoji} ${level.name}</span>
           <span class="pd-level-num">Level ${levelNum}</span>
-          ${p.is_pioneer ? '<span class="level-badge-inline badge-pioneer" style="margin-top:2px;font-size:9px">🚀 Pionier</span>' : ''}
         </div>
+        ${p.avg_rating > 0 ? `<div style="font-size:12px;color:var(--gold);margin-top:4px">
+          ${'⭐'.repeat(Math.round(p.avg_rating || 0))} ${parseFloat(p.avg_rating||0).toFixed(1)} (${p.review_count||0} Bewertungen)</div>` : ''}
       </div>
       <div class="pd-taler-card" onclick="openWalletModal()">
         <span class="pd-taler-icon">🪙</span>
@@ -6519,103 +6538,120 @@ function renderProfile() {
       </div>
     </div>
 
-    <!-- XP-BALKEN -->
+    <!-- XP PROGRESS -->
     <div class="pd-xp-section">
       <div class="pd-xp-row">
-        <span class="pd-xp-label">Fortschritt</span>
+        <span class="pd-xp-label">${level.emoji} ${level.name} → ${level.nextName || '🏆 MAX'}</span>
         <span class="pd-xp-val">${xp} / ${level.next || xp} XP</span>
       </div>
       <div class="pd-xp-track">
         <div class="pd-xp-fill" style="width:${xpPct}%"></div>
       </div>
-      <div class="pd-xp-hint">${level.next ? `Noch ${xpNeeded} XP bis zum nächsten Level` : '🏆 Maximales Level!'}</div>
-    </div>
-
-    <!-- MOTIVATIONS-KARTE -->
-    <div class="pd-motiv-card">
-      <div class="pd-motiv-inner">
-        <div class="pd-motiv-rocket">🚀</div>
-        <div>
-          <div class="pd-motiv-text">${motivText}</div>
-          <div class="pd-motiv-meta">
-            ${daysToNext > 0 ? `<div class="pd-motiv-badge time">⏱ ~${daysToNext} Tage</div>` : ''}
-            ${level.next ? `<div class="pd-motiv-badge unlock" onclick="openLevelModal()">🔒 Schaltet frei: Premium Badge</div>` : ''}
-          </div>
-        </div>
+      <div class="pd-xp-hint">
+        ${level.next
+          ? 'Noch <strong>' + xpNeeded + ' XP</strong> · Verkaufe ' + Math.ceil(xpNeeded/50) + ' Artikel um aufzusteigen 🚀'
+          : '🏆 Maximales Level erreicht!'}
       </div>
     </div>
 
-    <!-- STATS -->
-    <div class="pd-stats">
-      <div class="pd-stat"><div class="pd-stat-val">${myListings.length}</div><div class="pd-stat-lbl">Inserate</div></div>
-      <div class="pd-stat"><div class="pd-stat-val">${verkauftCount}</div><div class="pd-stat-lbl">Verkauft</div></div>
-      <div class="pd-stat"><div class="pd-stat-val">${credits}</div><div class="pd-stat-lbl">🪙 Taler</div></div>
-    </div>
-    <!-- BADGES (TASK 4) -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:0 2px;">
-      <div style="background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:6px;">🎯 Erster Login</div>
-      <div style="background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#ff6400;display:flex;align-items:center;gap:6px;">🚀 Pioneer</div>
-      ${myListings.length >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#22c55e;display:flex;align-items:center;gap:6px;">📦 Erstes Inserat</div>' : ''}
-      ${verkauftCount >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#818cf8;display:flex;align-items:center;gap:6px;">💰 Erster Verkauf</div>' : ''}
+    <!-- KPI CARDS (real data from allListings) -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      <div onclick="openMeinVerkaufen()" style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
+        <div style="font-size:20px;font-weight:900;color:var(--green)">${soldListings.length}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Verkauft 💰</div>
+      </div>
+      <div onclick="switchPdTab('aktiv',document.querySelector('.pd-tab'))" style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">${activeListings.length}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Aktiv 📦</div>
+      </div>
+      <div onclick="openMeinKaufen()" style="background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
+        <div style="font-size:20px;font-weight:900;color:#4fc3f7">0</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Gekauft 🛒</div>
+      </div>
+      <div onclick="openWalletModal()" style="background:rgba(255,100,0,0.08);border:1px solid rgba(255,100,0,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
+        <div style="font-size:20px;font-weight:900;color:#ff6400">${credits}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Taler 🪙</div>
+      </div>
     </div>
 
-    <!-- KÄUFE & VERKÄUFE SCHNELLZUGRIFF -->
+    <!-- PENDING DEALS ALERT (FOMO) -->
+    ${reservedListings.length > 0 ? `
+      <div onclick="openMeinVerkaufen()"
+        style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));
+        border:2px solid rgba(255,152,0,0.4);border-radius:14px;padding:14px 16px;
+        margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;
+        animation:pulse 2s infinite">
+        <div style="font-size:28px">⚡</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:900;color:var(--orange)">
+            ${reservedListings.length} Kaufanfrage${reservedListings.length > 1 ? 'n warten' : ' wartet'}!
+          </div>
+          <div style="font-size:11px;color:var(--text-faint)">
+            Jetzt bestätigen → +50 XP & Taler verdienen
+          </div>
+        </div>
+        <div style="font-size:16px;color:var(--orange)">→</div>
+      </div>` : ''}
+
+    <!-- BADGES -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🎯 Erster Login</div>
+      ${p.is_pioneer ? '<div style="background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#ff6400">🚀 Pionier</div>' : ''}
+      ${myListings.length >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22c55e">📦 Erstes Inserat</div>' : ''}
+      ${soldListings.length >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#818cf8">💰 Erster Verkauf</div>' : ''}
+      ${soldListings.length >= 5 ? '<div style="background:rgba(255,215,0,0.15);border:1px solid var(--gold);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🏆 Viel-Verkäufer</div>' : ''}
+    </div>
+
+    <!-- QUICK ACTIONS -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
       <div onclick="openMeinKaufen()"
         style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.3);
-        border-radius:14px;padding:14px 12px;cursor:pointer;
-        transition:all 0.2s;-webkit-tap-highlight-color:rgba(255,215,0,0.1)">
-        <div style="font-size:24px;margin-bottom:6px">🛒</div>
+        border-radius:14px;padding:14px 12px;cursor:pointer">
+        <div style="font-size:22px;margin-bottom:4px">🛒</div>
         <div style="font-size:13px;font-weight:800;color:var(--gold)">Meine Käufe</div>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Deals & Bestellungen</div>
+        <div style="font-size:10px;color:var(--text-faint)">Deals & Status</div>
       </div>
       <div onclick="openMeinVerkaufen()"
         style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.3);
-        border-radius:14px;padding:14px 12px;cursor:pointer;
-        transition:all 0.2s;-webkit-tap-highlight-color:rgba(0,230,118,0.1)">
-        <div style="font-size:24px;margin-bottom:6px">💰</div>
+        border-radius:14px;padding:14px 12px;cursor:pointer">
+        <div style="font-size:22px;margin-bottom:4px">💰</div>
         <div style="font-size:13px;font-weight:800;color:var(--green)">Meine Verkäufe</div>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Anfragen & Umsatz</div>
+        <div style="font-size:10px;color:var(--text-faint)">Anfragen & Umsatz</div>
       </div>
     </div>
 
     <!-- TABS -->
     <div class="pd-tabs-wrap">
       <div class="pd-tabs" id="pd-tabs">
-        <button class="pd-tab active" onclick="switchPdTab('angebote',this)">
-          🏷️ Angebote <span class="pd-tab-count">${angeboteCount}</span>
+        <button class="pd-tab active" onclick="switchPdTab('aktiv',this)">
+          🏷️ Aktiv <span class="pd-tab-count">${activeListings.length}</span>
         </button>
-        <button class="pd-tab" onclick="switchPdTab('gesuche',this)">
-          🔍 Gesuche <span class="pd-tab-count">${gesucheCount}</span>
+        <button class="pd-tab" onclick="switchPdTab('reserviert',this)">
+          ⏳ Reserviert <span class="pd-tab-count">${reservedListings.length}</span>
         </button>
         <button class="pd-tab" onclick="switchPdTab('verkauft',this)">
-          ✅ Verkauft <span class="pd-tab-count">${verkauftCount}</span>
+          🏆 Verkauft <span class="pd-tab-count">${soldListings.length}</span>
+        </button>
+        <button class="pd-tab" onclick="switchPdTab('gesuche',this)">
+          🔍 Gesuche <span class="pd-tab-count">${gesucheListings.length}</span>
         </button>
       </div>
     </div>
 
-    <!-- PIONEER BANNER -->
-    ${p.is_pioneer ? `
-    <div class="pioneer-banner">
-      <div class="pioneer-banner-icon">🚀</div>
-      <div class="pioneer-banner-text">
-        <h4>Pionier der ersten Stunde!</h4>
-        <p>Du bist einer der ersten 50 User von Uri-Markt. Dieser Badge bleibt für immer.</p>
-      </div>
-    </div>` : ''}
     <!-- GRID -->
     <div class="pd-grid-wrap" id="pd-grid-wrap">
-      ${renderPdGrid('angebote', myListings)}
+      ${renderPdGrid('aktiv', myListings)}
     </div>
 
     <!-- REFERRAL -->
     <div class="pd-referral">
       <h3>🎁 Freunde einladen & 10 Uri-Taler kassieren</h3>
-      <p>Wenn sich jemand mit deinem Code anmeldet <strong>und sein erstes Inserat schaltet</strong>, erhältst du 10 Uri-Taler.</p>
+      <p>Wenn sich jemand mit deinem Code anmeldet und sein erstes Inserat schaltet, erhältst du 10 Uri-Taler.</p>
       <div class="pd-referral-box">
         <span class="pd-referral-code">${referralCode}</span>
         <button class="copy-btn" onclick="copyReferral('${referralLink}')">📋 Kopieren</button>
-        <button class="copy-btn" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;margin-left:6px" onclick="if(navigator.share){navigator.share({title:'Uri-Markt',text:'Komm zum smartesten Marktplatz im Kanton Uri! Hier ist mein Code: ${referralCode}',url:'${referralLink}'})}else{copyReferral('${referralLink}')}">🚀 Teilen</button>
+        <button class="copy-btn" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;margin-left:6px"
+          onclick="if(navigator.share){navigator.share({title:'Uri-Markt',text:'Mein Code: ${referralCode}',url:'${referralLink}'})}else{copyReferral('${referralLink}')}">🚀 Teilen</button>
       </div>
     </div>
 
@@ -6628,9 +6664,7 @@ function renderProfile() {
     </div>
   `;
 
-  // Nav-Profil-Button aktualisieren
   updateNavProfileBtn();
-  // XP-Balken animiert einblenden
   requestAnimationFrame(() => {
     const fill = el.querySelector('.pd-xp-fill');
     if (fill) { fill.style.width = '0%'; setTimeout(() => { fill.style.width = xpPct + '%'; }, 100); }
@@ -6651,19 +6685,28 @@ function updateNavProfileBtn() {
 }
 function renderPdGrid(tab, myListings) {
   let items = [];
-  if (tab === 'angebote') {
-    items = myListings.filter(l => (l.type === 'Angebot' || l.type === 'Coming Soon') && l.status !== 'sold' && l.status !== 'verkauft');
+  if (tab === 'aktiv' || tab === 'angebote') {
+    items = myListings.filter(l =>
+      l.status === 'active' &&
+      (l.type === 'Angebot' || l.type === 'Coming Soon')
+    );
+  } else if (tab === 'reserviert') {
+    items = myListings.filter(l => l.status === 'reserved');
+  } else if (tab === 'verkauft') {
+    items = myListings.filter(l =>
+      l.status === 'sold' || l.status === 'verkauft'
+    );
   } else if (tab === 'gesuche') {
     items = myListings.filter(l => l.type === 'Gesuch');
-  } else if (tab === 'verkauft') {
-    items = myListings.filter(l => l.status === 'sold' || l.status === 'verkauft');
   }
 
   if (items.length === 0) {
     const emptyTexts = {
+      aktiv: '📦 Noch keine aktiven Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
       angebote: '📦 Noch keine Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
+      reserviert: '⏳ Keine reservierten Artikel.',
       gesuche: '🔍 Noch keine Gesuche. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">🔍 Gesuch erstellen</button>',
-      verkauft: '✅ Noch nichts verkauft.'
+      verkauft: '🏆 Noch nichts verkauft.'
     };
     return `<div class="pd-grid"><div class="pd-empty">${emptyTexts[tab] || 'Keine Einträge'}</div></div>`;
   }
@@ -6693,7 +6736,9 @@ function renderPdGrid(tab, myListings) {
 
 function switchPdTab(tab, btnEl) {
   document.querySelectorAll('.pd-tab').forEach(b => b.classList.remove('active'));
-  btnEl.classList.add('active');
+  if (btnEl) btnEl.classList.add('active');
+  // Map old tab names to new ones
+  if (tab === 'angebote') tab = 'aktiv';
   const uid = getUID() || currentUser?.id;
   const myListings = allListings.filter(l => l.user_id === uid);
   const wrap = document.getElementById('pd-grid-wrap');
