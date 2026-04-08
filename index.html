@@ -6531,6 +6531,26 @@ function renderProfile() {
       ${verkauftCount >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:#818cf8;display:flex;align-items:center;gap:6px;">💰 Erster Verkauf</div>' : ''}
     </div>
 
+    <!-- KÄUFE & VERKÄUFE SCHNELLZUGRIFF -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div onclick="openMeinKaufen()"
+        style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.3);
+        border-radius:14px;padding:14px 12px;cursor:pointer;
+        transition:all 0.2s;-webkit-tap-highlight-color:rgba(255,215,0,0.1)">
+        <div style="font-size:24px;margin-bottom:6px">🛒</div>
+        <div style="font-size:13px;font-weight:800;color:var(--gold)">Meine Käufe</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Deals & Bestellungen</div>
+      </div>
+      <div onclick="openMeinVerkaufen()"
+        style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.3);
+        border-radius:14px;padding:14px 12px;cursor:pointer;
+        transition:all 0.2s;-webkit-tap-highlight-color:rgba(0,230,118,0.1)">
+        <div style="font-size:24px;margin-bottom:6px">💰</div>
+        <div style="font-size:13px;font-weight:800;color:var(--green)">Meine Verkäufe</div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:2px">Anfragen & Umsatz</div>
+      </div>
+    </div>
+
     <!-- TABS -->
     <div class="pd-tabs-wrap">
       <div class="pd-tabs" id="pd-tabs">
@@ -8787,7 +8807,19 @@ function setReviewRating(n) {
 async function submitReview(txId, reviewedUserId, listingId) {
   const rating = window._currentReviewRating || 0;
   const comment = document.getElementById('review-comment')?.value?.trim() || '';
-  if (!rating) { showToast('⚠️ Bitte Sterne vergeben', 'error'); return; }
+  if (!rating) {
+    // Simple validation - don't open error panel, just shake the stars
+    const starEl = document.getElementById('star-rating');
+    if (starEl) {
+      starEl.style.animation = 'none';
+      starEl.style.transform = 'scale(1.1)';
+      setTimeout(() => { starEl.style.transform = 'scale(1)'; }, 200);
+    }
+    const lbl = document.getElementById('rating-label');
+    if (lbl) { lbl.textContent = '👆 Bitte tippe auf einen Stern'; lbl.style.color = '#f59e0b'; }
+    showToast('👆 Bitte zuerst Sterne vergeben', 'info');
+    return;
+  }
   try {
     showToast('⏳ Bewertung wird gespeichert...', 'info');
     const res = await supaFetch('rpc/submit_review', {
@@ -9021,7 +9053,7 @@ window.addEventListener('unhandledrejection', function(event) {
   }
 });
 
-// showToast erweitern: type='error' oeffnet auch Error-Panel
+// showToast erweitern: type='error' oeffnet Error-Panel NUR bei echten API/System-Fehlern
 (function() {
   const _origShowToast = showToast;
   window.showToast = function(msg, typeOrDuration, duration) {
@@ -9033,8 +9065,13 @@ window.addEventListener('unhandledrejection', function(event) {
     if (typeof _origShowToast === 'function') {
       _origShowToast(msg, ms);
     }
-    // Bei Fehlern: Error-Panel oeffnen
-    if (isError && msg && msg.length > 5) {
+    // Error-Panel NUR bei echten Fehlern (nicht bei Validierung/Hinweisen)
+    // Erkennungsmerkmal: echte Fehler enthalten '❌' oder technische Begriffe
+    const isRealError = isError && msg && msg.length > 5
+      && (msg.includes('❌') || msg.includes('Fehler:') || msg.includes('HTTP')
+          || msg.includes('RLS') || msg.includes('violates') || msg.includes('500')
+          || msg.includes('403') || msg.includes('401') || msg.includes('404'));
+    if (isRealError && typeof showErrorPanel === 'function') {
       showErrorPanel(msg, null);
     }
   };
