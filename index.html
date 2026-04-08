@@ -6351,26 +6351,54 @@ function toggleVoice() {
 // ============================================================
 // getLevelInfo ist weiter unten mit 5 Stufen definiert (Beobachter → Gotthard-Titan)
 
-async function addXP(amount, reason) {
+async function addXP(amount, reason, actionKey) {
   if (!currentUser || !currentProfile) return;
+  // Use server-side idempotent XP if actionKey provided
+  if (actionKey) {
+    try {
+      const res = await supaFetch('rpc/grant_xp_once', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_user_id: getUID(),
+          p_action_key: actionKey,
+          p_amount: amount
+        })
+      });
+      if (res.already_granted) return; // Already got XP
+      if (res.success) {
+        currentProfile.xp_points = res.new_total;
+        currentProfile.xp = res.new_total;
+        showXpToast(amount, reason);
+        const oldLevel = getLevelInfo(res.new_total - amount);
+        const newLevel = getLevelInfo(res.new_total);
+        if (oldLevel.name !== newLevel.name) {
+          setTimeout(() => showLevelUpModal(newLevel), 800);
+        }
+        renderProfile();
+        updateNavProfileBtn();
+      }
+    } catch(e) {
+      console.warn('addXP (server) failed:', e.message);
+    }
+    return;
+  }
+  // Fallback: client-side (for cases without actionKey)
   const oldXP = currentProfile.xp_points || currentProfile.xp || 0;
   const newXP = oldXP + amount;
   const oldLevel = getLevelInfo(oldXP);
   const newLevel = getLevelInfo(newXP);
-  // XP updaten (GETRENNT von Credits!)
   currentProfile.xp_points = newXP;
   currentProfile.xp = newXP;
   currentProfile.level_name = newLevel.name;
   currentProfile.badge = newLevel.badge;
   try {
-    await supaFetch(`profiles?id=eq.${getUID()}`, {
+    await supaFetch('profiles?id=eq.' + getUID(), {
       method: 'PATCH',
-      body: JSON.stringify({ xp_points: newXP, xp: newXP, level_name: newLevel.name, badge: newLevel.badge })
+      body: JSON.stringify({ xp_points: newXP, xp: newXP,
+        level_name: newLevel.name, badge: newLevel.badge })
     });
   } catch(e) { console.error('addXP Fehler:', e.message); }
-  // XP-Toast anzeigen
   showXpToast(amount, reason);
-  // Level-Up prüfen
   if (oldLevel.name !== newLevel.name) {
     setTimeout(() => showLevelUpModal(newLevel), 800);
   }
@@ -7793,10 +7821,22 @@ async function renderKaufenContent(tab) {
           + 'border-radius:10px;color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px">'
           + '⏳ Warte auf Bestätigung</button>';
       } else if (tx.status === 'completed') {
-        html += '<button onclick="openReviewModal(\'' + txId + '\',\'' + sellerId + '\',\'' + listingId + '\')" '
-          + 'style="width:100%;padding:10px;background:rgba(255,215,0,0.1);border:1px solid var(--gold);'
-          + 'border-radius:10px;color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">'
-          + '⭐ Bewertung schreiben</button>';
+        // Check if buyer has already reviewed
+        const alreadyReviewed = tx.buyer_has_reviewed === true;
+        if (alreadyReviewed) {
+          html += '<div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);'
+            + 'border-radius:12px;padding:14px;text-align:center">'
+            + '<div style="font-size:28px;margin-bottom:6px">🏆</div>'
+            + '<div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:4px">Deal abgeschlossen!</div>'
+            + '<div style="font-size:11px;color:var(--text-faint)">+5 XP für deine Bewertung · +10 XP an Verkäufer</div>'
+            + '</div>';
+        } else {
+          html += '<button onclick="openReviewModal(\'' + txId + '\',\'' + sellerId + '\',\'' + listingId + '\')" '
+            + 'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,215,0,0.05));'
+            + 'border:2px solid var(--gold);border-radius:12px;color:var(--gold);'
+            + 'font-weight:800;cursor:pointer;font-size:13px">'
+            + '⭐ Jetzt bewerten & +5 XP sichern</button>';
+        }
       } else if (tx.status === 'confirmed') {
         html += '<div style="font-size:12px;font-weight:700;color:var(--green);'
           + 'padding:8px;text-align:center">🤝 Übergabe vereinbaren!</div>';
@@ -8651,7 +8691,19 @@ async function _loadSellerTx(listingId) {
             </div>` : ''}
           ${tx.status === 'completed' ? `
             <div style="margin-top:8px">
-              <button onclick="openReviewModal('${tx.id}','${tx.buyer_id}','${tx.listing_id}')" style="width:100%;padding:12px;background:rgba(255,215,0,0.1);border:1px solid var(--gold);border-radius:10px;color:var(--gold);font-weight:700;cursor:pointer">⭐ Käufer bewerten</button>
+              ${tx.seller_has_reviewed
+                ? `<div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);
+                    border-radius:12px;padding:14px;text-align:center">
+                    <div style="font-size:24px;margin-bottom:4px">🏆</div>
+                    <div style="font-size:13px;font-weight:800;color:var(--green)">Verkauf abgeschlossen!</div>
+                    <div style="font-size:11px;color:var(--text-faint);margin-top:4px">+50 XP Verkauf · +5 XP Bewertung</div>
+                  </div>`
+                : `<button onclick="openReviewModal('${tx.id}','${tx.buyer_id}','${tx.listing_id}')"
+                    style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(255,215,0,0.15),rgba(255,215,0,0.05));
+                    border:2px solid var(--gold);border-radius:12px;color:var(--gold);
+                    font-weight:800;cursor:pointer;font-size:13px">
+                    ⭐ Käufer bewerten & +5 XP sichern
+                  </button>`}
             </div>` : ''}
         </div>`;
     }).join('');
@@ -8712,12 +8764,23 @@ async function respondToTx(txId, action) {
       }
       showToast('Kaufanfrage abgelehnt.', 'info');
     } else if (action === 'completed') {
-      await supaFetch('transactions?id=eq.' + txId, { method: 'PATCH', body: JSON.stringify({ status: 'completed' }) });
+      // Use server-side RPC: sets sold, grants XP once
+      const completeRes = await supaFetch('rpc/complete_transaction', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_transaction_id: txId,
+          p_seller_id: getUID()
+        })
+      });
+      if (!completeRes.success) {
+        showToast('❌ ' + (completeRes.error || 'Fehler'), 'error');
+        return;
+      }
+      // Show XP locally (already granted server-side)
+      showXpToast(50, 'Verkauf abgeschlossen');
       const txRes = await supaFetch('transactions?id=eq.' + txId);
       const tx = Array.isArray(txRes) ? txRes[0] : txRes;
       if (tx) {
-        await supaFetch('listings?id=eq.' + tx.listing_id, { method: 'PATCH', body: JSON.stringify({ status: 'sold', sold_at: new Date().toISOString() }) });
-        typeof addXP === 'function' && addXP(50, 'Verkauf abgeschlossen');
         await sendNotification(
           tx.buyer_id,
           '🏆 Deal abgeschlossen!',
@@ -8889,6 +8952,10 @@ async function openEditListing(listingId) {
   const listing = allListings.find(l => String(l.id) === String(listingId));
   if (!listing) { showToast('❌ Nicht gefunden', 'error'); return; }
   if (listing.user_id !== getUID()) { showToast('❌ Keine Berechtigung', 'error'); return; }
+  if (listing.status === 'reserved') {
+    showToast('⏳ Inserat ist reserviert – während einer laufenden Kaufanfrage nicht editierbar.', 'error');
+    return;
+  }
   document.getElementById('edit-listing-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'edit-listing-overlay';
