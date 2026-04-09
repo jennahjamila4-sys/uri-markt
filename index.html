@@ -4417,15 +4417,27 @@ function renderCard(l, i) {
 
   // Calculate reservation deadline for countdown display
   let reservedUntilText = '';
-  if (isReserved && l.reserved_until) {
-    const ms = new Date(l.reserved_until).getTime() - Date.now();
-    if (ms > 0) {
-      const hrs = Math.floor(ms / 3600000);
-      const mins = Math.floor((ms % 3600000) / 60000);
-      reservedUntilText = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + ' Min';
+  let reservedUntilIso = l.reserved_until || '';
+  if (isReserved) {
+    if (l.reserved_until) {
+      const ms = new Date(l.reserved_until).getTime() - Date.now();
+      if (ms > 0) {
+        const hrs = Math.floor(ms / 3600000);
+        const mins = Math.floor((ms % 3600000) / 60000);
+        reservedUntilText = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + ' Min';
+      } else {
+        reservedUntilText = 'läuft aus';
+      }
+    } else {
+      // Fallback: assume reserved just now, show 48h
+      reservedUntilText = '~48h';
+      // Store synthetic deadline for countdown
+      if (!l._reservedFallback) {
+        l._reservedFallback = true;
+        l.reserved_until = new Date(Date.now() + 48*3600*1000).toISOString();
+        reservedUntilIso = l.reserved_until;
+      }
     }
-  } else if (isReserved) {
-    reservedUntilText = '48h';
   }
 
   if (isComingSoon) {
@@ -4468,7 +4480,7 @@ function renderCard(l, i) {
       : '<div class="card-img-placeholder">' + (l.emoji || getCategoryEmoji(l.category)) + '</div>'}
     ${showSoldStamp ? '<div class="card-sold-stamp">VERKAUFT</div>' : ''}
     ${isReserved ? `
-      <div data-reserved-until="${l.reserved_until || ''}" style="
+      <div data-reserved-until="${reservedUntilIso}" style="
         position:absolute;top:8px;left:8px;
         background:linear-gradient(135deg,#ff9800,#f57c00);
         color:#000;font-size:9px;font-weight:900;
@@ -8744,8 +8756,17 @@ async function confirmPurchase(listingId, paymentMethod) {
       );
     }
 
-    // 9. Feed neu laden + Bestätigungs-Modal
+    // 9. Feed neu laden + reserved_until in frisch geladene Daten injizieren
     await loadListings();
+    // Nach loadListings: reserved_until sicherstellen (Fallback falls DB-Column fehlt)
+    const freshListing = allListings.find(function(l) { return String(l.id) === String(listingId); });
+    if (freshListing && freshListing.status === 'reserved') {
+      if (!freshListing.reserved_until) {
+        freshListing.reserved_until = reservedUntil;
+      }
+      // Sofort neu rendern damit Badge sichtbar wird
+      renderListings();
+    }
     _showBuyerConfirmedModal(listing, paymentMethod, price);
 
   } catch(e) {
