@@ -4130,6 +4130,25 @@ async function loadListings() {
   } catch(e) {
     allListings = DEMO_LISTINGS;
   }
+
+  // Separate sold from active for correct feed display
+  // sold listings go to FOMO section, NOT main feed
+  window._recentlySoldListings = allListings
+    .filter(l => {
+      if (l.status !== 'sold' && l.status !== 'verkauft') return false;
+      // Only show sold within last 24 hours
+      if (!l.sold_at) return true; // no sold_at = show anyway
+      const soldTime = new Date(l.sold_at).getTime();
+      const hoursSinceSold = (Date.now() - soldTime) / 3600000;
+      return hoursSinceSold <= 24;
+    })
+    .slice(0, 10); // max 10 in FOMO section
+
+  // Remove ALL sold listings from main allListings array
+  // They must NOT appear in the main feed
+  allListings = allListings.filter(l =>
+    l.status !== 'sold' && l.status !== 'verkauft'
+  );
   // Seller-Badges asynchron anreichern (non-blocking)
   enrichListingsWithBadges();
   renderListings();
@@ -4167,27 +4186,99 @@ async function enrichListingsWithBadges() {
 
 function renderListings() {
   const grid = document.getElementById('listings-grid');
-  let filtered = allListings;
 
-  if (currentTab === 'angebote') filtered = allListings.filter(l => l.type === 'Angebot' || l.type === 'angebot');
-  else if (currentTab === 'gesuche') filtered = allListings.filter(l => l.type === 'Gesuch' || l.type === 'gesuch');
-  else if (currentTab === 'coming-soon') filtered = allListings.filter(l => l.type === 'Coming Soon' || l.type === 'coming_soon' || l.status === 'coming_soon');
+  // Filter active listings by tab
+  let filtered = allListings;
+  if (currentTab === 'angebote') {
+    filtered = allListings.filter(l =>
+      l.type === 'Angebot' || l.type === 'angebot'
+    );
+  } else if (currentTab === 'gesuche') {
+    filtered = allListings.filter(l =>
+      l.type === 'Gesuch' || l.type === 'gesuch'
+    );
+  } else if (currentTab === 'coming-soon') {
+    filtered = allListings.filter(l =>
+      l.type === 'Coming Soon' ||
+      l.type === 'coming_soon' ||
+      l.status === 'coming_soon'
+    );
+  }
+
+  // Guarantee: no sold items ever in main feed
+  filtered = filtered.filter(l =>
+    l.status !== 'sold' && l.status !== 'verkauft'
+  );
+
+  // Render FOMO section with REAL sold listings
+  _renderFomoSection();
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint)"><div style="font-size:48px;margin-bottom:12px">🔍</div><p>Noch keine Einträge. Sei der Erste!</p></div>`;
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-faint)">'
+      + '<div style="font-size:48px;margin-bottom:12px">🔍</div>'
+      + '<p>Noch keine Einträge. Sei der Erste!</p></div>';
     return;
   }
 
-  grid.innerHTML = filtered.map((l, i) => renderCard(l, i)).join('');
+  grid.innerHTML = filtered.map(function(l, i) {
+    return renderCard(l, i);
+  }).join('');
   startCountdowns();
 }
+
+function _renderFomoSection() {
+  const container = document.getElementById('fake-missed-deals');
+  if (!container) return;
+
+  const soldItems = window._recentlySoldListings || [];
+
+  if (soldItems.length === 0) {
+    // Keep static demo items if no real sold listings yet
+    return;
+  }
+
+  // Build FOMO cards from real sold listings
+  container.innerHTML = soldItems.map(function(l) {
+    // Calculate time since sold
+    let timeText = 'VERKAUFT';
+    if (l.sold_at) {
+      const mins = Math.round((Date.now() - new Date(l.sold_at).getTime()) / 60000);
+      if (mins < 60) {
+        timeText = 'VERKAUFT IN ' + mins + ' MIN';
+      } else {
+        const hrs = Math.floor(mins / 60);
+        timeText = 'VERKAUFT IN ' + hrs + ' STD';
+      }
+    }
+
+    const emoji = l.emoji || '📦';
+    const title = l.title || 'Artikel';
+    const price = l.price || 0;
+
+    // NOT clickable — sold items are only viewable in seller profile
+    return '<div class="listing-card" style="min-width:140px;opacity:0.7;'
+      + 'filter:grayscale(0.3);cursor:default;pointer-events:none">'
+      + '<div class="card-img-placeholder" style="height:100px;font-size:30px">'
+      + emoji + '</div>'
+      + '<div class="card-sold-stamp" style="font-size:10px;padding:4px 8px">'
+      + timeText + '</div>'
+      + '<div class="card-body" style="padding:8px">'
+      + '<div class="card-title" style="font-size:11px">'
+      + escHtml(title) + '</div>'
+      + '<div class="card-price" style="font-size:12px">CHF ' + price + '</div>'
+      + '</div></div>';
+  }).join('');
+}
+
+// Export for external calls
+window._renderFomoSection = _renderFomoSection;
 
 function renderCard(l, i) {
   const isSold = l.status === 'sold' || l.status === 'verkauft';
   const isComingSoon = l.type === 'Coming Soon' || l.status === 'coming_soon';
   const isFaved = favorites.includes(l.id);
   const viewers = l.viewers || Math.floor(Math.random() * 20 + 2);
-  const showSoldStamp = isSold || (Math.random() < 0.08 && !isComingSoon); // 8% random sold
+  const showSoldStamp = isSold; // only show VERKAUFT stamp on actual sold items
 
   if (isComingSoon) {
     const spotsTotal = l.spots_total || 50;
@@ -4214,8 +4305,16 @@ function renderCard(l, i) {
     </div>`;
   }
 
+  // sold items: never clickable in main feed
+  // (they should never reach here due to filtering,
+  // but as safety net: disable click)
+  const cardClick = isSold ? '' : `onclick="openDetail('${l.id}')"`;
+  const cardStyle = isSold
+    ? `style="animation-delay:${i*0.05}s;opacity:0.5;cursor:default;pointer-events:none"`
+    : `style="animation-delay:${i*0.05}s"`;
+
   return `
-  <div class="listing-card fade-in" onclick="openDetail('${l.id}')" style="animation-delay:${i*0.05}s">
+  <div class="listing-card fade-in" ${cardClick} ${cardStyle}>
     ${l.is_promoted ? '<div class="card-promoted-badge">⭐ HIGHLIGHT</div>' : ''}
     <div class="card-img-placeholder">${l.emoji || getCategoryEmoji(l.category)}</div>
     ${showSoldStamp ? '<div class="card-sold-stamp">VERKAUFT</div>' : ''}
