@@ -4611,20 +4611,7 @@ function openDetail(id, directListing) {
           font-weight:700;text-align:center;margin-top:8px">
           ❌ VERKAUFT
         </div>` : ''}
-      ${currentUser && l.user_id === getUID() ? `
-        <button onclick="openEditListing('${l.id}')"
-          style="width:100%;padding:14px;background:rgba(255,215,0,0.1);
-          border:2px solid var(--gold);border-radius:12px;color:var(--gold);
-          font-weight:700;cursor:pointer;margin-top:8px;display:block">
-          ✏️ Inserat bearbeiten
-        </button>
-        <button onclick="openSellerDashboard('${l.id}')"
-          style="width:100%;padding:14px;background:rgba(0,230,118,0.08);
-          border:1px solid var(--green);border-radius:12px;color:var(--green);
-          font-weight:700;cursor:pointer;margin-top:8px;display:block">
-          📊 Kaufanfragen & Bestätigen
-        </button>` : ''}
-      ${isOwner || isAdmin ? renderOwnerActions(l) : ''}
+      ${isOwner ? renderOwnerDetailSection(l) : ''}
       ${renderShareButton(l)}
       <div class="comments-section">
         <div class="comments-title">💬 Kommentare</div>
@@ -4706,6 +4693,111 @@ function renderContactSection(l) {
       ${btnHtml}
     </div>
   </div>`;
+}
+
+function renderOwnerDetailSection(l) {
+  const lid = String(l.id || '').replace(/'/g, '');
+  const isSold    = l.status === 'sold' || l.status === 'verkauft';
+  const isReserved = l.status === 'reserved';
+
+  // ── SOLD: Abschluss-Karte ──────────────────────────────────
+  if (isSold) {
+    return `
+      <div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.25);
+        border-radius:16px;padding:20px;text-align:center;margin-top:12px">
+        <div style="font-size:36px;margin-bottom:8px">🏆</div>
+        <div style="font-size:16px;font-weight:900;color:var(--green);margin-bottom:4px">
+          Erfolgreich verkauft!</div>
+        <div style="font-size:12px;color:var(--text-faint);line-height:1.5;margin-bottom:14px">
+          Dieser Artikel hat einen neuen Besitzer. +50 XP wurden vergeben.
+        </div>
+        <button onclick="deleteListing('${lid}')"
+          style="padding:10px 24px;background:rgba(255,68,68,0.1);
+          border:1px solid rgba(255,68,68,0.3);border-radius:10px;
+          color:var(--red);font-size:12px;font-weight:700;cursor:pointer">
+          🗑️ Inserat entfernen
+        </button>
+      </div>`;
+  }
+
+  // ── RESERVED: Deal-Cockpit ─────────────────────────────────
+  if (isReserved) {
+    // Countdown berechnen
+    let countdownText = '~48h';
+    if (l.reserved_until) {
+      const ms = new Date(l.reserved_until).getTime() - Date.now();
+      if (ms > 0) {
+        const hrs = Math.floor(ms / 3600000);
+        const mins = Math.floor((ms % 3600000) / 60000);
+        countdownText = hrs > 0 ? hrs + 'h ' + mins + 'min' : mins + ' Min';
+      } else { countdownText = 'Abgelaufen'; }
+    }
+    return `
+      <div style="margin-top:12px">
+
+        <!-- Status Banner -->
+        <div style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));
+          border:2px solid rgba(255,152,0,0.5);border-radius:16px;
+          padding:16px;margin-bottom:12px;text-align:center">
+          <div style="font-size:11px;font-weight:800;color:#ff9800;
+            letter-spacing:1px;margin-bottom:4px">⏳ KAUFANFRAGE LÄUFT</div>
+          <div style="font-size:28px;font-weight:900;color:#ff9800">
+            Noch ${countdownText}</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px">
+            Bestätige oder lehne ab – dann wird der Artikel freigegeben.
+          </div>
+        </div>
+
+        <!-- Primär: Kaufanfragen verwalten -->
+        <button onclick="openSellerDashboard('${lid}')"
+          style="width:100%;padding:18px;
+          background:linear-gradient(135deg,var(--gold),#f59e0b);
+          border:none;border-radius:14px;color:#000;
+          font-size:16px;font-weight:900;cursor:pointer;
+          box-shadow:0 4px 20px rgba(255,215,0,0.35);
+          display:flex;align-items:center;justify-content:center;gap:10px;
+          margin-bottom:10px">
+          <span style="font-size:20px">📊</span>
+          Kaufanfragen verwalten & bestätigen
+        </button>
+
+        <!-- Sekundär: Info -->
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+          border-radius:12px;padding:12px 14px;
+          font-size:11px;color:var(--text-faint);line-height:1.6">
+          ✅ Nach Bestätigung: Kontaktdaten werden gegenseitig freigeschaltet.<br>
+          🏆 Nach Übergabe: Artikel wird automatisch als Verkauft markiert (+50 XP).<br>
+          ❌ Bei Ablehnung: Artikel wird wieder aktiv geschaltet.
+        </div>
+      </div>`;
+  }
+
+  // ── ACTIVE: Verwaltungs-Buttons ────────────────────────────
+  return `
+    <div style="display:grid;gap:8px;margin-top:12px">
+      <button onclick="openEditListing('${lid}')"
+        style="width:100%;padding:14px;
+        background:rgba(255,215,0,0.08);
+        border:1.5px solid rgba(255,215,0,0.4);
+        border-radius:12px;color:var(--gold);
+        font-weight:700;cursor:pointer;font-size:14px">
+        ✏️ Inserat bearbeiten
+      </button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button onclick="boostListing('${lid}')"
+          style="padding:12px;background:rgba(255,215,0,0.08);
+          border:1px solid rgba(255,215,0,0.3);border-radius:12px;
+          color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">
+          🚀 Boost (50 Taler)
+        </button>
+        <button onclick="deleteListing('${lid}')"
+          style="padding:12px;background:rgba(255,68,68,0.08);
+          border:1px solid rgba(255,68,68,0.3);border-radius:12px;
+          color:var(--red);font-weight:700;cursor:pointer;font-size:12px">
+          🗑️ Löschen
+        </button>
+      </div>
+    </div>`;
 }
 
 function renderOwnerActions(l) {
