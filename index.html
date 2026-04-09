@@ -4074,19 +4074,47 @@ if (typeof openResetPwModal === "function") window.openResetPwModal = openResetP
 function initSwipeLogic() {
   const container = document.getElementById('swipe-container');
   if (!container) return;
+
+  let swipeTarget = null;
+
   container.addEventListener('touchstart', e => {
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
+    // Remember where the touch started
+    swipeTarget = e.target;
   }, { passive: true });
+
   container.addEventListener('touchend', e => {
     const dx = e.changedTouches[0].clientX - swipeStartX;
     const dy = e.changedTouches[0].clientY - swipeStartY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-      if (dx < 0 && currentPanel < 2) swipeTo(currentPanel + 1);
-      if (dx > 0 && currentPanel > 0) swipeTo(currentPanel - 1);
+
+    // Only horizontal swipes
+    if (!(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50)) return;
+
+    // BLOCK panel swipe if touch started inside a
+    // horizontally scrollable container
+    // (FOMO section, carousels, modal sheets etc.)
+    const scrollableParent = swipeTarget && swipeTarget.closest(
+      '#fake-missed-deals, .boost-carousel, [style*="overflow-x"], [style*="overflow-x:auto"]'
+    );
+    if (scrollableParent) {
+      // Check if this container actually has scrollable content
+      const hasHScroll = scrollableParent.scrollWidth > scrollableParent.clientWidth;
+      if (hasHScroll) return; // Let the inner scroll handle it
     }
+
+    // Also block if any modal is open
+    const anyModalOpen = document.querySelector(
+      '.modal-overlay.open, #detail-modal.open, #auth-modal.open'
+    );
+    if (anyModalOpen) return;
+
+    // Execute panel switch
+    if (dx < 0 && currentPanel < 2) swipeTo(currentPanel + 1);
+    if (dx > 0 && currentPanel > 0) swipeTo(currentPanel - 1);
   }, { passive: true });
-  console.log('✅ URI-MARKT Swipe-Listener aktiv');
+
+  console.log('\u2705 URI-MARKT Swipe-Listener aktiv (scroll-aware)');
 }
 
 // Startet die Logik erst, wenn der DOM bereit ist oder per Intervall-Check
@@ -4275,10 +4303,24 @@ window._renderFomoSection = _renderFomoSection;
 
 function renderCard(l, i) {
   const isSold = l.status === 'sold' || l.status === 'verkauft';
+  const isReserved = l.status === 'reserved';
   const isComingSoon = l.type === 'Coming Soon' || l.status === 'coming_soon';
   const isFaved = favorites.includes(l.id);
   const viewers = l.viewers || Math.floor(Math.random() * 20 + 2);
-  const showSoldStamp = isSold; // only show VERKAUFT stamp on actual sold items
+  const showSoldStamp = isSold;
+
+  // Calculate reservation deadline for countdown display
+  let reservedUntilText = '';
+  if (isReserved && l.reserved_until) {
+    const ms = new Date(l.reserved_until).getTime() - Date.now();
+    if (ms > 0) {
+      const hrs = Math.floor(ms / 3600000);
+      const mins = Math.floor((ms % 3600000) / 60000);
+      reservedUntilText = hrs > 0 ? hrs + 'h ' + mins + 'm' : mins + ' Min';
+    }
+  } else if (isReserved) {
+    reservedUntilText = '48h';
+  }
 
   if (isComingSoon) {
     const spotsTotal = l.spots_total || 50;
@@ -4305,19 +4347,28 @@ function renderCard(l, i) {
     </div>`;
   }
 
-  // sold items: never clickable in main feed
-  // (they should never reach here due to filtering,
-  // but as safety net: disable click)
-  const cardClick = isSold ? '' : `onclick="openDetail('${l.id}')"`;
-  const cardStyle = isSold
-    ? `style="animation-delay:${i*0.05}s;opacity:0.5;cursor:default;pointer-events:none"`
-    : `style="animation-delay:${i*0.05}s"`;
+  // Click behaviour based on status
+  const cardClickAttr = (isSold || isReserved)
+    ? `onclick="openDetail('${l.id}')"` // reserved still viewable
+    : `onclick="openDetail('${l.id}')"`;
+  const cardOpacity = isSold ? 'opacity:0.5;cursor:default;pointer-events:none;' : '';
 
   return `
-  <div class="listing-card fade-in" ${cardClick} ${cardStyle}>
+  <div class="listing-card fade-in" ${cardClickAttr}
+    style="animation-delay:${i*0.05}s;${cardOpacity}">
     ${l.is_promoted ? '<div class="card-promoted-badge">⭐ HIGHLIGHT</div>' : ''}
     <div class="card-img-placeholder">${l.emoji || getCategoryEmoji(l.category)}</div>
     ${showSoldStamp ? '<div class="card-sold-stamp">VERKAUFT</div>' : ''}
+    ${isReserved ? `
+      <div style="
+        position:absolute;top:8px;left:8px;
+        background:linear-gradient(135deg,#ff9800,#f57c00);
+        color:#000;font-size:9px;font-weight:900;
+        padding:4px 8px;border-radius:6px;
+        letter-spacing:0.5px;z-index:2;
+        box-shadow:0 2px 8px rgba(255,152,0,0.5)">
+        ⏳ RESERVIERT${reservedUntilText ? ' · noch ' + reservedUntilText : ''}
+      </div>` : ''}
     <div class="card-heart ${isFaved?'liked':''}" onclick="event.stopPropagation();toggleFav('${l.id}',this)">${isFaved?'❤️':'🤍'}</div>
     <div class="viewers-badge">👁️ ${viewers}</div>
     <div class="card-body">
@@ -4325,8 +4376,8 @@ function renderCard(l, i) {
       <div class="card-title">${escHtml(l.title)}</div>
       ${l.price > 0 ? `<div class="card-price">CHF ${l.price}</div>` : '<div class="card-price" style="color:var(--green)">Gratis</div>'}
       <div class="card-location">📍 ${escHtml(l.location||l.gemeinde||'Uri')}</div>
-      ${l._sellerBadge ? `<div class="card-seller-badge">${l._sellerBadge}</div>` : ''}
-      ${viewers > 10 ? `<div class="card-fomo"><span class="fomo-dot"></span>🔥 ${viewers} schauen gerade</div>` : ''}
+      ${isReserved ? `<div style="font-size:10px;color:#ff9800;margin-top:4px;font-weight:700">🔒 Kaufverhandlung läuft</div>` : ''}
+      ${!isReserved && viewers > 10 ? `<div class="card-fomo"><span class="fomo-dot"></span>🔥 ${viewers} schauen gerade</div>` : ''}
     </div>
   </div>`;
 }
@@ -8922,6 +8973,9 @@ async function respondToTx(txId, action) {
       }
       // Show XP locally (already granted server-side)
       showXpToast(50, 'Verkauf abgeschlossen');
+      // Immediately reload listings to move sold item
+      await loadListings();
+      if (typeof renderProfile === 'function') renderProfile();
       const txRes = await supaFetch('transactions?id=eq.' + txId);
       const tx = Array.isArray(txRes) ? txRes[0] : txRes;
       if (tx) {
@@ -9056,6 +9110,19 @@ async function submitReview(txId, reviewedUserId, listingId) {
     launchConfetti && launchConfetti();
     showToast('✅ Bewertung gesendet! +5 XP. Neuer Schnitt: ' + parseFloat(res.new_avg||0).toFixed(1) + ' ⭐', 'success');
     await refreshProfile && refreshProfile();
+    // Reload listings so sold item moves to correct sections
+    await loadListings();
+    // If seller verkaufen modal is open, refresh it
+    const verkaufenModal = document.getElementById('mein-verkaufen-modal');
+    if (verkaufenModal && verkaufenModal.classList.contains('open')) {
+      if (typeof renderVerkaufenContent === 'function') {
+        renderVerkaufenContent('verkauft');
+      }
+    }
+    // If profile is visible, re-render it
+    if (typeof renderProfile === 'function') {
+      renderProfile();
+    }
   } catch(e) {
     showToast('❌ Fehler: ' + e.message, 'error');
   }
