@@ -7065,52 +7065,60 @@ async function renderProfile() {
   });
 }
 
+function updateNavProfileBtn() {
+  const iconEl = document.getElementById('nav-profile-icon');
+  if (!iconEl) return;
+  if (currentProfile && currentProfile.avatar_url) {
+    iconEl.innerHTML = '<img src="' + escHtml(currentProfile.avatar_url) + '" class="nav-profile-icon-img" alt="Profil">';
+  } else if (currentProfile && currentProfile.username) {
+    const initial = (currentProfile.username || 'U').charAt(0).toUpperCase();
+    iconEl.innerHTML = '<span style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#F59E0B);color:#000;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold)">' + initial + '</span>';
+  } else {
+    iconEl.innerHTML = '👤';
+  }
+}
+window.updateNavProfileBtn = updateNavProfileBtn;
+
 function renderPdGrid(tab, myListings) {
   let items = [];
   if (tab === 'aktiv' || tab === 'angebote') {
     items = myListings.filter(l =>
-      l.status === 'active' &&
-      (l.type === 'Angebot' || l.type === 'Coming Soon')
+      l.status === 'active' && (l.type === 'Angebot' || l.type === 'Coming Soon')
     );
   } else if (tab === 'reserviert') {
     items = myListings.filter(l => l.status === 'reserved');
   } else if (tab === 'verkauft') {
-    items = myListings.filter(l =>
-      l.status === 'sold' || l.status === 'verkauft'
-    );
+    items = myListings.filter(l => l.status === 'sold' || l.status === 'verkauft');
   } else if (tab === 'gesuche') {
     items = myListings.filter(l => l.type === 'Gesuch');
   }
   if (items.length === 0) {
     const emptyTexts = {
-      aktiv: '📦 Noch keine aktiven Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
-      angebote: '📦 Noch keine Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
+      aktiv: '📦 Noch keine aktiven Angebote.<br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
       reserviert: '⏳ Keine reservierten Artikel.',
-      gesuche: '🔍 Noch keine Gesuche. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">🔍 Gesuch erstellen</button>',
+      gesuche: '🔍 Noch keine Gesuche.<br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">🔍 Gesuch erstellen</button>',
       verkauft: '🏆 Noch nichts verkauft.'
     };
-    return `<div class="pd-grid"><div class="pd-empty">${emptyTexts[tab] || 'Keine Einträge'}</div></div>`;
+    return '<div class="pd-grid"><div class="pd-empty">' + (emptyTexts[tab]||'Keine Einträge') + '</div></div>';
   }
-  const gridItems = items.map(l => {
-    const safeId = String(l.id).replace(/'/g, '');
-    const isSold = l.status === 'sold' || l.status === 'verkauft';
-    const isGesuch = l.type === 'Gesuch';
-    const badgeClass = isSold ? 'verkauft' : isGesuch ? 'gesuch' : 'aktiv';
-    const badgeLabel = isSold ? 'Verkauft' : isGesuch ? 'Gesuch' : 'Aktiv';
-    const imgHtml = l.images && l.images[0]
-      ? `<img src="${escHtml(l.images[0])}" alt="" style="width:100%;height:100%;object-fit:cover">`
-      : `<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">${l.emoji || '📦'}</div>`;
-    return `
-      <div class="pd-grid-item" onclick="openDetail('${safeId}')">
-        <div class="pd-grid-img">${imgHtml}</div>
-        <div class="pd-grid-body">
-          <div class="pd-grid-badge ${badgeClass}">${badgeLabel}</div>
-          <div class="pd-grid-title">${escHtml(l.title || '')}</div>
-          <div class="pd-grid-price">CHF ${l.price || 0}</div>
-        </div>
-      </div>`;
+  const gridItems = items.map(function(l) {
+    const safeId = String(l.id).replace(/'/g,'');
+    const isSold = l.status==='sold'||l.status==='verkauft';
+    const isGesuch = l.type==='Gesuch';
+    const badgeClass = isSold?'verkauft':isGesuch?'gesuch':'aktiv';
+    const badgeLabel = isSold?'Verkauft':isGesuch?'Gesuch':'Aktiv';
+    const imgHtml = l.image_url
+      ? '<img src="'+escHtml(l.image_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">'
+      : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">'+(l.emoji||'📦')+'</div>';
+    return '<div class="pd-grid-item" onclick="openDetail(\'' + safeId + '\')">'
+      +'<div class="pd-grid-img">'+imgHtml+'</div>'
+      +'<div class="pd-grid-body">'
+      +'<div class="pd-grid-badge '+badgeClass+'">'+badgeLabel+'</div>'
+      +'<div class="pd-grid-title">'+escHtml(l.title||'')+'</div>'
+      +'<div class="pd-grid-price">CHF '+(l.price||0)+'</div>'
+      +'</div></div>';
   }).join('');
-  return `<div class="pd-grid">${gridItems}</div>`;
+  return '<div class="pd-grid">'+gridItems+'</div>';
 }
 window.renderPdGrid = renderPdGrid;
 
@@ -7133,19 +7141,19 @@ async function switchPdTab(tab, btnEl) {
         wrap.innerHTML = '<div class="pd-grid"><div class="pd-empty">🏆 Noch nichts verkauft.</div></div>';
         return;
       }
-      const gridHtml = soldItems.map(l => {
+      const gridHtml = soldItems.map(function(l) {
         const safeId = String(l.id).replace(/'/g,'');
         const soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : '';
         const imgHtml = l.image_url
-          ? '<img src="' + escHtml(l.image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover">'
-          : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">' + (l.emoji||'📦') + '</div>';
+          ? '<img src="'+escHtml(l.image_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">'+(l.emoji||'📦')+'</div>';
         return '<div class="pd-grid-item" onclick="openDetail(\'' + safeId + '\')">'
-          + '<div class="pd-grid-img">'+imgHtml+'</div>'
-          + '<div class="pd-grid-body">'
-          + '<div class="pd-grid-badge verkauft">🏆 Verkauft'+(soldDate?' · '+soldDate:'')+'</div>'
-          + '<div class="pd-grid-title">'+escHtml(l.title||'')+'</div>'
-          + '<div class="pd-grid-price">CHF '+(l.price||0)+'</div>'
-          + '</div></div>';
+          +'<div class="pd-grid-img">'+imgHtml+'</div>'
+          +'<div class="pd-grid-body">'
+          +'<div class="pd-grid-badge verkauft">🏆 Verkauft'+(soldDate?' · '+soldDate:'')+'</div>'
+          +'<div class="pd-grid-title">'+escHtml(l.title||'')+'</div>'
+          +'<div class="pd-grid-price">CHF '+(l.price||0)+'</div>'
+          +'</div></div>';
       }).join('');
       wrap.innerHTML = '<div class="pd-grid">'+gridHtml+'</div>';
     } catch(e) {
