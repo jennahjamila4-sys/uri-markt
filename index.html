@@ -6831,7 +6831,7 @@ function closeLevelUpModal() {
 // ============================================================
 // PROFILE
 // ============================================================
-function renderProfile() {
+async function renderProfile() {
   const el = document.getElementById('profile-content');
   if (!el) return;
   if (!currentUser || !currentProfile) {
@@ -6855,11 +6855,45 @@ function renderProfile() {
     .indexOf(level.name) + 1 || 1;
 
   const uid = getUID() || currentUser.id;
+
+  // allListings has sold items removed — use full Supabase query for real counts
+  // Load counts from DB (non-blocking, show skeleton first)
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-faint)">⏳ Lade Profil...</div>';
+
+  // Real counts from Supabase
+  let soldCount = 0;
+  let boughtCount = 0;
+  let activeCount = 0;
+  let reservedCount = 0;
+  let soldListingsDb = [];
+
+  try {
+    // All own listings (including sold)
+    const ownListings = await supaFetch(
+      'listings?user_id=eq.' + uid + '&select=id,status,title,price,emoji,category,created_at,sold_at,type,image_url,reserved_until&order=created_at.desc&limit=100'
+    );
+    const own = Array.isArray(ownListings) ? ownListings : [];
+    soldCount = own.filter(l => l.status === 'sold' || l.status === 'verkauft').length;
+    activeCount = own.filter(l => l.status === 'active').length;
+    reservedCount = own.filter(l => l.status === 'reserved').length;
+    soldListingsDb = own.filter(l => l.status === 'sold' || l.status === 'verkauft');
+
+    // Bought: transactions as buyer
+    const txs = await supaFetch(
+      'transactions?buyer_id=eq.' + uid + '&status=eq.completed&select=id&limit=100'
+    );
+    boughtCount = Array.isArray(txs) ? txs.length : 0;
+  } catch(e) {
+    console.warn('Profile counts error:', e.message);
+    // fallback: use allListings
+    const own = allListings.filter(l => l.user_id === uid);
+    activeCount = own.filter(l => l.status === 'active').length;
+    reservedCount = own.filter(l => l.status === 'reserved').length;
+  }
+
   const myListings = allListings.filter(l => l.user_id === uid);
-  const activeListings = myListings.filter(l => l.status === 'active');
-  const reservedListings = myListings.filter(l => l.status === 'reserved');
-  const soldListings = myListings.filter(l => l.status === 'sold' || l.status === 'verkauft');
   const gesucheListings = myListings.filter(l => l.type === 'Gesuch');
+  const reservedListings = myListings.filter(l => l.status === 'reserved');
 
   const displayName = escHtml(p.username || p.full_name || 'Urner');
   const initial = displayName.charAt(0).toUpperCase();
@@ -6886,7 +6920,8 @@ function renderProfile() {
           <span class="pd-level-num">Level ${levelNum}</span>
         </div>
         ${p.avg_rating > 0 ? `<div style="font-size:12px;color:var(--gold);margin-top:4px">
-          ${'⭐'.repeat(Math.round(p.avg_rating || 0))} ${parseFloat(p.avg_rating||0).toFixed(1)} (${p.review_count||0} Bewertungen)</div>` : ''}
+          ${'⭐'.repeat(Math.round(p.avg_rating || 0))} ${parseFloat(p.avg_rating||0).toFixed(1)}
+          <span style="color:var(--text-faint)">(${p.review_count||0} Bew.)</span></div>` : ''}
       </div>
       <div class="pd-taler-card" onclick="openWalletModal()">
         <span class="pd-taler-icon">🪙</span>
@@ -6906,9 +6941,7 @@ function renderProfile() {
         <span class="pd-xp-label">${level.emoji} ${level.name} → ${level.nextName || '🏆 MAX'}</span>
         <span class="pd-xp-val">${xp} / ${level.next || xp} XP</span>
       </div>
-      <div class="pd-xp-track">
-        <div class="pd-xp-fill" style="width:${xpPct}%"></div>
-      </div>
+      <div class="pd-xp-track"><div class="pd-xp-fill" style="width:${xpPct}%"></div></div>
       <div class="pd-xp-hint">
         ${level.next
           ? 'Noch <strong>' + xpNeeded + ' XP</strong> · Verkaufe ' + Math.ceil(xpNeeded/50) + ' Artikel um aufzusteigen 🚀'
@@ -6916,41 +6949,58 @@ function renderProfile() {
       </div>
     </div>
 
-    <!-- KPI CARDS (real data from allListings) -->
+    <!-- KPI CARDS — echte DB-Zahlen, alle anklickbar -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
-      <div onclick="openMeinVerkaufen()" style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
-        <div style="font-size:20px;font-weight:900;color:var(--green)">${soldListings.length}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Verkauft 💰</div>
+
+      <!-- Verkauft → Meine Verkäufe (Verkauft-Tab) -->
+      <div onclick="openMeinVerkaufen('verkauft')"
+        style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.3);
+        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
+        transition:all 0.15s;-webkit-tap-highlight-color:rgba(0,230,118,0.1)">
+        <div style="font-size:26px;font-weight:900;color:var(--green)">${soldCount}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">💰 Verkauft</div>
       </div>
-      <div onclick="switchPdTab('aktiv',document.querySelector('.pd-tab'))" style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
-        <div style="font-size:20px;font-weight:900;color:var(--gold)">${activeListings.length}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Aktiv 📦</div>
+
+      <!-- Aktiv → Profil-Tab Aktiv -->
+      <div onclick="document.querySelector('.pd-tab') && switchPdTab('aktiv', document.querySelector('.pd-tab'))"
+        style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.3);
+        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
+        transition:all 0.15s;-webkit-tap-highlight-color:rgba(255,215,0,0.1)">
+        <div style="font-size:26px;font-weight:900;color:var(--gold)">${activeCount}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">📦 Aktiv</div>
       </div>
-      <div onclick="openMeinKaufen()" style="background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
-        <div style="font-size:20px;font-weight:900;color:#4fc3f7">0</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Gekauft 🛒</div>
+
+      <!-- Gekauft → Meine Käufe (echte Zahl) -->
+      <div onclick="openMeinKaufen()"
+        style="background:rgba(79,195,247,0.08);border:1.5px solid rgba(79,195,247,0.3);
+        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
+        transition:all 0.15s;-webkit-tap-highlight-color:rgba(79,195,247,0.1)">
+        <div style="font-size:26px;font-weight:900;color:#4fc3f7">${boughtCount}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">🛒 Gekauft</div>
       </div>
-      <div onclick="openWalletModal()" style="background:rgba(255,100,0,0.08);border:1px solid rgba(255,100,0,0.25);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer">
-        <div style="font-size:20px;font-weight:900;color:#ff6400">${credits}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:2px">Taler 🪙</div>
+
+      <!-- Taler → Wallet -->
+      <div onclick="openWalletModal()"
+        style="background:rgba(255,100,0,0.08);border:1.5px solid rgba(255,100,0,0.3);
+        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
+        transition:all 0.15s;-webkit-tap-highlight-color:rgba(255,100,0,0.1)">
+        <div style="font-size:26px;font-weight:900;color:#ff6400">${credits}</div>
+        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">🪙 Taler</div>
       </div>
     </div>
 
     <!-- PENDING DEALS ALERT (FOMO) -->
     ${reservedListings.length > 0 ? `
-      <div onclick="openMeinVerkaufen()"
+      <div onclick="openMeinVerkaufen('aktiv')"
         style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));
         border:2px solid rgba(255,152,0,0.4);border-radius:14px;padding:14px 16px;
-        margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;
-        animation:pulse 2s infinite">
+        margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px">
         <div style="font-size:28px">⚡</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:900;color:var(--orange)">
-            ${reservedListings.length} Kaufanfrage${reservedListings.length > 1 ? 'n warten' : ' wartet'}!
-          </div>
+            ${reservedListings.length} Kaufanfrage${reservedListings.length > 1 ? 'n warten' : ' wartet'} auf dich!</div>
           <div style="font-size:11px;color:var(--text-faint)">
-            Jetzt bestätigen → +50 XP & Taler verdienen
-          </div>
+            Jetzt bestätigen → +50 XP & Taler verdienen</div>
         </div>
         <div style="font-size:16px;color:var(--orange)">→</div>
       </div>` : ''}
@@ -6959,40 +7009,22 @@ function renderProfile() {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <div style="background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🎯 Erster Login</div>
       ${p.is_pioneer ? '<div style="background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#ff6400">🚀 Pionier</div>' : ''}
-      ${myListings.length >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22c55e">📦 Erstes Inserat</div>' : ''}
-      ${soldListings.length >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#818cf8">💰 Erster Verkauf</div>' : ''}
-      ${soldListings.length >= 5 ? '<div style="background:rgba(255,215,0,0.15);border:1px solid var(--gold);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🏆 Viel-Verkäufer</div>' : ''}
-    </div>
-
-    <!-- QUICK ACTIONS -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <div onclick="openMeinKaufen()"
-        style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.3);
-        border-radius:14px;padding:14px 12px;cursor:pointer">
-        <div style="font-size:22px;margin-bottom:4px">🛒</div>
-        <div style="font-size:13px;font-weight:800;color:var(--gold)">Meine Käufe</div>
-        <div style="font-size:10px;color:var(--text-faint)">Deals & Status</div>
-      </div>
-      <div onclick="openMeinVerkaufen()"
-        style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.3);
-        border-radius:14px;padding:14px 12px;cursor:pointer">
-        <div style="font-size:22px;margin-bottom:4px">💰</div>
-        <div style="font-size:13px;font-weight:800;color:var(--green)">Meine Verkäufe</div>
-        <div style="font-size:10px;color:var(--text-faint)">Anfragen & Umsatz</div>
-      </div>
+      ${(activeCount + soldCount) >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22c55e">📦 Erstes Inserat</div>' : ''}
+      ${soldCount >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#818cf8">💰 Erster Verkauf</div>' : ''}
+      ${soldCount >= 5 ? '<div style="background:rgba(255,215,0,0.15);border:1px solid var(--gold);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🏆 Viel-Verkäufer</div>' : ''}
     </div>
 
     <!-- TABS -->
     <div class="pd-tabs-wrap">
       <div class="pd-tabs" id="pd-tabs">
         <button class="pd-tab active" onclick="switchPdTab('aktiv',this)">
-          🏷️ Aktiv <span class="pd-tab-count">${activeListings.length}</span>
+          🏷️ Aktiv <span class="pd-tab-count">${activeCount}</span>
         </button>
         <button class="pd-tab" onclick="switchPdTab('reserviert',this)">
-          ⏳ Reserviert <span class="pd-tab-count">${reservedListings.length}</span>
+          ⏳ Reserviert <span class="pd-tab-count">${reservedCount}</span>
         </button>
         <button class="pd-tab" onclick="switchPdTab('verkauft',this)">
-          🏆 Verkauft <span class="pd-tab-count">${soldListings.length}</span>
+          🏆 Verkauft <span class="pd-tab-count">${soldCount}</span>
         </button>
         <button class="pd-tab" onclick="switchPdTab('gesuche',this)">
           🔍 Gesuche <span class="pd-tab-count">${gesucheListings.length}</span>
@@ -7000,7 +7032,7 @@ function renderProfile() {
       </div>
     </div>
 
-    <!-- GRID -->
+    <!-- GRID: aktiv listings from allListings -->
     <div class="pd-grid-wrap" id="pd-grid-wrap">
       ${renderPdGrid('aktiv', myListings)}
     </div>
@@ -7033,79 +7065,50 @@ function renderProfile() {
   });
 }
 
-function updateNavProfileBtn() {
-  const iconEl = document.getElementById('nav-profile-icon');
-  if (!iconEl) return;
-  if (currentProfile && currentProfile.avatar_url) {
-    iconEl.innerHTML = `<img src="${currentProfile.avatar_url}" class="nav-profile-icon-img" alt="Profil">`;
-  } else if (currentProfile && currentProfile.username) {
-    const initial = (currentProfile.username || 'U').charAt(0).toUpperCase();
-    iconEl.innerHTML = `<span style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#F59E0B);color:#000;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid var(--gold)">${initial}</span>`;
-  } else {
-    iconEl.innerHTML = '👤';
-  }
-}
-function renderPdGrid(tab, myListings) {
-  let items = [];
-  if (tab === 'aktiv' || tab === 'angebote') {
-    items = myListings.filter(l =>
-      l.status === 'active' &&
-      (l.type === 'Angebot' || l.type === 'Coming Soon')
-    );
-  } else if (tab === 'reserviert') {
-    items = myListings.filter(l => l.status === 'reserved');
-  } else if (tab === 'verkauft') {
-    items = myListings.filter(l =>
-      l.status === 'sold' || l.status === 'verkauft'
-    );
-  } else if (tab === 'gesuche') {
-    items = myListings.filter(l => l.type === 'Gesuch');
-  }
-
-  if (items.length === 0) {
-    const emptyTexts = {
-      aktiv: '📦 Noch keine aktiven Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
-      angebote: '📦 Noch keine Angebote. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Jetzt erstellen</button>',
-      reserviert: '⏳ Keine reservierten Artikel.',
-      gesuche: '🔍 Noch keine Gesuche. <br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">🔍 Gesuch erstellen</button>',
-      verkauft: '🏆 Noch nichts verkauft.'
-    };
-    return `<div class="pd-grid"><div class="pd-empty">${emptyTexts[tab] || 'Keine Einträge'}</div></div>`;
-  }
-
-  const gridItems = items.map(l => {
-    const safeId = String(l.id).replace(/'/g, '');
-    const isSold = l.status === 'sold' || l.status === 'verkauft';
-    const isGesuch = l.type === 'Gesuch';
-    const badgeClass = isSold ? 'verkauft' : isGesuch ? 'gesuch' : 'aktiv';
-    const badgeLabel = isSold ? 'Verkauft' : isGesuch ? 'Gesuch' : 'Aktiv';
-    const imgHtml = l.images && l.images[0]
-      ? `<img src="${escHtml(l.images[0])}" alt="" style="width:100%;height:100%;object-fit:cover">`
-      : `<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">${l.emoji || '📦'}</div>`;
-    return `
-      <div class="pd-grid-item" onclick="openDetail('${safeId}')">
-        <div class="pd-grid-img">${imgHtml}</div>
-        <div class="pd-grid-body">
-          <div class="pd-grid-badge ${badgeClass}">${badgeLabel}</div>
-          <div class="pd-grid-title">${escHtml(l.title || '')}</div>
-          <div class="pd-grid-price">CHF ${l.price || 0}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  return `<div class="pd-grid">${gridItems}</div>`;
-}
-
-function switchPdTab(tab, btnEl) {
+async function switchPdTab(tab, btnEl) {
   document.querySelectorAll('.pd-tab').forEach(b => b.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
-  // Map old tab names to new ones
   if (tab === 'angebote') tab = 'aktiv';
   const uid = getUID() || currentUser?.id;
-  const myListings = allListings.filter(l => l.user_id === uid);
   const wrap = document.getElementById('pd-grid-wrap');
-  if (wrap) wrap.innerHTML = renderPdGrid(tab, myListings);
+  if (!wrap) return;
+
+  if (tab === 'verkauft') {
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint)">⏳ Lade...</div>';
+    try {
+      const soldData = await supaFetch(
+        'listings?user_id=eq.' + uid + '&status=in.(sold,verkauft)&order=sold_at.desc&limit=50&select=*'
+      );
+      const soldItems = Array.isArray(soldData) ? soldData : [];
+      if (soldItems.length === 0) {
+        wrap.innerHTML = '<div class="pd-grid"><div class="pd-empty">🏆 Noch nichts verkauft.</div></div>';
+        return;
+      }
+      const gridHtml = soldItems.map(l => {
+        const safeId = String(l.id).replace(/'/g,'');
+        const soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : '';
+        const imgHtml = l.image_url
+          ? '<img src="' + escHtml(l.image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">' + (l.emoji||'📦') + '</div>';
+        return '<div class="pd-grid-item" onclick="openDetail(\'' + safeId + '\')">'
+          + '<div class="pd-grid-img">'+imgHtml+'</div>'
+          + '<div class="pd-grid-body">'
+          + '<div class="pd-grid-badge verkauft">🏆 Verkauft'+(soldDate?' · '+soldDate:'')+'</div>'
+          + '<div class="pd-grid-title">'+escHtml(l.title||'')+'</div>'
+          + '<div class="pd-grid-price">CHF '+(l.price||0)+'</div>'
+          + '</div></div>';
+      }).join('');
+      wrap.innerHTML = '<div class="pd-grid">'+gridHtml+'</div>';
+    } catch(e) {
+      wrap.innerHTML = '<div style="padding:20px;color:var(--red)">❌ '+e.message+'</div>';
+    }
+    return;
+  }
+
+  const myListings = allListings.filter(l => l.user_id === uid);
+  wrap.innerHTML = renderPdGrid(tab, myListings);
 }
+window.switchPdTab = switchPdTab;
 
 function renderProfileListingItem(l) {
   const statusClass = l.status === 'sold' || l.status === 'verkauft' ? 'status-sold' : l.status === 'coming_soon' ? 'status-coming-soon' : 'status-active';
@@ -8100,10 +8103,10 @@ function openMeinKaufen() {
   renderKaufenContent('am-bieten');
 }
 
-function openMeinVerkaufen() {
+function openMeinVerkaufen(tab) {
   const modal = document.getElementById('mein-verkaufen-modal');
   modal.classList.add('open');
-  renderVerkaufenContent('aktiv');
+  renderVerkaufenContent(tab || 'aktiv');
 }
 
 // openWalletModal ist oben definiert (Duplikat entfernt um Konflikte zu vermeiden)
