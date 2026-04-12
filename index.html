@@ -4043,7 +4043,7 @@ if (typeof switchKontoTab === "function") window.switchKontoTab = switchKontoTab
 if (typeof switchPdTab === "function") window.switchPdTab = switchPdTab;
 if (typeof switchPublicTab === "function") window.switchPublicTab = switchPublicTab;
 if (typeof switchTab === "function") window.switchTab = switchTab;
-if (typeof switchVerkaufenTab === "function") window.switchVerkaufenTab = switchVerkaufenTab;
+// switchVerkaufenTab is defined below — no re-assignment needed here
 if (typeof switchWalletTab === "function") window.switchWalletTab = switchWalletTab;
 if (typeof toggleCmGesuchVoice === "function") window.toggleCmGesuchVoice = toggleCmGesuchVoice;
 if (typeof toggleCreateVoice === "function") window.toggleCreateVoice = toggleCreateVoice;
@@ -8147,6 +8147,40 @@ async function logWalletTx(type, amount, description, listingId) {
 window.logWalletTx = logWalletTx;
 
 
+// ── Wallet Topup Handlers ──
+function handleTwintTopup() {
+  showToast('📱 TWINT Aufladung wird vorbereitet...', 'info');
+  // TODO: Stripe/TWINT checkout integration
+}
+function handleCardTopup() {
+  showToast('💳 Kreditkarten-Aufladung wird vorbereitet...', 'info');
+  // TODO: Stripe card checkout integration
+}
+function handleApplePayTopup() {
+  showToast('🍎 Apple/Google Pay wird vorbereitet...', 'info');
+  // TODO: Stripe Apple Pay integration
+}
+function handleCoffeeSpend() {
+  if (!currentProfile || (currentProfile.credits || 0) < 3) {
+    showToast('⚠️ Nicht genug Taler (3 benötigt)', 'error'); return;
+  }
+  if (!confirm('☕ 3 Taler für einen Kaffee spenden?')) return;
+  supaFetch('profiles?id=eq.' + getUID(), {
+    method: 'PATCH',
+    body: JSON.stringify({ credits: (currentProfile.credits || 0) - 3 })
+  }).then(function() {
+    if (currentProfile) currentProfile.credits = (currentProfile.credits || 0) - 3;
+    logWalletTx('coffee', -3, 'Kaffee fürs Team ☕', null);
+    showToast('☕ Danke für den Kaffee! -3 Taler', 'success');
+    refreshProfile && refreshProfile();
+  }).catch(function(e) { showToast('❌ ' + e.message, 'error'); });
+}
+window.handleTwintTopup   = handleTwintTopup;
+window.handleCardTopup    = handleCardTopup;
+window.handleApplePayTopup = handleApplePayTopup;
+window.handleCoffeeSpend  = handleCoffeeSpend;
+
+
 function openWalletModal() {
   if (!currentUser || !currentProfile) { showToast('Bitte zuerst anmelden', 'error'); return; }
   const credits = currentProfile.credits || 0;
@@ -8533,201 +8567,13 @@ function openMeinKaufen() {
   renderKaufenContent('am-bieten');
 }
 
-// ── openVerkaufDetail — rich sold item detail overlay ──
-async function openVerkaufDetail(listingId) {
-  // Remove existing
-  var ex = document.getElementById('verkauf-detail-ov');
-  if (ex) ex.remove();
-
-  var ov = document.createElement('div');
-  ov.id = 'verkauf-detail-ov';
-  ov.style.cssText = 'position:fixed;inset:0;background:#0d0d0d;z-index:9999;overflow-y:auto;max-width:390px;margin:0 auto';
-  ov.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-faint)">⏳ Lade...</div>';
-  document.body.appendChild(ov);
-  document.body.style.overflow = 'hidden';
-
-  function closeVerkaufDetail() {
-    var el = document.getElementById('verkauf-detail-ov');
-    if (el) el.remove();
-    document.body.style.overflow = '';
-  }
-
-  try {
-    var uid = getUID();
-    // Load listing + tx in parallel
-    var [lData, txData] = await Promise.all([
-      supaFetch('listings?id=eq.' + listingId + '&select=*&limit=1'),
-      supaFetch('transactions?listing_id=eq.' + listingId + '&seller_id=eq.' + uid + '&order=created_at.desc&limit=1')
-    ]);
-
-    var l = (Array.isArray(lData) ? lData[0] : null) || allListings.find(function(x){ return String(x.id) === String(listingId); }) || {};
-    var tx = (Array.isArray(txData) ? txData[0] : null) || {};
-
-    var price = parseFloat(l.price || 0);
-    var prov  = Math.round(price * 0.10);
-    var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : (tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '');
-    var payLabel = {cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte'}[tx.payment_method] || '💵 Bar';
-    var hasRating = tx.seller_reviewed || tx.buyer_reviewed;
-    var buyerAnon = tx.buyer_contact ? tx.buyer_contact.charAt(0).toUpperCase() + '.***' : 'Anonym';
-
-    // XP FOMO
-    var xp = (currentProfile && (currentProfile.xp_points || currentProfile.xp)) || 0;
-    var level = getLevelInfo(xp);
-    var xpNeeded = level.next ? level.next - xp : 0;
-
-    // Hero image
-    var heroHtml = l.image_url
-      ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:200px;object-fit:cover">'
-      : '<div style="width:100%;height:200px;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(0,0,0,0.5));display:flex;align-items:center;justify-content:center;font-size:72px">' + (l.emoji||'📦') + '</div>';
-
-    // Review status card
-    var reviewSection = '';
-    if (!hasRating) {
-      reviewSection = '<div style="background:linear-gradient(135deg,rgba(79,195,247,0.1),rgba(79,195,247,0.03));border:2px solid rgba(79,195,247,0.35);border-radius:13px;padding:14px;margin-bottom:14px;text-align:center">'
-        + '<div style="font-size:22px;margin-bottom:5px">⭐</div>'
-        + '<div style="font-size:13px;font-weight:900;color:#4fc3f7;margin-bottom:3px">Bewertung noch ausstehend</div>'
-        + '<div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;margin-bottom:10px">' + buyerAnon + ' hat noch nicht bewertet.<br>Erinnere ihn — du erhältst ebenfalls +10 XP!</div>'
-        + '<button onclick="showToast(\'📨 Erinnerung gesendet!\',\'success\')" style="width:100%;padding:10px;background:#4fc3f7;border:none;border-radius:9px;color:#000;font-weight:800;font-size:12px;cursor:pointer">📨 Käufer freundlich erinnern</button>'
-        + '</div>';
-    } else {
-      var rating = parseFloat(tx.seller_rating || tx.buyer_rating || 5);
-      var stars = '⭐'.repeat(Math.round(rating));
-      reviewSection = '<div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.2);border-radius:12px;padding:12px;margin-bottom:14px;text-align:center">'
-        + '<div style="font-size:20px;margin-bottom:4px">' + stars + '</div>'
-        + '<div style="font-size:12px;font-weight:800;color:#00e676">Bewertung erhalten ✅</div>'
-        + (tx.review_comment ? '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:5px;font-style:italic">"' + escHtml(tx.review_comment) + '"</div>' : '')
-        + '</div>';
-    }
-
-    ov.innerHTML = [
-      // STICKY HEADER
-      '<div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#0d0d0d;z-index:10">',
-        '<button onclick="closeVerkaufDetail()" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer">← Zurück</button>',
-        '<div style="font-size:14px;font-weight:900;flex:1">🏆 Verkauf</div>',
-        '<button onclick="navigator.share ? navigator.share({title:\'' + escHtml(l.title||'') + '\',text:\'Ich habe gerade erfolgreich auf Uri-Markt verkauft!\'}) : showToast(\'↗ Link kopiert!\')" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">↗ Teilen</button>',
-      '</div>',
-
-      // HERO
-      '<div style="position:relative">' + heroHtml,
-        '<div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 50%)"></div>',
-        '<div style="position:absolute;bottom:12px;left:16px"><span style="display:inline-block;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;background:#00e676;color:#000">✅ Abgeschlossen</span></div>',
-        '<div style="position:absolute;bottom:12px;right:16px;font-size:22px;font-weight:900;color:var(--gold)">CHF ' + price.toFixed(0) + '</div>',
-      '</div>',
-
-      // BODY
-      '<div style="padding:16px">',
-
-        // TITLE + DATE
-        '<div style="font-size:18px;font-weight:900;margin-bottom:3px">' + escHtml(l.title||'') + '</div>',
-        '<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:14px">Verkauft am ' + soldDate + (l.location ? ' · 📍 ' + escHtml(l.location) : '') + '</div>',
-
-        // REWARD ROW
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">',
-          '<div style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.28);border-radius:12px;padding:11px 8px;text-align:center">',
-            '<div style="font-size:20px;margin-bottom:3px">⭐</div>',
-            '<div style="font-size:16px;font-weight:900;color:var(--gold)">+50</div>',
-            '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">XP verdient</div>',
-          '</div>',
-          '<div style="background:rgba(255,68,68,0.06);border:1.5px solid rgba(255,68,68,0.2);border-radius:12px;padding:11px 8px;text-align:center">',
-            '<div style="font-size:20px;margin-bottom:3px">📉</div>',
-            '<div style="font-size:16px;font-weight:900;color:#ff6464">-' + prov + '</div>',
-            '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">Taler Provision</div>',
-          '</div>',
-          (!hasRating
-            ? '<div style="background:rgba(79,195,247,0.08);border:1.5px solid rgba(79,195,247,0.35);border-radius:12px;padding:11px 8px;text-align:center">'
-              + '<div style="font-size:20px;margin-bottom:3px;animation:pulse 1.5s infinite">⭐</div>'
-              + '<div style="font-size:13px;font-weight:900;color:#4fc3f7">Offen</div>'
-              + '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">Bewertung</div>'
-              + '</div>'
-            : '<div style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.28);border-radius:12px;padding:11px 8px;text-align:center">'
-              + '<div style="font-size:20px;margin-bottom:3px">⭐</div>'
-              + '<div style="font-size:16px;font-weight:900;color:#00e676">5.0</div>'
-              + '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">Bewertung</div>'
-              + '</div>'
-          ),
-        '</div>',
-
-        // REVIEW SECTION
-        reviewSection,
-
-        // DEAL INFO TABLE
-        '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.28);letter-spacing:.8px;margin-bottom:8px">DEAL-ÜBERSICHT</div>',
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:13px;margin-bottom:14px">',
-          [
-            ['Artikel',      escHtml(l.title||'')],
-            ['Verkaufspreis','CHF ' + price.toFixed(0), 'color:var(--gold)'],
-            ['Provision 10%','-' + prov + ' Taler', 'color:rgba(255,68,68,0.8)'],
-            ['Zahlung',      payLabel],
-            ['Käufer',       '🔒 ' + buyerAnon],
-            ['Datum',        soldDate],
-          ].map(function(r) {
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
-              + '<span style="font-size:11px;color:rgba(255,255,255,0.38)">' + r[0] + '</span>'
-              + '<span style="font-size:11px;font-weight:700' + (r[2] ? ';' + r[2] : '') + '">' + r[1] + '</span>'
-              + '</div>';
-          }).join(''),
-        '</div>',
-
-        // TIMELINE
-        '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.28);letter-spacing:.8px;margin-bottom:10px">DEAL-VERLAUF</div>',
-        '<div style="position:relative;padding-left:20px">',
-          '<div style="position:absolute;left:9px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,0.08)"></div>',
-          [
-            ['✓', '#00e676', 'Inserat erstellt', '', l.created_at ? new Date(l.created_at).toLocaleDateString('de-CH') : ''],
-            ['✓', '#00e676', 'Kaufanfrage erhalten', buyerAnon + ' möchte kaufen', tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : ''],
-            ['✓', '#00e676', 'Bestätigt & Provision abgezogen', '-' + prov + ' Taler · Kontakte freigeschaltet', ''],
-            ['✓', '#00e676', 'Übergabe bestätigt', '+50 XP gutgeschrieben', soldDate],
-            [hasRating ? '★' : '?', hasRating ? '#00e676' : '#4fc3f7',
-              hasRating ? 'Bewertung erhalten' : 'Bewertung ausstehend',
-              hasRating ? '"Alles super!"' : buyerAnon + ' hat noch nicht bewertet', ''],
-          ].map(function(step) {
-            return '<div style="display:flex;gap:10px;padding-bottom:14px;position:relative">'
-              + '<div style="width:20px;height:20px;border-radius:50%;background:' + step[1] + ';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#000;flex-shrink:0;z-index:1">' + step[0] + '</div>'
-              + '<div style="padding-top:1px;flex:1">'
-              + '<div style="font-size:12px;font-weight:700">' + step[2] + '</div>'
-              + (step[3] ? '<div style="font-size:10px;color:rgba(255,255,255,0.38);margin-top:1px">' + step[3] + '</div>' : '')
-              + (step[4] ? '<div style="font-size:9px;color:rgba(255,255,255,0.25);margin-top:2px">' + step[4] + '</div>' : '')
-              + '</div></div>';
-          }).join(''),
-        '</div>',
-
-        // ACTION BUTTONS
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;margin-bottom:14px">',
-          '<button onclick="navigator.share ? navigator.share({title:\'' + escHtml(l.title||'') + '\'}) : showToast(\'↗ Geteilt!\')" style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:#fff;font-weight:700;cursor:pointer;font-size:12px">↗ Teilen</button>',
-          '<button onclick="closeVerkaufDetail();openCreateModal()" style="padding:12px;border-radius:12px;background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">🚀 Neu inserieren</button>',
-        '</div>',
-
-        // FOMO NEXT LEVEL
-        xpNeeded > 0 && xpNeeded < 300 ? (
-          '<div style="background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.25);border-radius:13px;padding:13px;cursor:pointer" onclick="closeVerkaufDetail();openCreateModal()">'
-          + '<div style="font-size:12px;font-weight:900;color:var(--gold);margin-bottom:3px">🔥 Noch ' + xpNeeded + ' XP bis ' + (level.nextName || 'nächstes Level') + '!</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.4;margin-bottom:8px">' + Math.ceil(xpNeeded/50) + ' weiterer Verkauf = Level-Up + Gratis-Boost. Deine Käufer warten!</div>'
-          + '<div style="display:inline-block;background:var(--gold);color:#000;padding:7px 14px;border-radius:8px;font-size:11px;font-weight:800">➕ Nächstes Inserat →</div>'
-          + '</div>'
-        ) : '',
-
-      '</div>',
-    ].join('');
-
-  } catch(e2) {
-    ov.innerHTML = '<div style="padding:30px;text-align:center;color:var(--red)">❌ ' + e2.message + '</div>';
-  }
-}
-window.openVerkaufDetail = openVerkaufDetail;
-
-
 function openMeinVerkaufen(tab) {
   var modal = document.getElementById('mein-verkaufen-modal');
   if (!modal) return;
   modal.classList.add('open');
-  var activeTab = tab || 'aktiv';
-  // Activate correct tab button
-  document.querySelectorAll('#mein-verkaufen-modal .modal-tab').forEach(function(btn, i) {
-    var tabs = ['aktiv','verkauft','entwuerfe'];
-    btn.classList.toggle('active', tabs[i] === activeTab);
-  });
-  renderVerkaufenContent(activeTab);
+  renderVerkaufenContent('verkauft');
 }
+window.openMeinVerkaufen = openMeinVerkaufen;
 
 // openWalletModal ist oben definiert (Duplikat entfernt um Konflikte zu vermeiden)
 
@@ -8884,166 +8730,469 @@ async function renderKaufenContent(tab) {
 async function renderVerkaufenContent(tab) {
   var container = document.getElementById('verkaufen-content');
   if (!container || !currentUser) return;
-  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint)">⏳ Lade...</div>';
+  container.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">⏳ Lade...</div>';
 
   try {
     var uid = getUID();
 
-    // Load transactions (for stats)
-    var txPromise = supaFetch('transactions?seller_id=eq.' + uid + '&order=created_at.desc&limit=50');
-    // Load listings based on tab
-    var queryMap = {
-      aktiv:    'listings?user_id=eq.' + uid + '&status=in.(active,reserved)&order=created_at.desc&limit=50&select=*',
-      verkauft: 'listings?user_id=eq.' + uid + '&status=in.(sold,verkauft)&order=sold_at.desc&limit=50&select=*',
-      entwuerfe:'listings?user_id=eq.' + uid + '&status=eq.draft&order=created_at.desc&limit=50&select=*',
-    };
-    var listingPromise = supaFetch(queryMap[tab] || queryMap.aktiv);
-    var results = await Promise.all([txPromise, listingPromise]);
-    var txList = Array.isArray(results[0]) ? results[0] : [];
-    var myListings = Array.isArray(results[1]) ? results[1] : [];
+    // ── Parallel load: transactions + sold listings ──
+    var results = await Promise.all([
+      supaFetch('transactions?seller_id=eq.' + uid + '&order=created_at.desc&limit=100'),
+      supaFetch('listings?user_id=eq.' + uid + '&status=in.(sold,verkauft)&order=sold_at.desc&limit=100&select=*'),
+      supaFetch('reviews?reviewed_id=eq.' + uid + '&select=rating,comment,created_at&order=created_at.desc&limit=100')
+    ]);
 
-    // Stats
-    var soldCount   = txList.filter(function(t){ return t.status === 'completed'; }).length;
-    var pendingDeals= txList.filter(function(t){ return t.status === 'pending' || t.status === 'confirmed'; }).length;
-    var totalEarned = txList.filter(function(t){ return t.status === 'completed'; })
-                      .reduce(function(s,t){ return s + parseFloat(t.amount||0) * 0.9; }, 0);
-    var avgRating   = parseFloat((currentProfile && currentProfile.avg_rating) || 0);
+    var txList     = Array.isArray(results[0]) ? results[0] : [];
+    var soldItems  = Array.isArray(results[1]) ? results[1] : [];
+    var reviews    = Array.isArray(results[2]) ? results[2] : [];
 
-    var html = ''
-      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">'
-      + '<div style="text-align:center;background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.25);border-radius:11px;padding:10px 4px"><div style="font-size:18px;font-weight:900;color:#00e676">' + soldCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">✅ Deals</div></div>'
-      + '<div style="text-align:center;background:rgba(255,215,0,0.07);border:1px solid rgba(255,215,0,0.25);border-radius:11px;padding:10px 4px"><div style="font-size:14px;font-weight:900;color:var(--gold)">CHF ' + Math.round(totalEarned) + '</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">💰 Verdient</div></div>'
-      + '<div style="text-align:center;background:rgba(79,195,247,0.07);border:1px solid rgba(79,195,247,0.25);border-radius:11px;padding:10px 4px"><div style="font-size:18px;font-weight:900;color:#4fc3f7">' + (avgRating > 0 ? avgRating.toFixed(1) : '–') + '</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">⭐ Rating</div></div>'
-      + '<div onclick="openPendingDeals()" style="text-align:center;background:' + (pendingDeals > 0 ? 'rgba(255,152,0,0.1)' : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (pendingDeals > 0 ? 'rgba(255,152,0,0.4)' : 'rgba(255,255,255,0.1)') + ';border-radius:11px;padding:10px 4px;cursor:pointer' + (pendingDeals > 0 ? ';animation:pulse 2s infinite' : '') + '"><div style="font-size:18px;font-weight:900;color:' + (pendingDeals > 0 ? '#ff9800' : 'rgba(255,255,255,0.35)') + '">' + pendingDeals + '</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">⚡ Offen</div></div>'
-      + '</div>';
+    // ── REAL calculations ──
+    var completedTx = txList.filter(function(t){ return t.status === 'completed'; });
+    var pendingTx   = txList.filter(function(t){ return t.status === 'pending' || t.status === 'confirmed'; });
 
-    // Pending alert
-    if (pendingDeals > 0) {
-      html += '<div onclick="openPendingDeals()" style="background:rgba(255,152,0,0.09);border:2px solid rgba(255,152,0,0.45);border-radius:12px;padding:11px 13px;cursor:pointer;display:flex;align-items:center;gap:9px;animation:pulse 2s infinite;margin-bottom:12px">'
-        + '<div style="font-size:18px">⚡</div>'
-        + '<div style="flex:1"><div style="font-size:12px;font-weight:900;color:#ff9800">' + pendingDeals + ' Kaufanfrage' + (pendingDeals > 1 ? 'n' : '') + ' warten!</div>'
-        + '<div style="font-size:9px;color:rgba(255,255,255,0.38)">Jetzt bestätigen → +50 XP & Taler</div></div>'
-        + '<div style="color:#ff9800">→</div></div>';
-    }
+    // Netto = sum of (amount - commission) for completed tx
+    var bruttoTotal = completedTx.reduce(function(s,t){ return s + parseFloat(t.amount||0); }, 0);
+    var provTotal   = completedTx.reduce(function(s,t){ return s + parseFloat(t.commission||t.amount*0.1||0); }, 0);
+    var nettoTotal  = bruttoTotal - provTotal;
 
-    // VERKAUFT TAB — the new rich view
-    if (tab === 'verkauft') {
-      if (myListings.length === 0) {
-        html += '<div style="padding:32px;text-align:center"><div style="font-size:48px;margin-bottom:10px">🏆</div>'
-          + '<div style="font-size:16px;font-weight:900;color:var(--gold);margin-bottom:6px">Noch nichts verkauft</div>'
-          + '<div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.6;margin-bottom:16px">Dein Keller ist eine Goldmine!<br>Erstelle dein erstes Inserat in 60 Sekunden.</div>'
-          + '<button style="padding:12px 20px;background:var(--gold);border:none;border-radius:10px;color:#000;font-weight:800;cursor:pointer;font-size:13px" onclick="closeModal(\'mein-verkaufen-modal\');openCreateModal()">➕ Jetzt inserieren</button></div>';
-        container.innerHTML = html;
-        return;
-      }
+    // Real rating from reviews table
+    var avgRating = reviews.length > 0
+      ? reviews.reduce(function(s,r){ return s + parseFloat(r.rating||0); }, 0) / reviews.length
+      : 0;
+    var reviewCount = reviews.length;
 
-      // Load tx details for sold listings (for rich detail)
-      var txByListing = {};
-      txList.forEach(function(tx) {
-        if (!txByListing[String(tx.listing_id)]) txByListing[String(tx.listing_id)] = tx;
-      });
+    // Pending count
+    var pendingCount = pendingTx.length;
 
-      // FOMO XP banner
-      var xp = (currentProfile && (currentProfile.xp_points || currentProfile.xp)) || 0;
-      var level = getLevelInfo(xp);
-      var xpNeeded = level.next ? level.next - xp : 0;
-      if (xpNeeded > 0 && xpNeeded < 200) {
-        html += '<div style="background:linear-gradient(135deg,rgba(255,215,0,0.09),rgba(255,152,0,0.04));border:1.5px solid rgba(255,215,0,0.28);border-radius:12px;padding:11px 13px;margin-bottom:12px">'
-          + '<div style="font-size:12px;font-weight:900;color:var(--gold)">🚀 Noch ' + xpNeeded + ' XP bis ' + (level.nextName || 'nächstes Level') + '!</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">' + Math.ceil(xpNeeded/50) + ' weiterer Verkauf bringt dich ans Ziel.</div>'
-          + '</div>';
-      }
-
-      // Each sold listing card
-      myListings.forEach(function(l) {
-        var lid = String(l.id || '').replace(/'/g,'');
-        var tx = txByListing[lid] || {};
-        var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : '';
-        var price = parseFloat(l.price || 0);
-        var prov = Math.round(price * 0.10);
-        var paymentLabel = {cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte'}[tx.payment_method] || (tx.payment_method || '');
-        var imgHtml = l.image_url
-          ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
-          : '<div style="font-size:26px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05)">' + (l.emoji||'📦') + '</div>';
-
-        // Determine review status
-        var hasRating = tx.seller_reviewed || tx.buyer_reviewed;
-        var buyerInitial = tx.buyer_contact ? '🔒 ' + (tx.buyer_contact.charAt(0).toUpperCase()) + '.***' : '🔒 Anonym';
-
-        html += '<div onclick="openVerkaufDetail(\'' + lid + '\')" style="display:flex;align-items:center;gap:11px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer">'
-          // Image + status dot
-          + '<div style="width:56px;height:56px;border-radius:11px;overflow:hidden;flex-shrink:0;position:relative">'
-          + imgHtml
-          + '<div style="position:absolute;bottom:-3px;right:-3px;width:16px;height:16px;border-radius:50%;border:2px solid #0d0d0d;display:flex;align-items:center;justify-content:center;font-size:8px;background:' + (hasRating ? '#00e676' : '#4fc3f7') + '">'
-          + (hasRating ? '★' : '✓') + '</div>'
-          + '</div>'
-          // Body
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(l.title||'') + '</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.38);margin-bottom:4px">' + (paymentLabel||'Bar') + ' · ' + buyerInitial + (soldDate ? ' · ' + soldDate : '') + '</div>'
-          + '<div style="display:flex;gap:5px;flex-wrap:wrap">'
-          + '<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">✅ Verkauft</span>'
-          + '<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(255,215,0,0.1);color:var(--gold)">+50 XP</span>'
-          + (!hasRating ? '<span style="display:inline-flex;align-items:center;gap:2px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(79,195,247,0.12);color:#4fc3f7">⭐ Bewertung offen</span>' : '')
-          + '</div>'
-          + '</div>'
-          // Right
-          + '<div style="text-align:right;flex-shrink:0">'
-          + '<div style="font-size:14px;font-weight:900;color:var(--gold)">CHF ' + price.toFixed(0) + '</div>'
-          + '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:1px">' + soldDate + '</div>'
-          + '<div style="font-size:9px;color:rgba(255,68,68,0.6);margin-top:1px">-' + prov + ' Taler</div>'
-          + '</div>'
-          + '</div>';
-      });
-
-      container.innerHTML = html;
-      return;
-    }
-
-    // AKTIV / ENTWÜRFE TAB
-    if (myListings.length === 0) {
-      html += '<div style="padding:32px;text-align:center"><div style="font-size:48px;margin-bottom:10px">📦</div>'
-        + '<div style="font-size:15px;font-weight:900;color:var(--gold);margin-bottom:6px">Keine Inserate</div>'
-        + '<div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.6;margin-bottom:16px">Erstelle dein erstes Inserat in 60 Sekunden.</div>'
-        + '<button style="padding:12px 20px;background:var(--gold);border:none;border-radius:10px;color:#000;font-weight:800;cursor:pointer" onclick="closeModal(\'mein-verkaufen-modal\');openCreateModal()">➕ Inserat erstellen</button></div>';
-      container.innerHTML = html;
-      return;
-    }
-
-    myListings.forEach(function(l) {
-      var lid = String(l.id || '').replace(/'/g,'');
-      var statusMap = {
-        active:   {col:'#00e676', dot:'rgba(0,230,118,0.1)', border:'rgba(0,230,118,0.2)', label:'● AKTIV'},
-        reserved: {col:'#ff9800', dot:'rgba(255,152,0,0.1)', border:'rgba(255,152,0,0.25)', label:'● RESERVIERT'},
-        draft:    {col:'rgba(255,255,255,0.4)', dot:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.1)', label:'● ENTWURF'},
-      };
-      var st = statusMap[l.status] || statusMap.active;
-      var imgHtml = l.image_url
-        ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
-        : '<div style="font-size:26px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05)">' + (l.emoji||'📦') + '</div>';
-
-      html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:12px;margin-bottom:9px">'
-        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
-        + '<div style="width:52px;height:52px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
-        + '<div style="flex:1;min-width:0">'
-        + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(l.title||'') + '</div>'
-        + '<div style="display:flex;gap:8px;align-items:center;margin-top:3px">'
-        + '<span style="font-size:14px;font-weight:900;color:var(--gold)">CHF ' + (l.price||0) + '</span>'
-        + '<span style="font-size:9px;font-weight:700;color:' + st.col + '">' + st.label + '</span>'
-        + '</div>'
-        + (l.status === 'reserved' ? '<div style="font-size:9px;color:#ff9800;margin-top:2px">⏳ Kaufanfrage läuft</div>' : '')
-        + '</div></div>'
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
-        + '<button onclick="openDetail(\'' + lid + '\')" style="padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#fff;font-weight:700;cursor:pointer;font-size:12px">👁 Ansehen</button>'
-        + '<button onclick="openSellerDashboard(\'' + lid + '\')" style="padding:10px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);border-radius:10px;color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">📊 Anfragen</button>'
-        + '</div></div>';
+    // Build tx lookup by listing_id for detail view
+    var txByListing = {};
+    txList.forEach(function(tx) {
+      var lid = String(tx.listing_id);
+      if (!txByListing[lid]) txByListing[lid] = tx;
     });
 
+    // ── XP / Level for FOMO ──
+    var xp = (currentProfile && (currentProfile.xp_points || currentProfile.xp)) || 0;
+    var level = getLevelInfo(xp);
+    var xpNeeded = level.next ? level.next - xp : 0;
+
+    // ── HTML BUILD ──
+    var html = '';
+
+    // KPI 3-GRID — store data in window for onclick safety
+    var _kpiItems = completedTx.slice(0,8).map(function(t){
+      var lx = soldItems.find(function(x){ return String(x.id) === String(t.listing_id); }) || {};
+      return {title: escHtml(lx.title || 'Deal #'+String(t.listing_id||'').substring(0,4)), netto: (parseFloat(t.amount||0)-parseFloat(t.commission||t.amount*0.1||0)).toFixed(0)};
+    });
+    window._kpiData = { brutto: bruttoTotal, prov: provTotal, netto: nettoTotal, deals: soldItems.length, rating: avgRating, reviewCount: reviewCount, items: _kpiItems };
+
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 14px">';
+
+    // KPI 1: Netto-Umsatz
+    html += '<div id="kpi-umsatz-btn" style="background:rgba(0,230,118,0.07);border:1.5px solid rgba(0,230,118,0.3);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;user-select:none">'
+      + '<div style="font-size:20px;margin-bottom:4px">💰</div>'
+      + '<div style="font-size:15px;font-weight:900;color:#00e676;line-height:1.1">CHF<br>' + Math.round(nettoTotal).toLocaleString('de-CH') + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.3">Netto-Umsatz<br>(nach Provision)</div>'
+      + '</div>';
+
+    // KPI 2: Deals
+    html += '<div id="kpi-deals-btn" style="background:rgba(255,215,0,0.07);border:1.5px solid rgba(255,215,0,0.3);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;user-select:none">'
+      + '<div style="font-size:20px;margin-bottom:4px">🏆</div>'
+      + '<div style="font-size:20px;font-weight:900;color:#FFD700;line-height:1">' + soldItems.length + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.3">Abgeschlossene<br>Deals</div>'
+      + '</div>';
+
+    // KPI 3: Rating
+    html += '<div id="kpi-rating-btn" style="background:rgba(79,195,247,0.07);border:1.5px solid rgba(79,195,247,0.3);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;user-select:none">'
+      + '<div style="font-size:20px;margin-bottom:4px">⭐</div>'
+      + '<div style="font-size:20px;font-weight:900;color:#4fc3f7;line-height:1">' + (avgRating > 0 ? avgRating.toFixed(1) : '–') + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.3">Ø Bewertung<br>' + reviewCount + ' Reviews</div>'
+      + '</div>';
+
+    html += '</div>';
+
+    // Attach click listeners after DOM insert (via requestAnimationFrame)
+    window._attachKpiClicks = function() {
+      var b1  = document.getElementById('kpi-umsatz-btn');
+      var b2  = document.getElementById('kpi-deals-btn');
+      var b3  = document.getElementById('kpi-rating-btn');
+      var bka = document.getElementById('_ka-pending-btn');
+      var bc1 = document.getElementById('_vk-create-btn1');
+      var bfomo = document.getElementById('_vk-fomo-btn');
+      if (b1)    b1.onclick    = function(){ _openKpiSheet('umsatz'); };
+      if (b2)    b2.onclick    = function(){ _openKpiSheet('deals'); };
+      if (b3)    b3.onclick    = function(){ _openKpiSheet('rating'); };
+      if (bka)   bka.onclick   = function(){ closeModal('mein-verkaufen-modal'); setTimeout(openPendingDeals, 150); };
+      if (bc1)   bc1.onclick   = function(){ closeModal('mein-verkaufen-modal'); openCreateModal(); };
+      if (bfomo) bfomo.onclick = function(){ closeModal('mein-verkaufen-modal'); openCreateModal(); };
+      // Event delegation for sold item cards
+      var vc = document.getElementById('verkaufen-content');
+      if (vc && !vc._vkDelegated) {
+        vc._vkDelegated = true;
+        vc.addEventListener('click', function(e) {
+          var card = e.target.closest('._vk-item-card');
+          if (card && card.dataset.lid) { _openVerkaufDetail(card.dataset.lid); }
+        });
+      }
+    };
+    requestAnimationFrame(function(){ window._attachKpiClicks && window._attachKpiClicks(); });
+
+    // KAUFANFRAGEN — single big button only
+    if (pendingCount > 0) {
+      html += '<div id="_ka-pending-btn" style="margin:0 16px 14px;background:rgba(255,152,0,0.09);border:2px solid rgba(255,152,0,0.45);border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;animation:pulse 2s infinite">'
+        + '<div style="font-size:22px;flex-shrink:0">⚡</div>'
+        + '<div style="flex:1">'
+        + '<div style="font-size:13px;font-weight:900;color:#ff9800">' + pendingCount + ' Kaufanfrage' + (pendingCount > 1 ? 'n warten' : ' wartet') + '!</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);margin-top:2px">Jetzt bestätigen → +50 XP & Taler verdienen</div>'
+        + '</div>'
+        + '<div style="color:#ff9800;font-size:18px;font-weight:700;flex-shrink:0">→</div>'
+        + '</div>';
+    }
+
+    // DIVIDER
+    html += '<div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:1px;padding:4px 16px 8px;display:flex;align-items:center;gap:8px">VERKAUFTE ARTIKEL<span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block"></span></div>';
+
+    // SOLD ITEMS LIST
+    if (soldItems.length === 0) {
+      html += '<div style="padding:40px 20px;text-align:center">'
+        + '<div style="font-size:52px;margin-bottom:12px">📦</div>'
+        + '<div style="font-size:16px;font-weight:900;color:#FFD700;margin-bottom:6px">Noch nichts verkauft</div>'
+        + '<div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.6;margin-bottom:18px">Dein Keller ist eine Goldmine!<br>Erstelle dein erstes Inserat in 60 Sekunden.</div>'
+        + '<button id="_vk-create-btn1" style="padding:13px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">➕ Jetzt inserieren</button>'
+        + '</div>';
+    } else {
+      soldItems.forEach(function(l) {
+        var lid = String(l.id || '').replace(/'/g,'');
+        var tx  = txByListing[lid] || {};
+        var price = parseFloat(l.price || 0);
+        var prov  = Math.round(parseFloat(tx.commission || price * 0.1));
+        var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : (tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '');
+        var payLabel = {cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte'}[tx.payment_method] || '💵 Bar';
+        var buyerAnon = tx.buyer_contact ? (tx.buyer_contact.charAt(0).toUpperCase() + '.***') : 'Anonym';
+        var hasRating = tx.seller_reviewed || tx.buyer_reviewed;
+
+        var imgHtml = l.image_url
+          ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;background:rgba(255,255,255,0.05)">' + (l.emoji||'📦') + '</div>';
+
+        html += '<div class="_vk-item-card" data-lid="' + lid + '" style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;-webkit-tap-highlight-color:rgba(255,255,255,0.04)">'
+          // IMAGE + STATUS DOT
+          + '<div style="width:54px;height:54px;border-radius:11px;overflow:hidden;flex-shrink:0;position:relative">'
+          + imgHtml
+          + '<div style="position:absolute;bottom:-3px;right:-3px;width:16px;height:16px;border-radius:50%;border:2px solid #0d0d0d;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;background:' + (hasRating ? '#00e676' : '#4fc3f7') + ';color:#000">'
+          + (hasRating ? '★' : '✓') + '</div>'
+          + '</div>'
+          // BODY
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">' + escHtml(l.title||'Artikel') + '</div>'
+          + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px">' + payLabel + ' · 🔒 ' + buyerAnon + (soldDate ? ' · ' + soldDate : '') + '</div>'
+          + '<div style="display:flex;gap:5px;flex-wrap:wrap">'
+          + '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">✅ Verkauft</span>'
+          + '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(255,215,0,0.1);color:#FFD700">+50 XP</span>'
+          + (!hasRating ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(79,195,247,0.12);color:#4fc3f7">⭐ Bewertung offen</span>' : '')
+          + '</div>'
+          + '</div>'
+          // RIGHT
+          + '<div style="text-align:right;flex-shrink:0">'
+          + '<div style="font-size:14px;font-weight:900;color:#FFD700">CHF ' + price.toFixed(0) + '</div>'
+          + '<div style="font-size:9px;color:rgba(255,255,255,0.28);margin-top:2px">' + soldDate + '</div>'
+          + '<div style="font-size:9px;color:rgba(255,68,68,0.55);margin-top:1px">-' + prov + ' Taler</div>'
+          + '</div>'
+          + '</div>';
+      });
+    }
+
+    // FOMO FOOTER
+    if (xpNeeded > 0 && xpNeeded < 300 && soldItems.length > 0) {
+      html += '<div id="_vk-fomo-btn" style="margin:14px 16px 0;background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.22);border-radius:13px;padding:13px;cursor:pointer">'
+        + '<div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">🔥 Noch ' + xpNeeded + ' XP bis ' + (level.nextName || 'nächstes Level') + '!</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:8px">' + Math.ceil(xpNeeded/50) + ' weiterer Verkauf bringt dich ans Ziel. Deine Käufer warten!</div>'
+        + '<div style="display:inline-block;background:#FFD700;color:#000;padding:7px 14px;border-radius:8px;font-size:11px;font-weight:900">➕ Jetzt inserieren →</div>'
+        + '</div>';
+    }
+
     container.innerHTML = html;
+
   } catch(e) {
-    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">❌ ' + e.message + '</div>';
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + e.message + '</div>';
   }
 }
+window.renderVerkaufenContent = renderVerkaufenContent;
+
+// ── KPI Detail Sheet ──
+function _openKpiSheet(type) {
+  var ex = document.getElementById('_kpi-sheet-ov');
+  if (ex) ex.remove();
+
+  var d = window._kpiData || {};
+  var brutto = d.brutto || 0;
+  var prov   = d.prov   || 0;
+  var netto  = d.netto  || 0;
+  var deals  = d.deals  || 0;
+  var rating = parseFloat(d.rating || 0);
+  var reviewCount = d.reviewCount || 0;
+  var items  = d.items  || [];
+
+  var ov = document.createElement('div');
+  ov.id = '_kpi-sheet-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:19999;display:flex;align-items:flex-end;justify-content:center';
+  ov.onclick = function(e) { if(e.target===ov) ov.remove(); };
+
+  var bodyHtml = '';
+  if (type === 'umsatz') {
+    bodyHtml = '<div style="font-size:17px;font-weight:900;color:#00e676;margin-bottom:4px">💰 Netto-Umsatz</div>'
+      + '<div style="font-size:38px;font-weight:900;color:#00e676;margin-bottom:6px">CHF ' + Math.round(netto).toLocaleString('de-CH') + '</div>'
+      + '<div style="background:rgba(255,255,255,0.04);border-radius:11px;padding:12px;margin-bottom:12px">'
+      + '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="color:rgba(255,255,255,0.45)">Brutto-Umsatz</span><span style="font-weight:700">CHF ' + Math.round(brutto) + '</span></div>'
+      + '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="color:rgba(255,255,255,0.45)">Provision total (10%)</span><span style="font-weight:700;color:rgba(255,68,68,0.8)">-CHF ' + Math.round(prov) + '</span></div>'
+      + '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span style="font-weight:800">Netto</span><span style="font-weight:900;color:#00e676">CHF ' + Math.round(netto) + '</span></div>'
+      + '</div>'
+      + (items.length > 0
+        ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:10px">'
+          + items.map(function(it) {
+              return '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04)">'
+                + '<span style="color:rgba(255,255,255,0.4);overflow:hidden;text-overflow:ellipsis;max-width:200px">' + (it.title||'') + '</span>'
+                + '<span style="color:#00e676;font-weight:700;flex-shrink:0;margin-left:8px">+CHF ' + it.netto + '</span></div>';
+            }).join('')
+          + '</div>' : '');
+  } else if (type === 'deals') {
+    bodyHtml = '<div style="font-size:17px;font-weight:900;color:#FFD700;margin-bottom:4px">🏆 Deine Deals</div>'
+      + '<div style="font-size:38px;font-weight:900;color:#FFD700;margin-bottom:12px">' + deals + ' Verkäufe</div>'
+      + '<div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:11px;padding:13px;text-align:center">'
+      + '<div style="font-size:11px;font-weight:800;color:#FFD700;margin-bottom:6px">🏅 Dein Rang im Kanton Uri</div>'
+      + '<div style="font-size:32px;font-weight:900">Top!</div>'
+      + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px">Weiter verkaufen um aufzusteigen</div>'
+      + '</div>';
+  } else if (type === 'rating') {
+    var stars = rating > 0 ? '⭐'.repeat(Math.round(rating)) : '';
+    bodyHtml = '<div style="font-size:17px;font-weight:900;color:#4fc3f7;margin-bottom:4px">⭐ Dein Rating</div>'
+      + '<div style="font-size:38px;font-weight:900;color:#4fc3f7;margin-bottom:3px">' + (rating > 0 ? rating.toFixed(1) : '–') + '</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:12px">Basiert auf ' + reviewCount + ' echten Bewertungen</div>'
+      + (rating === 0
+        ? '<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:13px;text-align:center;color:rgba(255,255,255,0.35);font-size:12px">Noch keine Bewertungen. Schliesse deinen ersten Deal ab!</div>'
+        : '<div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:11px">'
+          + '<div style="font-size:28px;text-align:center;margin-bottom:6px">' + stars + '</div>'
+          + '<div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.45)">Alle Bewertungen kommen von echten Käufern</div>'
+          + '</div>');
+  }
+
+  ov.innerHTML = '<div style="background:#111;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:390px;border-top:2px solid rgba(255,255,255,0.1)">'
+    + '<div style="text-align:right;margin-bottom:8px"><button id="_kpi-close-btn" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px">✕</button></div>'
+    + bodyHtml + '</div>';
+
+  document.body.appendChild(ov);
+  var closeBtn = document.getElementById('_kpi-close-btn');
+  if (closeBtn) closeBtn.onclick = function(){ var el = document.getElementById('_kpi-sheet-ov'); if(el) el.remove(); };
+}
+window._openKpiSheet = _openKpiSheet;
+
+// ── Verkauf Detail Overlay ──
+async function _openVerkaufDetail(listingId) {
+  var ex = document.getElementById('_vkdet-ov');
+  if (ex) ex.remove();
+
+  var ov = document.createElement('div');
+  ov.id = '_vkdet-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:#0d0d0d;z-index:19999;overflow-y:auto;max-width:390px;margin:0 auto';
+  ov.innerHTML = '<div style="padding:50px;text-align:center;color:rgba(255,255,255,0.4)">⏳ Lade...</div>';
+  document.body.appendChild(ov);
+  document.body.style.overflow = 'hidden';
+
+  function _closeVkDet() {
+    var el = document.getElementById('_vkdet-ov');
+    if (el) el.remove();
+    document.body.style.overflow = '';
+  }
+
+  function _goCreate() {
+    _closeVkDet();
+    openCreateModal();
+  }
+
+  try {
+    var uid = getUID();
+    var results = await Promise.all([
+      supaFetch('listings?id=eq.' + listingId + '&select=*&limit=1'),
+      supaFetch('transactions?listing_id=eq.' + listingId + '&seller_id=eq.' + uid + '&order=created_at.desc&limit=1'),
+      supaFetch('reviews?listing_id=eq.' + listingId + '&select=rating,comment,created_at&limit=1')
+    ]);
+
+    var l   = (Array.isArray(results[0]) ? results[0][0] : null) || allListings.find(function(x){ return String(x.id) === String(listingId); }) || {};
+    var tx  = (Array.isArray(results[1]) ? results[1][0] : null) || {};
+    var rev = (Array.isArray(results[2]) ? results[2][0] : null) || null;
+
+    var price    = parseFloat(l.price || 0);
+    var prov     = Math.round(parseFloat(tx.commission || price * 0.1));
+    var netto    = price - prov;
+    var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH')
+                 : tx.updated_at ? new Date(tx.updated_at).toLocaleDateString('de-CH') : '';
+    var crDate   = l.created_at ? new Date(l.created_at).toLocaleDateString('de-CH') : '';
+    var txDate   = tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '';
+    var payLabel = {cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte'}[tx.payment_method] || '💵 Bar';
+    var buyerAnon = tx.buyer_contact ? (tx.buyer_contact.charAt(0).toUpperCase() + '.***') : 'Anonym';
+    var hasRating = !!(rev || tx.seller_reviewed || tx.buyer_reviewed);
+    var title = escHtml(l.title || 'Artikel');
+    var location = l.location ? '📍 ' + escHtml(l.location) : '';
+
+    // XP FOMO
+    var xp      = (currentProfile && (currentProfile.xp_points || currentProfile.xp)) || 0;
+    var level   = getLevelInfo(xp);
+    var xpNeeded = level.next ? level.next - xp : 0;
+
+    var heroHtml = l.image_url
+      ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:190px;object-fit:cover">'
+      : '<div style="width:100%;height:190px;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(0,0,0,0.5));display:flex;align-items:center;justify-content:center;font-size:72px">' + (l.emoji || '📦') + '</div>';
+
+    // Review card
+    var reviewHtml = '';
+    if (!hasRating) {
+      reviewHtml = '<div id="_review-cta-box" style="background:linear-gradient(135deg,rgba(79,195,247,0.1),rgba(79,195,247,0.03));border:2px solid rgba(79,195,247,0.35);border-radius:13px;padding:14px;margin-bottom:14px;text-align:center">'
+        + '<div style="font-size:24px;margin-bottom:5px">⭐</div>'
+        + '<div style="font-size:13px;font-weight:900;color:#4fc3f7;margin-bottom:3px">Bewertung noch ausstehend</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.5;margin-bottom:10px">🔒 ' + buyerAnon + ' hat noch nicht bewertet.<br>Erinnere ihn — du erhältst auch +10 XP!</div>'
+        + '<button id="_remind-buyer-btn" style="width:100%;padding:11px;background:#4fc3f7;border:none;border-radius:9px;color:#000;font-weight:900;font-size:12px;cursor:pointer">📨 Käufer freundlich erinnern</button>'
+        + '</div>';
+    } else {
+      var rating = rev ? parseFloat(rev.rating || 5) : 5;
+      var stars  = '⭐'.repeat(Math.round(rating));
+      reviewHtml = '<div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.2);border-radius:12px;padding:12px;margin-bottom:14px;text-align:center">'
+        + '<div style="font-size:20px;margin-bottom:4px">' + stars + '</div>'
+        + '<div style="font-size:12px;font-weight:800;color:#00e676;margin-bottom:3px">Bewertung erhalten ✅</div>'
+        + (rev && rev.comment ? '<div style="font-size:10px;color:rgba(255,255,255,0.4);font-style:italic">"' + escHtml(rev.comment) + '"</div>' : '')
+        + '</div>';
+    }
+
+    // Deal table rows
+    var tableRows = [
+      ['Verkaufspreis', 'CHF ' + price.toFixed(0), 'color:#FFD700'],
+      ['Provision (10%)', '-' + prov + ' Taler', 'color:rgba(255,68,68,0.8)'],
+      ['Netto', 'CHF ' + netto.toFixed(0), 'color:#00e676'],
+      ['Zahlung', payLabel, ''],
+      ['Käufer', '🔒 ' + buyerAnon, ''],
+      ['Datum', soldDate, ''],
+    ].map(function(r) {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+        + '<span style="font-size:11px;color:rgba(255,255,255,0.35)">' + r[0] + '</span>'
+        + '<span style="font-size:11px;font-weight:700' + (r[2] ? ';' + r[2] : '') + '">' + r[1] + '</span>'
+        + '</div>';
+    }).join('');
+
+    // Timeline steps
+    var timelineSteps = [
+      ['✓', '#00e676', '#000', 'Inserat erstellt', '', crDate],
+      ['✓', '#00e676', '#000', 'Kaufanfrage erhalten', '🔒 ' + buyerAnon + ' · ' + payLabel, txDate],
+      ['✓', '#00e676', '#000', 'Bestätigt · -' + prov + ' Taler', 'Kontakte freigeschaltet', ''],
+      ['✓', '#00e676', '#000', 'Übergabe · +50 XP', '', soldDate],
+      [hasRating ? '★' : '?',
+       hasRating ? '#00e676' : 'rgba(79,195,247,0.15)',
+       hasRating ? '#000' : '#4fc3f7',
+       hasRating ? 'Bewertung erhalten' : 'Bewertung ausstehend',
+       hasRating ? (rev && rev.comment ? '"' + escHtml((rev.comment||'').substring(0,50)) + '"' : '⭐') : '🔒 ' + buyerAnon + ' hat noch nicht bewertet',
+       ''],
+    ].map(function(s) {
+      return '<div style="display:flex;gap:10px;padding-bottom:14px;position:relative">'
+        + '<div style="width:20px;height:20px;border-radius:50%;background:' + s[1] + ';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:' + s[2] + ';flex-shrink:0;z-index:1;margin-top:1px">' + s[0] + '</div>'
+        + '<div style="padding-top:1px;flex:1">'
+        + '<div style="font-size:12px;font-weight:700;color:' + (s[0]==='?' ? '#4fc3f7' : '#fff') + '">' + s[3] + '</div>'
+        + (s[4] ? '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + s[4] + '</div>' : '')
+        + (s[5] ? '<div style="font-size:9px;color:rgba(255,255,255,0.22);margin-top:2px">' + s[5] + '</div>' : '')
+        + '</div></div>';
+    }).join('');
+
+    // FOMO block
+    var fomoHtml = (xpNeeded > 0 && xpNeeded < 300)
+      ? '<div id="_vkdet-fomo" style="background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.25);border-radius:13px;padding:13px;cursor:pointer;margin-bottom:4px">'
+        + '<div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">🔥 Noch ' + xpNeeded + ' XP bis ' + (level.nextName || 'nächstes Level') + '!</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:8px">' + Math.ceil(xpNeeded / 50) + ' weiterer Verkauf = Level-Up + Gratis-Boost.</div>'
+        + '<div style="display:inline-block;background:#FFD700;color:#000;padding:7px 14px;border-radius:8px;font-size:11px;font-weight:900">➕ Nächstes Inserat →</div>'
+        + '</div>'
+      : '';
+
+    ov.innerHTML = ''
+      // STICKY HEADER — all buttons get IDs for event wiring
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#0d0d0d;z-index:10">'
+        + '<button id="_vkdet-back" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">← Zurück</button>'
+        + '<div style="font-size:14px;font-weight:900">🏆 Verkauf</div>'
+        + '<button id="_vkdet-share" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer">↗ Teilen</button>'
+      + '</div>'
+      // HERO
+      + '<div style="position:relative">' + heroHtml
+        + '<div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 55%)"></div>'
+        + '<div style="position:absolute;bottom:12px;left:16px;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;background:' + (hasRating ? '#00e676' : '#4fc3f7') + ';color:#000">' + (hasRating ? '✅ Abgeschlossen' : '⭐ Bewertung offen') + '</div>'
+        + '<div style="position:absolute;bottom:12px;right:16px;font-size:22px;font-weight:900;color:#FFD700">CHF ' + price.toFixed(0) + '</div>'
+      + '</div>'
+      // BODY
+      + '<div style="padding:16px">'
+        + '<div style="font-size:19px;font-weight:900;margin-bottom:3px">' + title + '</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:14px">Verkauft am ' + soldDate + (location ? ' · ' + location : '') + '</div>'
+        // REWARD ROW
+        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:16px">'
+          + '<div style="background:rgba(255,215,0,0.07);border:1.5px solid rgba(255,215,0,0.3);border-radius:13px;padding:12px 8px;text-align:center"><div style="font-size:20px;margin-bottom:4px">⭐</div><div style="font-size:16px;font-weight:900;color:#FFD700">+50</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:2px">XP erhalten</div></div>'
+          + '<div style="background:rgba(255,68,68,0.06);border:1.5px solid rgba(255,68,68,0.2);border-radius:13px;padding:12px 8px;text-align:center"><div style="font-size:20px;margin-bottom:4px">📉</div><div style="font-size:16px;font-weight:900;color:#ff6464">-' + prov + '</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:2px">Taler Provision</div></div>'
+          + (!hasRating
+              ? '<div style="background:rgba(79,195,247,0.07);border:1.5px solid rgba(79,195,247,0.35);border-radius:13px;padding:12px 8px;text-align:center"><div style="font-size:20px;margin-bottom:4px">⭐</div><div style="font-size:14px;font-weight:900;color:#4fc3f7">Offen</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:2px">Bewertung</div></div>'
+              : '<div style="background:rgba(0,230,118,0.07);border:1.5px solid rgba(0,230,118,0.28);border-radius:13px;padding:12px 8px;text-align:center"><div style="font-size:20px;margin-bottom:4px">⭐</div><div style="font-size:16px;font-weight:900;color:#00e676">5.0</div><div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:2px">Bewertung ✓</div></div>'
+            )
+        + '</div>'
+        + reviewHtml
+        // TABLE
+        + '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.9px;margin-bottom:8px">DEAL-ÜBERSICHT</div>'
+        + '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:13px;margin-bottom:14px">' + tableRows + '</div>'
+        // TIMELINE
+        + '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.9px;margin-bottom:10px">DEAL-VERLAUF</div>'
+        + '<div style="position:relative;padding-left:20px">'
+          + '<div style="position:absolute;left:9px;top:8px;bottom:16px;width:1px;background:rgba(255,255,255,0.08)"></div>'
+          + timelineSteps
+        + '</div>'
+        // ACTION BUTTONS
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;margin-bottom:14px">'
+          + '<button id="_vkdet-share2" style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:#fff;font-weight:700;cursor:pointer;font-size:12px">↗ Teilen</button>'
+          + '<button id="_vkdet-create" style="padding:12px;border-radius:12px;background:rgba(255,215,0,0.09);border:1px solid rgba(255,215,0,0.3);color:#FFD700;font-weight:700;cursor:pointer;font-size:12px">🚀 Neu inserieren</button>'
+        + '</div>'
+        + fomoHtml
+      + '</div>';
+
+    // ── Wire all buttons via IDs — ZERO inline onclick ──
+    var btnBack   = ov.querySelector('#_vkdet-back');
+    var btnShare1 = ov.querySelector('#_vkdet-share');
+    var btnShare2 = ov.querySelector('#_vkdet-share2');
+    var btnCreate = ov.querySelector('#_vkdet-create');
+    var btnFomo   = ov.querySelector('#_vkdet-fomo');
+    var btnRemind = ov.querySelector('#_remind-buyer-btn');
+
+    function _doShare() {
+      if (navigator.share) {
+        navigator.share({ title: l.title || 'Uri-Markt', text: 'Erfolgreich verkauft auf Uri-Markt!' });
+      } else {
+        navigator.clipboard && navigator.clipboard.writeText(window.location.origin)
+          .then(function() { showToast('Link kopiert!'); });
+      }
+    }
+
+    if (btnBack)   btnBack.onclick   = _closeVkDet;
+    if (btnShare1) btnShare1.onclick = _doShare;
+    if (btnShare2) btnShare2.onclick = _doShare;
+    if (btnCreate) btnCreate.onclick = _goCreate;
+    if (btnFomo)   btnFomo.onclick   = _goCreate;
+    if (btnRemind) btnRemind.onclick = function() {
+      this.textContent = '✅ Erinnerung gesendet!';
+      this.style.background = '#00e676';
+      showToast('📨 Erinnerung gesendet!', 'success');
+    };
+
+  } catch(e3) {
+    ov.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07)">'
+      + '<button id="_vkdet-err-back" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">← Zurück</button></div>'
+      + '<div style="padding:30px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + e3.message + '</div>';
+    var errBack = ov.querySelector('#_vkdet-err-back');
+    if (errBack) errBack.onclick = _closeVkDet;
+  }
+}
+window._openVerkaufDetail = _openVerkaufDetail;
+
+// ── switchVerkaufenTab: defined here (modal tabs removed, kept for safety) ──
+function switchVerkaufenTab(tab, el) { renderVerkaufenContent('verkauft'); }
+// switchVerkaufenTab defined below;
 
 
 function renderTransactions() {
@@ -9105,11 +9254,6 @@ function switchKaufenTab(tab, el) {
   renderKaufenContent(tab);
 }
 
-function switchVerkaufenTab(tab, el) {
-  document.querySelectorAll('#mein-verkaufen-modal .modal-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderVerkaufenContent(tab);
-}
 
 function switchPublicTab(tab, el) {
   document.querySelectorAll('#public-profile-modal .modal-tab').forEach(t => t.classList.remove('active'));
@@ -10295,18 +10439,13 @@ window.copyErrorText = copyErrorText;
 <div id="mein-verkaufen-modal" class="modal-overlay" onclick="closeModalIfBg(event, 'mein-verkaufen-modal')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-body">
-      <div class="flex justify-between items-center mb-4" style="padding: 0 20px">
-        <h2 class="text-xl font-black">💸 Loswerden &amp; Verdienen</h2>
-        <button class="p-2 bg-glass rounded-full" onclick="closeModal('mein-verkaufen-modal')" style="border:none; color:white; cursor:pointer">✕</button>
+    <div class="modal-body" style="padding:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 16px 10px">
+        <h2 style="font-size:20px;font-weight:900;color:#fff">💸 Meine Verkäufe</h2>
+        <button onclick="closeModal('mein-verkaufen-modal')" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px">✕</button>
       </div>
-      <div class="modal-tabs mb-4" style="margin: 0 20px">
-        <button class="modal-tab active" onclick="switchVerkaufenTab('aktiv', this)">AKTIV</button>
-        <button class="modal-tab" onclick="switchVerkaufenTab('verkauft', this)">VERKAUFT</button>
-        <button class="modal-tab" onclick="switchVerkaufenTab('entwuerfe', this)">ENTWÜRFE</button>
-      </div>
-      <div id="verkaufen-content" class="modal-content-scroll" style="padding: 0 20px">
-        <!-- Content will be injected here -->
+      <div id="verkaufen-content" class="modal-content-scroll" style="padding:0 0 24px">
+        <!-- Injected by renderVerkaufenContent() -->
       </div>
     </div>
   </div>
