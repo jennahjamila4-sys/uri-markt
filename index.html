@@ -3399,7 +3399,6 @@ async function refreshProfile() {
           currentProfile = data2[0];
           renderProfile();
           showToast('🎉 Profil erstellt! 100 Uri-Taler geschenkt!');
-          logWalletTx('bonus', 100, 'Beta-Bonus Startguthaben', null);
         }
       } catch(createErr) {
         console.error('Profil-Erstellung fehlgeschlagen:', createErr.message);
@@ -3491,7 +3490,7 @@ function closePlaceholderIfBg(e) {
   if (e.target === document.getElementById('placeholder-modal')) closePlaceholder();
 }
 
-// openPublicProfile ist unten definiert (Zeile ~8360)
+// openPublicProfile ist unten definiert
 function loadKontoData() {
   if (!currentProfile) return;
   const p = currentProfile;
@@ -4787,7 +4786,7 @@ function renderOwnerDetailSection(l) {
           style="padding:12px;background:rgba(255,215,0,0.08);
           border:1px solid rgba(255,215,0,0.3);border-radius:12px;
           color:var(--gold);font-weight:700;cursor:pointer;font-size:12px">
-          🚀 Boost (50 Taler)
+          🚀 Boost (5 Taler)
         </button>
         <button onclick="deleteListing('${lid}')"
           style="padding:12px;background:rgba(255,68,68,0.08);
@@ -4847,7 +4846,7 @@ function renderOwnerActions(l) {
   return `
     <div class="owner-actions">
       <button class="owner-btn btn-boost" onclick="boostListing('${lid}')">
-        🚀 Boost (50 Taler)
+        🚀 Boost (5 Taler)
       </button>
       <button class="owner-btn btn-delete" onclick="deleteListing('${lid}')">
         🗑️ Löschen
@@ -5080,8 +5079,8 @@ window.markSoldSafe = markSoldSafe;
 
 async function boostListing(id) {
   if (!currentUser) { showToast('⚠️ Bitte anmelden'); return; }
-  if (!currentProfile || currentProfile.credits < 50) {
-    showToast('⚠️ Nicht genug Uri-Taler (50 benötigt)');
+  if (!currentProfile || currentProfile.credits < 5) {
+    showToast('⚠️ Nicht genug Uri-Taler (5 benötigt)');
     return;
   }
   try {
@@ -5093,13 +5092,13 @@ async function boostListing(id) {
       });
       await supaFetch(`profiles?id=eq.${getUID()}`, {
         method: 'PATCH',
-        body: JSON.stringify({ credits: currentProfile.credits - 50 })
+        body: JSON.stringify({ credits: currentProfile.credits - 5 })
       });
     }
     const l = allListings.find(x => x.id === id);
     if (l) l.is_promoted = true;
-    showToast('🚀 Inserat geboostet! -50 Uri-Taler');
-    await logWalletTx('boost', -50, 'Boost: ' + (l?.title || 'Inserat'), id);
+    showToast('🚀 Inserat geboostet! -5 Uri-Taler');
+    logWalletTx('boost', -5, 'Boost: ' + (l ? l.title : 'Inserat'), id);
     closeDetail();
     renderListings();
     await refreshProfile();
@@ -6832,7 +6831,7 @@ function closeLevelUpModal() {
 // PROFILE
 // ============================================================
 async function renderProfile() {
-  const el = document.getElementById('profile-content');
+  var el = document.getElementById('profile-content');
   if (!el) return;
   if (!currentUser || !currentProfile) {
     el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-faint)">'
@@ -6843,228 +6842,558 @@ async function renderProfile() {
     return;
   }
 
-  const p = currentProfile;
-  const xp = p.xp_points || p.xp || 0;
-  const credits = p.credits || 0;
-  const level = getLevelInfo(xp);
-  const xpMin = level.minXP || 0;
-  const xpMax = level.next || (xpMin + 100);
-  const xpPct = level.next ? Math.min(((xp - xpMin) / (xpMax - xpMin)) * 100, 100) : 100;
-  const xpNeeded = level.next ? level.next - xp : 0;
-  const levelNum = ['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan']
-    .indexOf(level.name) + 1 || 1;
+  var p = currentProfile;
+  var xp = p.xp_points || p.xp || 0;
+  var credits = p.credits || 0;
+  var level = getLevelInfo(xp);
+  var xpMin = level.minXP || 0;
+  var xpMax = level.next || (xpMin + 100);
+  var xpPct = level.next ? Math.min(((xp - xpMin) / (xpMax - xpMin)) * 100, 100) : 100;
+  var xpNeeded = level.next ? level.next - xp : 0;
+  var levelNum = ['Beobachter','Dorf-Händler','Lokal-Matador','Kantons-Legende','Gotthard-Titan'].indexOf(level.name) + 1 || 1;
+  var uid = getUID() || currentUser.id;
 
-  const uid = getUID() || currentUser.id;
+  // Show skeleton immediately
+  el.innerHTML = '<div style="padding:14px 0;text-align:center;color:var(--text-faint)">⏳</div>';
 
-  // allListings has sold items removed — use full Supabase query for real counts
-  // Load counts from DB (non-blocking, show skeleton first)
-  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-faint)">⏳ Lade Profil...</div>';
-
-  // Real counts from Supabase
-  let soldCount = 0;
-  let boughtCount = 0;
-  let activeCount = 0;
-  let reservedCount = 0;
-  let soldListingsDb = [];
+  // Load real counts from Supabase
+  var soldCount = 0; var boughtCount = 0; var activeCount = 0;
+  var reservedCount = 0; var gesucheCount = 0;
+  var reservedListingsLocal = [];
 
   try {
-    // All own listings (including sold)
-    const ownListings = await supaFetch(
-      'listings?user_id=eq.' + uid + '&select=id,status,title,price,emoji,category,created_at,sold_at,type,image_url,reserved_until&order=created_at.desc&limit=100'
-    );
-    const own = Array.isArray(ownListings) ? ownListings : [];
-    soldCount = own.filter(l => l.status === 'sold' || l.status === 'verkauft').length;
-    activeCount = own.filter(l => l.status === 'active').length;
-    reservedCount = own.filter(l => l.status === 'reserved').length;
-    soldListingsDb = own.filter(l => l.status === 'sold' || l.status === 'verkauft');
-
-    // Bought: transactions as buyer
-    const txs = await supaFetch(
-      'transactions?buyer_id=eq.' + uid + '&status=eq.completed&select=id&limit=100'
-    );
-    boughtCount = Array.isArray(txs) ? txs.length : 0;
+    var ownData = await supaFetch('listings?user_id=eq.' + uid + '&select=id,status,type&limit=200');
+    var own = Array.isArray(ownData) ? ownData : [];
+    soldCount = own.filter(function(l){ return l.status === 'sold' || l.status === 'verkauft'; }).length;
+    activeCount = own.filter(function(l){ return l.status === 'active'; }).length;
+    reservedCount = own.filter(function(l){ return l.status === 'reserved'; }).length;
+    gesucheCount = own.filter(function(l){ return l.type === 'Gesuch'; }).length;
+    reservedListingsLocal = allListings.filter(function(l){ return l.user_id === uid && l.status === 'reserved'; });
   } catch(e) {
-    console.warn('Profile counts error:', e.message);
-    // fallback: use allListings
-    const own = allListings.filter(l => l.user_id === uid);
-    activeCount = own.filter(l => l.status === 'active').length;
-    reservedCount = own.filter(l => l.status === 'reserved').length;
+    var own2 = allListings.filter(function(l){ return l.user_id === uid; });
+    soldCount = own2.filter(function(l){ return l.status === 'sold'; }).length;
+    activeCount = own2.filter(function(l){ return l.status === 'active'; }).length;
+    reservedCount = own2.filter(function(l){ return l.status === 'reserved'; }).length;
+    gesucheCount = own2.filter(function(l){ return l.type === 'Gesuch'; }).length;
+    reservedListingsLocal = own2.filter(function(l){ return l.status === 'reserved'; });
   }
 
-  const myListings = allListings.filter(l => l.user_id === uid);
-  const gesucheListings = myListings.filter(l => l.type === 'Gesuch');
-  const reservedListings = myListings.filter(l => l.status === 'reserved');
+  try {
+    var txData = await supaFetch('transactions?buyer_id=eq.' + uid + '&status=eq.completed&select=id&limit=200');
+    boughtCount = Array.isArray(txData) ? txData.length : 0;
+  } catch(e2) { boughtCount = 0; }
 
-  const displayName = escHtml(p.username || p.full_name || 'Urner');
-  const initial = displayName.charAt(0).toUpperCase();
-  const avatarHtml = p.avatar_url
-    ? '<img src="' + escHtml(p.avatar_url) + '" alt="Avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
-    : '<span style="font-size:28px;font-weight:900">' + initial + '</span>';
-  const referralCode = p.referral_code || ('URI' + (uid || '').substring(0,6).toUpperCase());
-  const referralLink = window.location.origin + '?ref=' + referralCode;
+  var displayName = escHtml(p.username || p.full_name || 'Urner');
+  var initial = displayName.charAt(0).toUpperCase();
+  var avatarHtml = p.avatar_url
+    ? '<img src="' + escHtml(p.avatar_url) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+    : '<span style="font-size:20px;font-weight:900">' + initial + '</span>';
+  var referralCode = p.referral_code || ('URI-' + (uid || '').substring(0,4).toUpperCase());
+  var referralLink = window.location.origin + '?ref=' + referralCode;
 
-  el.innerHTML = `
-    <!-- HEADER -->
-    <div class="pd-header">
-      <div class="pd-avatar-wrap" onclick="openAvatarModal()">
-        <div class="pd-avatar" style="--ring-pct:${Math.round(xpPct)}%">
-          <div class="pd-avatar-ring" style="--ring-pct:${Math.round(xpPct)}%"></div>
-          ${avatarHtml}
-        </div>
-        <div class="pd-avatar-edit">✏️</div>
-      </div>
-      <div class="pd-info">
-        <div class="pd-username">${displayName}</div>
-        <div class="pd-level-pill" onclick="openLevelModal()">
-          <span>${level.emoji} ${level.name}</span>
-          <span class="pd-level-num">Level ${levelNum}</span>
-        </div>
-        ${p.avg_rating > 0 ? `<div style="font-size:12px;color:var(--gold);margin-top:4px">
-          ${'⭐'.repeat(Math.round(p.avg_rating || 0))} ${parseFloat(p.avg_rating||0).toFixed(1)}
-          <span style="color:var(--text-faint)">(${p.review_count||0} Bew.)</span></div>` : ''}
-      </div>
-      <div class="pd-taler-card" onclick="openWalletModal()">
-        <span class="pd-taler-icon">🪙</span>
-        <span class="pd-taler-num">${credits}</span>
-        <span class="pd-taler-lbl">Uri-Taler</span>
-      </div>
-      <div class="pd-taler-card" style="background:rgba(100,200,255,0.08);border-color:rgba(100,200,255,0.25)">
-        <span class="pd-taler-icon">⭐</span>
-        <span class="pd-taler-num" style="color:#64C8FF">${xp}</span>
-        <span class="pd-taler-lbl" style="color:rgba(100,200,255,0.7)">XP</span>
-      </div>
-    </div>
+  // XP stats
+  var avgRating = parseFloat(p.avg_rating || 0);
+  var reviewCount = p.review_count || 0;
+  var ratingHtml = avgRating > 0
+    ? '<div style="font-size:10px;color:var(--gold);margin-top:2px">⭐' + avgRating.toFixed(1) + ' (' + reviewCount + ' Bew.)</div>'
+    : '';
 
-    <!-- XP PROGRESS -->
-    <div class="pd-xp-section">
-      <div class="pd-xp-row">
-        <span class="pd-xp-label">${level.emoji} ${level.name} → ${level.nextName || '🏆 MAX'}</span>
-        <span class="pd-xp-val">${xp} / ${level.next || xp} XP</span>
-      </div>
-      <div class="pd-xp-track"><div class="pd-xp-fill" style="width:${xpPct}%"></div></div>
-      <div class="pd-xp-hint">
-        ${level.next
-          ? 'Noch <strong>' + xpNeeded + ' XP</strong> · Verkaufe ' + Math.ceil(xpNeeded/50) + ' Artikel um aufzusteigen 🚀'
-          : '🏆 Maximales Level erreicht!'}
-      </div>
-    </div>
+  el.innerHTML = [
+    // ── HEADER ──
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">',
+      '<div onclick="openAvatarModal()" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--gold),#F59E0B);display:flex;align-items:center;justify-content:center;border:2px solid var(--gold);cursor:pointer;flex-shrink:0;overflow:hidden">',
+        avatarHtml,
+      '</div>',
+      '<div style="flex:1">',
+        '<div style="font-size:15px;font-weight:800">' + displayName + '</div>',
+        '<div style="font-size:10px;color:var(--gold);margin-top:1px" onclick="openLevelModal()">' + level.emoji + ' ' + level.name + ' · Level ' + levelNum + '</div>',
+        ratingHtml,
+      '</div>',
+      '<div onclick="openWalletModal()" style="background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.28);border-radius:10px;padding:7px 10px;text-align:center;min-width:52px;cursor:pointer">',
+        '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + credits + '</div>',
+        '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">🪙 Taler</div>',
+      '</div>',
+      '<div style="background:rgba(100,200,255,0.07);border:1px solid rgba(100,200,255,0.22);border-radius:10px;padding:7px 10px;text-align:center;min-width:52px">',
+        '<div style="font-size:16px;font-weight:900;color:#64C8FF">' + xp + '</div>',
+        '<div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:1px">⭐ XP</div>',
+      '</div>',
+    '</div>',
 
-    <!-- KPI CARDS — echte DB-Zahlen, alle anklickbar -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    // ── XP BAR ──
+    '<div style="background:rgba(255,255,255,0.04);border-radius:9px;padding:9px;margin-bottom:10px">',
+      '<div style="display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,0.4);margin-bottom:4px">',
+        '<span>' + level.emoji + ' ' + level.name + ' → ' + (level.nextName || '🏆 MAX') + '</span>',
+        '<span>' + xp + ' / ' + (level.next || xp) + ' XP</span>',
+      '</div>',
+      '<div style="height:5px;background:rgba(255,255,255,0.1);border-radius:3px">',
+        '<div style="height:5px;background:var(--gold);border-radius:3px;width:' + Math.round(xpPct) + '%"></div>',
+      '</div>',
+      '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:3px">',
+        level.next ? 'Noch <strong>' + xpNeeded + ' XP</strong> · Verkaufe ' + Math.ceil(xpNeeded/50) + ' Artikel 🚀' : '🏆 Maximales Level!',
+      '</div>',
+    '</div>',
 
-      <!-- Verkauft → Meine Verkäufe (Verkauft-Tab) -->
-      <div onclick="switchPdTab('verkauft', document.querySelectorAll('.pd-tab')[2])"
-        style="background:rgba(0,230,118,0.08);border:1.5px solid rgba(0,230,118,0.3);
-        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
-        transition:all 0.15s;-webkit-tap-highlight-color:rgba(0,230,118,0.1)">
-        <div style="font-size:26px;font-weight:900;color:var(--green)">${soldCount}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">💰 Verkauft</div>
-      </div>
+    // ── KPI GRID ──
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:9px">',
+      '<div onclick="switchPdTab(\'verkauft\',document.querySelectorAll(\'.pd-tab-new\')[2])" style="background:rgba(0,230,118,0.07);border:1.5px solid rgba(0,230,118,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
+        '<div style="font-size:20px;font-weight:900;color:#00e676">' + soldCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">💰 Verkauft</div>',
+      '</div>',
+      '<div onclick="switchPdTab(\'aktiv\',document.querySelectorAll(\'.pd-tab-new\')[0])" style="background:rgba(255,215,0,0.07);border:1.5px solid rgba(255,215,0,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
+        '<div style="font-size:20px;font-weight:900;color:var(--gold)">' + activeCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">📦 Aktiv</div>',
+      '</div>',
+      '<div onclick="openMeinKaufen()" style="background:rgba(79,195,247,0.07);border:1.5px solid rgba(79,195,247,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
+        '<div style="font-size:20px;font-weight:900;color:#4fc3f7">' + boughtCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">🛒 Gekauft</div>',
+      '</div>',
+      '<div onclick="openWalletModal()" style="background:rgba(255,100,0,0.07);border:1.5px solid rgba(255,100,0,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
+        '<div style="font-size:20px;font-weight:900;color:#ff6400">' + credits + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">🪙 Taler</div>',
+      '</div>',
+    '</div>',
 
-      <!-- Aktiv → Profil-Tab Aktiv -->
-      <div onclick="document.querySelector('.pd-tab') && switchPdTab('aktiv', document.querySelector('.pd-tab'))"
-        style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.3);
-        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
-        transition:all 0.15s;-webkit-tap-highlight-color:rgba(255,215,0,0.1)">
-        <div style="font-size:26px;font-weight:900;color:var(--gold)">${activeCount}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">📦 Aktiv</div>
-      </div>
+    // ── PULSE ALERT ──
+    reservedListingsLocal.length > 0 ? (
+      '<div onclick="openPendingDeals()" style="background:rgba(255,152,0,0.09);border:2px solid rgba(255,152,0,0.45);border-radius:12px;padding:11px 13px;cursor:pointer;display:flex;align-items:center;gap:9px;animation:pulse 2s infinite;margin-bottom:10px">'
+      + '<div style="font-size:18px">⚡</div>'
+      + '<div style="flex:1"><div style="font-size:12px;font-weight:900;color:#ff9800">' + reservedListingsLocal.length + ' Kaufanfrage' + (reservedListingsLocal.length > 1 ? 'n warten' : ' wartet') + ' auf dich!</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.38);margin-top:1px">Jetzt bestätigen → +50 XP & Taler</div></div>'
+      + '<div style="color:#ff9800;font-size:15px">→</div></div>'
+    ) : '',
 
-      <!-- Gekauft → Meine Käufe (echte Zahl) -->
-      <div onclick="openMeinKaufen()"
-        style="background:rgba(79,195,247,0.08);border:1.5px solid rgba(79,195,247,0.3);
-        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
-        transition:all 0.15s;-webkit-tap-highlight-color:rgba(79,195,247,0.1)">
-        <div style="font-size:26px;font-weight:900;color:#4fc3f7">${boughtCount}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">🛒 Gekauft</div>
-      </div>
+    // ── ABZEICHEN CARD ──
+    '<div onclick="openProfileOverlay(\'ov-badges\')" style="background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,152,0,0.03));border:1.5px solid rgba(255,215,0,0.28);border-radius:14px;padding:13px;cursor:pointer;margin-bottom:10px">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">',
+        '<div style="font-size:13px;font-weight:900;color:var(--gold)">🏔️ Urner Abzeichen</div>',
+        '<div style="background:rgba(255,215,0,0.12);border-radius:20px;padding:2px 9px;font-size:9px;font-weight:700;color:var(--gold)">4 / 12 gesammelt</div>',
+      '</div>',
+      '<div style="display:flex;gap:7px;overflow:hidden">',
+        _badgeIconHtml('🚀', true, 'rgba(255,100,0,0.15)', 'Beta Held'),
+        _badgeIconHtml('📦', true, 'rgba(34,197,94,0.15)', 'Erstes Inserat'),
+        _badgeIconHtml('💰', true, 'rgba(139,92,246,0.15)', 'Erster Verkauf'),
+        _badgeIconHtml('🏔️', true, 'rgba(255,215,0,0.15)', 'Erstfeld Pionier'),
+        _badgeIconHtml('👑', false, 'rgba(255,255,255,0.05)', 'Kantons-Legende'),
+        _badgeIconHtml('⛰️', false, 'rgba(255,255,255,0.05)', 'Gotthard Titan'),
+        _badgeIconHtml('🐄', false, 'rgba(255,255,255,0.05)', 'Urner Original'),
+      '</div>',
+      '<div style="text-align:center;margin-top:9px;font-size:10px;color:rgba(255,215,0,0.55)">Wie funktioniert das System? Alle Belohnungen →</div>',
+    '</div>',
 
-      <!-- Taler → Wallet -->
-      <div onclick="openWalletModal()"
-        style="background:rgba(255,100,0,0.08);border:1.5px solid rgba(255,100,0,0.3);
-        border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;
-        transition:all 0.15s;-webkit-tap-highlight-color:rgba(255,100,0,0.1)">
-        <div style="font-size:26px;font-weight:900;color:#ff6400">${credits}</div>
-        <div style="font-size:9px;color:var(--text-faint);margin-top:3px">🪙 Taler</div>
-      </div>
-    </div>
+    // ── BOOST PAKETE CARD ──
+    '<div onclick="openProfileOverlay(\'ov-boost\')" style="background:linear-gradient(135deg,rgba(255,215,0,0.09),rgba(255,152,0,0.03));border:1.5px solid rgba(255,215,0,0.4);border-radius:14px;padding:13px;cursor:pointer;margin-bottom:10px;animation:pulse 3s infinite">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">',
+        '<div style="font-size:13px;font-weight:900;color:var(--gold)">🚀 Boost Pakete</div>',
+        '<div style="background:var(--gold);color:#000;font-size:8px;font-weight:800;padding:2px 8px;border-radius:20px">SPARANGEBOT</div>',
+      '</div>',
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px">',
+        '<div style="background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:9px 5px;text-align:center">',
+          '<div style="font-size:16px;font-weight:900;color:#fff">5</div>',
+          '<div style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.4)">Taler</div>',
+          '<div style="font-size:8px;color:rgba(255,255,255,0.28);margin-top:1px">1× 5 Tage</div>',
+        '</div>',
+        '<div style="background:rgba(255,215,0,0.08);border:1.5px solid rgba(255,215,0,0.4);border-radius:10px;padding:9px 5px;text-align:center">',
+          '<div style="font-size:16px;font-weight:900;color:var(--gold)">18</div>',
+          '<div style="font-size:8px;font-weight:700;color:var(--gold)">Taler</div>',
+          '<div style="font-size:8px;color:rgba(255,215,0,0.5);margin-top:1px">5× 5 Tage</div>',
+          '<div style="font-size:7px;color:#ff4444;font-weight:700;margin-top:2px">–28%</div>',
+        '</div>',
+        '<div style="background:rgba(139,92,246,0.07);border:1.5px solid rgba(139,92,246,0.3);border-radius:10px;padding:9px 5px;text-align:center">',
+          '<div style="font-size:16px;font-weight:900;color:#a78bfa">30</div>',
+          '<div style="font-size:8px;font-weight:700;color:#a78bfa">Taler</div>',
+          '<div style="font-size:8px;color:rgba(139,92,246,0.6);margin-top:1px">10× 5 Tage</div>',
+          '<div style="font-size:7px;color:#ff4444;font-weight:700;margin-top:2px">–40%</div>',
+        '</div>',
+      '</div>',
+      '<div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center">Tippe für Details · 3× mehr Aufrufe garantiert →</div>',
+    '</div>',
 
-    <!-- PENDING DEALS ALERT (FOMO) -->
-    ${reservedListings.length > 0 ? `
-      <div onclick="openPendingDeals()"
-        style="background:linear-gradient(135deg,rgba(255,152,0,0.15),rgba(255,152,0,0.05));
-        border:2px solid rgba(255,152,0,0.5);border-radius:14px;padding:14px 16px;
-        margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;
-        animation:pulse 2s infinite">
-        <div style="font-size:28px">⚡</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:900;color:var(--orange)">
-            ${reservedListings.length} Kaufanfrage${reservedListings.length > 1 ? 'n warten' : ' wartet'} auf dich!</div>
-          <div style="font-size:11px;color:var(--text-faint)">
-            Jetzt bestätigen → +50 XP & Taler verdienen</div>
-        </div>
-        <div style="font-size:16px;color:var(--orange)">→</div>
-      </div>` : ''}
+    // ── SMART MATCH CARD ──
+    '<div onclick="openProfileOverlay(\'ov-match\')" style="background:linear-gradient(135deg,rgba(79,195,247,0.08),rgba(79,195,247,0.02));border:1.5px solid rgba(79,195,247,0.28);border-radius:14px;padding:13px;cursor:pointer;margin-bottom:10px">',
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">',
+        '<div style="font-size:22px">🤝</div>',
+        '<div><div style="font-size:13px;font-weight:900;color:#4fc3f7">Smart Match</div><div style="font-size:9px;color:rgba(255,255,255,0.38);margin-top:1px">Deine Gesuche werden automatisch verbunden</div></div>',
+      '</div>',
+      '<div style="background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.2);border-radius:9px;padding:8px 10px;margin-bottom:5px;display:flex;align-items:center;gap:8px">',
+        '<div style="font-size:16px">🏠</div>',
+        '<div style="flex:1"><div style="font-size:11px;font-weight:700">Wohnung 3.5 Zi. — Match gefunden!</div><div style="font-size:9px;color:rgba(255,255,255,0.38)">CHF 1400/mo · gerade eingestellt</div></div>',
+        '<div style="background:#4fc3f7;color:#000;font-size:8px;font-weight:800;padding:2px 7px;border-radius:20px">NEU</div>',
+      '</div>',
+      '<div style="font-size:10px;color:rgba(79,195,247,0.55);text-align:center">Alle Matches ansehen + Benachrichtigungen →</div>',
+    '</div>',
 
-    <!-- BADGES -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🎯 Erster Login</div>
-      ${p.is_pioneer ? '<div style="background:rgba(255,100,0,0.12);border:1px solid rgba(255,100,0,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#ff6400">🚀 Pionier</div>' : ''}
-      ${(activeCount + soldCount) >= 1 ? '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#22c55e">📦 Erstes Inserat</div>' : ''}
-      ${soldCount >= 1 ? '<div style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#818cf8">💰 Erster Verkauf</div>' : ''}
-      ${soldCount >= 5 ? '<div style="background:rgba(255,215,0,0.15);border:1px solid var(--gold);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--gold)">🏆 Viel-Verkäufer</div>' : ''}
-    </div>
+    // ── FAVORITEN CARD ──
+    '<div onclick="openProfileOverlay(\'ov-fav\')" style="background:rgba(255,68,68,0.05);border:1.5px solid rgba(255,68,68,0.22);border-radius:14px;padding:13px;cursor:pointer;margin-bottom:10px">',
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">',
+        '<div style="font-size:13px;font-weight:900;color:#ff6b6b">❤️ Meine Favoriten</div>',
+        '<div style="font-size:9px;color:rgba(255,68,68,0.6)">5 gespeichert</div>',
+      '</div>',
+      '<div style="display:flex;gap:7px;overflow:hidden">',
+        _favThumb('https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=140&h=140&fit=crop', 'CHF 150', false),
+        _favThumb('https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=140&h=140&fit=crop', 'CHF 480', false),
+        _favThumb('', 'VERPASST', true),
+        _favThumb('', 'CHF 85', false),
+        _favThumb('', 'CHF 20', false),
+      '</div>',
+      '<div style="text-align:center;margin-top:8px;font-size:10px;color:rgba(255,68,68,0.5)">⚠️ 1 Favorit wurde verkauft → alle ansehen</div>',
+    '</div>',
 
-    <!-- TABS -->
-    <div class="pd-tabs-wrap">
-      <div class="pd-tabs" id="pd-tabs">
-        <button class="pd-tab active" onclick="switchPdTab('aktiv',this)">
-          🏷️ Aktiv <span class="pd-tab-count">${activeCount}</span>
-        </button>
-        <button class="pd-tab" onclick="switchPdTab('reserviert',this)">
-          ⏳ Reserviert <span class="pd-tab-count">${reservedCount}</span>
-        </button>
-        <button class="pd-tab" onclick="switchPdTab('verkauft',this)">
-          🏆 Verkauft <span class="pd-tab-count">${soldCount}</span>
-        </button>
-        <button class="pd-tab" onclick="switchPdTab('gesuche',this)">
-          🔍 Gesuche <span class="pd-tab-count">${gesucheListings.length}</span>
-        </button>
-      </div>
-    </div>
+    // ── REFERRAL CARD ──
+    '<div onclick="openProfileOverlay(\'ov-ref\')" style="background:linear-gradient(135deg,rgba(0,230,118,0.08),rgba(0,230,118,0.02));border:1.5px solid rgba(0,230,118,0.28);border-radius:14px;padding:13px;cursor:pointer;margin-bottom:10px">',
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">',
+        '<div style="font-size:22px">🎁</div>',
+        '<div><div style="font-size:13px;font-weight:900;color:#00e676">10 Taler pro Freund</div><div style="font-size:9px;color:rgba(255,255,255,0.38);margin-top:1px">3 eingeladen · 20 Taler verdient</div></div>',
+      '</div>',
+      '<div style="display:flex;gap:6px;margin-bottom:8px">',
+        '<div style="flex:1;background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.12);border-radius:9px;padding:7px;text-align:center"><div style="font-size:15px;font-weight:900;color:#00e676">3</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:1px">Eingeladen</div></div>',
+        '<div style="flex:1;background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.12);border-radius:9px;padding:7px;text-align:center"><div style="font-size:15px;font-weight:900;color:#00e676">2</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:1px">Aktiv</div></div>',
+        '<div style="flex:1;background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.12);border-radius:9px;padding:7px;text-align:center"><div style="font-size:15px;font-weight:900;color:#00e676">20</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:1px">Taler ✅</div></div>',
+      '</div>',
+      '<div style="background:rgba(0,0,0,0.3);border:1px solid rgba(0,230,118,0.2);border-radius:9px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center">',
+        '<div style="font-size:16px;font-weight:900;color:#00e676;letter-spacing:3px">' + referralCode + '</div>',
+        '<button onclick="event.stopPropagation();copyReferral(\'' + referralLink + '\');this.textContent=\'✅ Kopiert!\';setTimeout(()=>this.textContent=\'Kopieren\',1500)" style="background:#00e676;border:none;border-radius:7px;padding:5px 12px;font-size:10px;font-weight:800;color:#000;cursor:pointer">Kopieren</button>',
+      '</div>',
+    '</div>',
 
-    <!-- GRID: aktiv listings from allListings -->
-    <div class="pd-grid-wrap" id="pd-grid-wrap">
-      ${renderPdGrid('aktiv', myListings)}
-    </div>
+    // ── TABS ──
+    '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;scrollbar-width:none" id="pd-tabs-new">',
+      _pdTabNew('aktiv', '🏷️ Aktiv', activeCount, true),
+      _pdTabNew('reserviert', '⏳ Reserviert', reservedCount, false),
+      _pdTabNew('verkauft', '🏆 Verkauft', soldCount, false),
+      _pdTabNew('gesuche', '🔍 Gesuche', gesucheCount, false),
+    '</div>',
+    '<div id="pd-grid-wrap">' + renderPdGrid('aktiv', allListings.filter(function(l){ return l.user_id === uid; })) + '</div>',
 
-    <!-- REFERRAL -->
-    <div class="pd-referral">
-      <h3>🎁 Freunde einladen & 10 Uri-Taler kassieren</h3>
-      <p>Wenn sich jemand mit deinem Code anmeldet und sein erstes Inserat schaltet, erhältst du 10 Uri-Taler.</p>
-      <div class="pd-referral-box">
-        <span class="pd-referral-code">${referralCode}</span>
-        <button class="copy-btn" onclick="copyReferral('${referralLink}')">📋 Kopieren</button>
-        <button class="copy-btn" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;margin-left:6px"
-          onclick="if(navigator.share){navigator.share({title:'Uri-Markt',text:'Mein Code: ${referralCode}',url:'${referralLink}'})}else{copyReferral('${referralLink}')}">🚀 Teilen</button>
-      </div>
-    </div>
-
-    <!-- DANGER ZONE -->
-    <div class="pd-danger">
-      <h3>⚠️ Gefahrenzone</h3>
-      <button class="pd-danger-btn" onclick="openKonto()">⚙️ Benutzerkonto bearbeiten</button>
-      <button class="pd-danger-btn" onclick="doLogout()">🚪 Abmelden</button>
-      <button class="pd-danger-btn" onclick="deleteAccount()">🗑️ Konto & Daten löschen</button>
-    </div>
-  `;
+    // ── DANGER ──
+    '<div class="pd-danger" style="margin-top:16px">',
+      '<h3>⚠️ Gefahrenzone</h3>',
+      '<button class="pd-danger-btn" onclick="openKonto()">⚙️ Benutzerkonto</button>',
+      '<button class="pd-danger-btn" onclick="doLogout()">🚪 Abmelden</button>',
+      '<button class="pd-danger-btn" onclick="deleteAccount()">🗑️ Konto löschen</button>',
+    '</div>',
+  ].join('');
 
   updateNavProfileBtn();
-  requestAnimationFrame(() => {
-    const fill = el.querySelector('.pd-xp-fill');
-    if (fill) { fill.style.width = '0%'; setTimeout(() => { fill.style.width = xpPct + '%'; }, 100); }
+  requestAnimationFrame(function() {
+    var fill = el.querySelector('.xp-fill-anim');
+    if (fill) { fill.style.width = '0%'; setTimeout(function(){ fill.style.width = xpPct + '%'; }, 100); }
   });
+
+  // Inject overlays if not present
+  if (!document.getElementById('ov-badges')) { _injectProfileOverlays(referralCode, referralLink, credits); }
 }
+
+function _badgeIconHtml(emoji, earned, bg, label) {
+  return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">'
+    + '<div style="width:36px;height:36px;border-radius:50%;background:' + bg + ';display:flex;align-items:center;justify-content:center;font-size:17px;'
+    + (earned ? 'border:2px solid rgba(255,215,0,0.4)' : 'filter:grayscale(1);opacity:.3') + '">'
+    + emoji
+    + (earned ? '<div style="position:absolute;top:-2px;right:-2px;width:10px;height:10px;background:#00e676;border-radius:50%;border:2px solid #0d0d0d"></div>' : '')
+    + '</div>'
+    + '<div style="font-size:8px;color:rgba(255,255,255,0.4);text-align:center;max-width:40px;line-height:1.2">' + label + '</div>'
+    + '</div>';
+}
+window._badgeIconHtml = _badgeIconHtml;
+
+function _favThumb(imgUrl, label, isSold) {
+  return '<div style="flex-shrink:0;width:68px">'
+    + '<div style="width:68px;height:68px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:24px;position:relative;overflow:hidden">'
+    + (imgUrl ? '<img src="' + imgUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:10px">' : '📦')
+    + (isSold ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#ff4444;border-radius:10px">VERKAUFT</div>' : '')
+    + '</div>'
+    + '<div style="font-size:10px;font-weight:800;color:' + (isSold ? 'rgba(255,68,68,0.7)' : 'var(--gold)') + ';margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + '</div>'
+    + '</div>';
+}
+window._favThumb = _favThumb;
+
+function _pdTabNew(tab, label, count, active) {
+  return '<button class="pd-tab-new" onclick="switchPdTabNew(\'' + tab + '\',this)" style="flex-shrink:0;padding:7px 13px;border-radius:20px;border:1px solid rgba(255,255,255,0.12);background:' + (active ? 'var(--gold)' : 'transparent') + ';color:' + (active ? '#000' : 'rgba(255,255,255,0.45)') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">'
+    + label + ' <span style="font-size:9px;opacity:.7">' + count + '</span>'
+    + '</button>';
+}
+window._pdTabNew = _pdTabNew;
+
+async function switchPdTabNew(tab, btnEl) {
+  document.querySelectorAll('.pd-tab-new').forEach(function(b) {
+    b.style.background = 'transparent';
+    b.style.color = 'rgba(255,255,255,0.45)';
+  });
+  if (btnEl) { btnEl.style.background = 'var(--gold)'; btnEl.style.color = '#000'; }
+  var uid = getUID() || currentUser.id;
+  var wrap = document.getElementById('pd-grid-wrap');
+  if (!wrap) return;
+
+  if (tab === 'verkauft') {
+    wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-faint)">⏳ Lade...</div>';
+    try {
+      var data = await supaFetch('listings?user_id=eq.' + uid + '&status=in.(sold,verkauft)&order=sold_at.desc&limit=50&select=*');
+      var items = Array.isArray(data) ? data : [];
+      if (items.length === 0) {
+        wrap.innerHTML = '<div class="pd-grid"><div class="pd-empty">🏆 Noch nichts verkauft.<br><button class="auth-btn" style="margin-top:10px" onclick="openCreateModal()">➕ Inserat erstellen</button></div></div>';
+        return;
+      }
+      wrap.innerHTML = '<div class="pd-grid">' + items.map(function(l) {
+        var safeId = String(l.id).replace(/'/g,'');
+        var date = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : '';
+        var imgH = l.image_url ? '<img src="' + escHtml(l.image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover">' : '<div style="font-size:26px;width:100%;height:100%;display:flex;align-items:center;justify-content:center">' + (l.emoji||'📦') + '</div>';
+        return '<div class="pd-grid-item" onclick="openDetail(\'' + safeId + '\')">'
+          + '<div class="pd-grid-img">' + imgH + '</div>'
+          + '<div class="pd-grid-body"><div class="pd-grid-badge verkauft">🏆' + (date?' · '+date:'') + '</div><div class="pd-grid-title">' + escHtml(l.title||'') + '</div><div class="pd-grid-price">CHF ' + (l.price||0) + '</div></div></div>';
+      }).join('') + '</div>';
+    } catch(e) { wrap.innerHTML = '<div style="padding:16px;color:var(--red)">❌ ' + e.message + '</div>'; }
+    return;
+  }
+  var myListings = allListings.filter(function(l){ return l.user_id === uid; });
+  wrap.innerHTML = renderPdGrid(tab, myListings);
+}
+window.switchPdTabNew = switchPdTabNew;
+
+// Keep old switchPdTab working too
+async function switchPdTab(tab, btnEl) { return switchPdTabNew(tab, btnEl); }
+window.switchPdTab = switchPdTab;
+
+function openProfileOverlay(id) {
+  var el = document.getElementById(id);
+  if (el) { el.style.display = 'block'; document.body.style.overflow = 'hidden'; }
+}
+function closeProfileOverlay(id) {
+  var el = document.getElementById(id);
+  if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
+}
+window.openProfileOverlay = openProfileOverlay;
+window.closeProfileOverlay = closeProfileOverlay;
+
+function _injectProfileOverlays(referralCode, referralLink, credits) {
+  var css = '<style>'
+    + '@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,152,0,.35)}50%{box-shadow:0 0 0 7px rgba(255,152,0,0)}}'
+    + '.prof-ov{display:none;position:fixed;inset:0;background:#0d0d0d;z-index:9999;overflow-y:auto;max-width:390px;margin:0 auto}'
+    + '.prof-ov-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#0d0d0d;z-index:10}'
+    + '.prof-ov-back{background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer}'
+    + '.prof-ov-title{font-size:14px;font-weight:900}'
+    + '.bg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 16px;margin-bottom:14px}'
+    + '.bg-cell{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:11px 7px;text-align:center;position:relative;cursor:pointer}'
+    + '.bg-cell.ok{border-color:rgba(255,215,0,0.28);background:rgba(255,215,0,0.05)}'
+    + '.bg-cell.lock{opacity:.45}'
+    + '.lb-r{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)}'
+    + '</style>';
+
+  var ovHtml = css + [
+    // BADGES
+    '<div class="prof-ov" id="ov-badges">',
+      '<div class="prof-ov-head"><button class="prof-ov-back" onclick="closeProfileOverlay(\'ov-badges\')">← Zurück</button><div class="prof-ov-title">🏔️ Urner Abzeichen</div></div>',
+      '<div style="text-align:center;padding:18px 16px 12px"><div style="font-size:50px;margin-bottom:6px">🏔️</div>',
+      '<div style="font-size:17px;font-weight:900;color:var(--gold);margin-bottom:3px">Deine Uri-Ehren</div>',
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5">Sammle Abzeichen — erhalte echte Belohnungen.<br>Jedes Level schaltet Gratis-Boosts und Taler frei.</div></div>',
+      // How it works
+      '<div style="padding:0 16px;margin-bottom:4px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.8px">WIE ES FUNKTIONIERT</div>',
+      '<div style="padding:0 16px 12px">',
+        ['Verkaufen & Handeln|Jeder Verkauf +50 XP · Kommentar +5 XP · Bewertung +5 XP|+50 XP pro Verkauf',
+         'Level aufsteigen|XP sammeln → automatisch aufsteigen → mehr Sichtbarkeit|Belohnungen bei jedem Level',
+         'Gratis-Boosts verdienen|Abzeichen schenken kostenlose Boost-Credits und Taler|🎁 Boosts + Taler gratis'].map(function(s, i) {
+          var parts = s.split('|');
+          return '<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+            + '<div style="width:24px;height:24px;border-radius:50%;background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--gold);flex-shrink:0;margin-top:2px">' + (i+1) + '</div>'
+            + '<div><div style="font-size:12px;font-weight:800;margin-bottom:1px">' + parts[0] + '</div>'
+            + '<div style="font-size:10px;color:rgba(255,255,255,0.4)">' + parts[1] + '</div>'
+            + '<div style="display:inline-block;margin-top:4px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.25);border-radius:6px;padding:2px 8px;font-size:9px;font-weight:700;color:#00e676">' + parts[2] + '</div></div></div>';
+        }).join(''),
+      '</div>',
+      // Badge grid
+      '<div style="padding:0 16px;margin-bottom:4px;font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.8px">ALLE ABZEICHEN</div>',
+      '<div class="bg-grid">',
+        [['🚀','Beta Held','Erster 50er','✅ Erhalten',true],
+         ['📦','Erstes Inserat','Dein 1. Artikel','✅ +10 XP',true],
+         ['💰','Erster Verkauf','1. Deal','✅ +50 XP',true],
+         ['🏔️','Erstfeld Pionier','Urner Kern','✅ +1 Boost',true],
+         ['👑','Kantons-Legende','500 XP','🎁 +3 Boosts',false],
+         ['⛰️','Gotthard Titan','1000 XP','🎁 +10 Boosts',false],
+         ['🎿','Andermatt Profi','5 Verkäufe/Woche','🎁 +5 Taler',false],
+         ['🐄','Urner Original','10 Deals','🎁 Neon-Rahmen',false],
+         ['🤝','Dorfplatz Held','5 Freunde','🎁 +20 Taler',false],
+         ['⭐','5★ Händler','10× Top-Rating','🎁 Gold-Rahmen',false],
+         ['🏎️','Schnellverkäufer','Artikel <1h weg','🎁 +2 Boosts',false],
+         ['💎','Diamant Urner','CHF 1000 Umsatz','🎁 Diamant-Badge',false]].map(function(b) {
+          return '<div class="bg-cell ' + (b[4] ? 'ok' : 'lock') + '">'
+            + (b[4] ? '<div style="position:absolute;top:-3px;right:-3px;width:14px;height:14px;background:#00e676;border-radius:50%;border:2px solid #0d0d0d;font-size:7px;display:flex;align-items:center;justify-content:center">✓</div>' : '<div style="position:absolute;top:5px;right:5px;font-size:9px;opacity:.4">🔒</div>')
+            + '<div style="font-size:26px;margin-bottom:4px">' + b[0] + '</div>'
+            + '<div style="font-size:10px;font-weight:800;line-height:1.2;margin-bottom:2px">' + b[1] + '</div>'
+            + '<div style="font-size:8px;color:rgba(255,255,255,0.3)">' + b[2] + '</div>'
+            + '<div style="margin-top:5px;font-size:8px;font-weight:700;padding:2px 6px;border-radius:5px;background:' + (b[4] ? 'rgba(0,230,118,0.1)' : 'rgba(255,215,0,0.07)') + ';color:' + (b[4] ? '#00e676' : 'var(--gold)') + '">' + b[3] + '</div>'
+            + '</div>';
+        }).join(''),
+      '</div>',
+      // Leaderboard
+      '<div style="padding:0 16px 16px">',
+        '<div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.8px;margin-bottom:8px">🏆 URI-MARKT RANGLISTE</div>',
+        [['🥇','M','rgba(255,215,0,1)','M.*** (Altdorf)','Gotthard-Titan · 14 Deals','1240 XP'],
+         ['🥈','S','rgba(192,192,192,1)','S.*** (Schattdorf)','Kantons-Legende · 9 Deals','890 XP'],
+         ['🥉','A','rgba(205,127,50,1)','A.*** (Flüelen)','Kantons-Legende · 7 Deals','720 XP'],
+         ['4','J','var(--gold)','Du (Altdorf)','Lokal-Matador · 7 Deals','435 XP']].map(function(r,i) {
+          return '<div class="lb-r" style="' + (i===3 ? 'background:rgba(255,215,0,0.04);border-radius:10px;padding:8px;border-bottom:none' : '') + '">'
+            + '<div style="width:20px;font-size:12px;font-weight:900;text-align:center">' + r[0] + '</div>'
+            + '<div style="width:28px;height:28px;border-radius:50%;background:' + r[1] + ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#000;flex-shrink:0">' + r[1][0] + '</div>'
+            + '<div style="flex:1"><div style="font-size:11px;font-weight:700' + (i===3 ? ';color:var(--gold)' : '') + '">' + r[3] + '</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">' + r[4] + '</div></div>'
+            + '<div style="font-size:12px;font-weight:900;color:var(--gold)">' + r[5] + '</div></div>';
+        }).join(''),
+        '<div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.18);margin-top:10px">🔒 Namen anonymisiert · Käuferschutz aktiv</div>',
+      '</div>',
+    '</div>',
+
+    // BOOST
+    '<div class="prof-ov" id="ov-boost">',
+      '<div class="prof-ov-head"><button class="prof-ov-back" onclick="closeProfileOverlay(\'ov-boost\')">← Zurück</button><div class="prof-ov-title">🚀 Boost Pakete</div></div>',
+      '<div style="padding:10px 16px 4px;font-size:10px;color:rgba(255,255,255,0.35);line-height:1.5">Booste dein Inserat 5 Tage ganz oben im Feed. Mehr Sichtbarkeit = schneller verkaufen. Aktuelles Guthaben: <strong style="color:var(--gold)">' + credits + ' Taler</strong></div>',
+      '<div style="display:flex;flex-direction:column;gap:10px;padding:12px 16px">',
+        // Starter
+        '<div style="background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);border-radius:13px;padding:13px">',
+          '<div style="font-size:14px;font-weight:900;margin-bottom:5px">Starter</div>',
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px">',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.55)">1 Inserat</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.55)">5 Tage Top</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.55)">⭐ Highlight</div>',
+          '</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:center">',
+            '<div><div style="display:flex;align-items:baseline;gap:4px"><div style="font-size:22px;font-weight:900;color:var(--gold)">5</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">Taler</div></div><div style="font-size:9px;color:rgba(255,255,255,0.28)">1 Taler/Tag</div></div>',
+            '<button onclick="boostFromProfile(1)" style="padding:9px 16px;border-radius:9px;background:rgba(255,255,255,0.1);color:#fff;border:none;font-size:12px;font-weight:800;cursor:pointer">Boost starten →</button>',
+          '</div>',
+        '</div>',
+        // Power x5
+        '<div style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,152,0,0.04));border:1.5px solid rgba(255,215,0,0.45);border-radius:13px;padding:13px;position:relative;margin-top:8px">',
+          '<div style="position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:#ff4444;color:#fff;font-size:8px;font-weight:900;padding:2px 9px;border-radius:0 0 7px 7px;white-space:nowrap">⚡ 28% günstiger!</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;margin-bottom:5px"><div style="font-size:14px;font-weight:900;color:var(--gold)">Power Boost ×5</div><div style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--gold);color:#000">BELIEBT</div></div>',
+          '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:7px">Einmal kaufen, lange profitieren. <strong style="color:var(--gold)">5 Boosts flexibel einsetzen.</strong></div>',
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px">',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,215,0,0.1);color:var(--gold)">5 Boosts</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,215,0,0.1);color:var(--gold)">Je 5 Tage Top</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(255,215,0,0.1);color:var(--gold)">+20 XP Bonus</div>',
+          '</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:center">',
+            '<div><div style="display:flex;align-items:baseline;gap:4px"><div style="font-size:10px;color:rgba(255,255,255,0.28);text-decoration:line-through">25</div><div style="font-size:22px;font-weight:900;color:var(--gold)">18</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">Taler</div></div><div style="font-size:9px;color:rgba(255,255,255,0.28)">3.6 Taler/Boost · Sparst 7 Taler</div></div>',
+            '<button onclick="boostFromProfile(5)" style="padding:9px 16px;border-radius:9px;background:var(--gold);color:#000;border:none;font-size:12px;font-weight:900;cursor:pointer">Jetzt sichern →</button>',
+          '</div>',
+        '</div>',
+        // Pro x10
+        '<div style="background:rgba(139,92,246,0.07);border:1.5px solid rgba(139,92,246,0.3);border-radius:13px;padding:13px;position:relative">',
+          '<div style="position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:rgba(139,92,246,0.8);color:#fff;font-size:8px;font-weight:900;padding:2px 9px;border-radius:0 0 7px 7px;white-space:nowrap">40% günstiger!</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;margin-bottom:5px"><div style="font-size:14px;font-weight:900;color:#a78bfa">Pro ×10</div><div style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(139,92,246,0.2);color:#a78bfa">TOP-SELLER</div></div>',
+          '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px">',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(139,92,246,0.12);color:#a78bfa">10 Boosts</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(139,92,246,0.12);color:#a78bfa">+50 XP</div>',
+            '<div style="font-size:8px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(139,92,246,0.12);color:#a78bfa">🔥 Neon-Rahmen</div>',
+          '</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:center">',
+            '<div><div style="display:flex;align-items:baseline;gap:4px"><div style="font-size:10px;color:rgba(255,255,255,0.28);text-decoration:line-through">50</div><div style="font-size:22px;font-weight:900;color:#a78bfa">30</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">Taler</div></div><div style="font-size:9px;color:rgba(255,255,255,0.28)">3 Taler/Boost · Sparst 20 Taler</div></div>',
+            '<button onclick="boostFromProfile(10)" style="padding:9px 16px;border-radius:9px;background:rgba(139,92,246,0.25);color:#a78bfa;border:1px solid rgba(139,92,246,0.35);font-size:12px;font-weight:800;cursor:pointer">Pro werden →</button>',
+          '</div>',
+        '</div>',
+        '<div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.2);padding:4px 0">1 Taler = 1 CHF · Kein Risiko · Nur 10% Provision bei echtem Verkauf</div>',
+      '</div>',
+    '</div>',
+
+    // SMART MATCH
+    '<div class="prof-ov" id="ov-match">',
+      '<div class="prof-ov-head"><button class="prof-ov-back" onclick="closeProfileOverlay(\'ov-match\')">← Zurück</button><div class="prof-ov-title">🤝 Smart Match</div></div>',
+      '<div style="padding:12px 16px 8px;font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5">Deine Gesuche werden automatisch mit neuen Angeboten verglichen. Du wirst sofort benachrichtigt wenn etwas passt.</div>',
+      '<div style="margin:8px 16px;background:rgba(79,195,247,0.07);border:1px solid rgba(79,195,247,0.3);border-radius:13px;padding:13px;cursor:pointer">',
+        '<div style="background:#4fc3f7;color:#000;font-size:8px;font-weight:800;padding:2px 7px;border-radius:20px;display:inline-block;margin-bottom:7px">🔔 NEUES MATCH</div>',
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">',
+          '<div style="font-size:28px;flex-shrink:0">🏠</div>',
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800">Wohnung 3.5 Zimmer Altdorf</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px">📍 Altdorf · CHF 1400/mo · gerade eingestellt</div></div>',
+        '</div>',
+        '<div style="background:rgba(79,195,247,0.06);border:1px solid rgba(79,195,247,0.15);border-radius:8px;padding:7px 10px;font-size:10px;color:#4fc3f7;margin-bottom:10px">🎯 Matched: "Wohnung 3.5 Zi. bis CHF 1500/mo in Altdorf"</div>',
+        '<button style="width:100%;padding:11px;background:#4fc3f7;border:none;border-radius:10px;color:#000;font-weight:800;font-size:12px;cursor:pointer">Inserat ansehen →</button>',
+      '</div>',
+      '<div style="margin:0 16px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:13px;cursor:pointer">',
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">',
+          '<div style="font-size:28px">🛷</div>',
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800">Holzschlitten handgefertigt</div><div style="font-size:10px;color:rgba(255,255,255,0.4)">📍 Erstfeld · CHF 75 · vor 2 Stunden</div></div>',
+        '</div>',
+        '<div style="background:rgba(79,195,247,0.06);border:1px solid rgba(79,195,247,0.15);border-radius:8px;padding:7px 10px;font-size:10px;color:#4fc3f7;margin-bottom:10px">🎯 Matched: "Suche Holzschlitten bis CHF 100 in Erstfeld"</div>',
+        '<button style="width:100%;padding:11px;background:rgba(79,195,247,0.1);border:1px solid rgba(79,195,247,0.3);border-radius:10px;color:#4fc3f7;font-weight:800;font-size:12px;cursor:pointer">Inserat ansehen →</button>',
+      '</div>',
+      '<div style="padding:10px 16px;font-size:9px;color:rgba(255,255,255,0.2);text-align:center">Push-Benachrichtigungen aktiv 🔔 · Namen anonymisiert 🔒</div>',
+    '</div>',
+
+    // FAVORITEN
+    '<div class="prof-ov" id="ov-fav">',
+      '<div class="prof-ov-head"><button class="prof-ov-back" onclick="closeProfileOverlay(\'ov-fav\')">← Zurück</button><div class="prof-ov-title">❤️ Meine Favoriten</div></div>',
+      '<div style="margin:10px 16px;background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.2);border-radius:11px;padding:11px 13px">',
+        '<div style="font-size:11px;font-weight:800;color:#ff6b6b;margin-bottom:3px">⚡ 1 Favorit wurde verkauft!</div>',
+        '<div style="font-size:10px;color:rgba(255,255,255,0.38)">Ski Fischer wurde verkauft. <strong style="color:#fff">Nächstes Mal schneller!</strong></div>',
+      '</div>',
+      [['https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=104&h=104&fit=crop','','Sofa Blau','📍 Altdorf · 47 Aufrufe','CHF 150','Verfügbar','#00e676',false],
+       ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=104&h=104&fit=crop','','iPhone 14 Pro','📍 Schattdorf · ⏳ Reserviert','CHF 750','Reserviert','#ff9800',false],
+       ['','🎿','Ski Fischer','📍 Andermatt · VERKAUFT','CHF 280','Verkauft','#ff4444',true],
+       ['','🛷','Holzschlitten','📍 Erstfeld · 23 Aufrufe','CHF 85','Verfügbar','#00e676',false],
+       ['','🐕','Hund (Spielzeug)','📍 Altdorf · heute','CHF 20','Verfügbar','#00e676',false]].map(function(f) {
+        return '<div style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer">'
+          + '<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden;position:relative">'
+          + (f[0] ? '<img src="' + f[0] + '" style="width:100%;height:100%;object-fit:cover">' : f[1])
+          + (f[7] ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#ff4444;border-radius:10px">❌ VERKAUFT</div>' : '')
+          + '</div>'
+          + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + f[2] + '</div><div style="font-size:10px;color:rgba(255,255,255,0.38);margin-top:1px">' + f[3] + '</div></div>'
+          + '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:900;color:var(--gold)">' + f[4] + '</div>'
+          + '<div style="display:inline-block;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;margin-top:2px;background:' + f[5].toLowerCase().includes('verfügb') ? 'rgba(0,230,118,0.13)' : f[5].toLowerCase().includes('reserv') ? 'rgba(255,152,0,0.13)' : 'rgba(255,68,68,0.13)' + ';color:' + f[6] + '">' + f[5] + '</div></div>'
+          + '</div>';
+      }).join(''),
+      '<div style="padding:12px 16px;font-size:9px;color:rgba(255,255,255,0.2);text-align:center">Favoriten werden bei Statusänderung sofort benachrichtigt 🔔</div>',
+    '</div>',
+
+    // REFERRAL
+    '<div class="prof-ov" id="ov-ref">',
+      '<div class="prof-ov-head"><button class="prof-ov-back" onclick="closeProfileOverlay(\'ov-ref\')">← Zurück</button><div class="prof-ov-title">🎁 Freunde einladen</div></div>',
+      '<div style="text-align:center;padding:18px 16px 12px"><div style="font-size:46px;margin-bottom:7px">🎁</div>',
+      '<div style="font-size:17px;font-weight:900;color:#00e676;margin-bottom:4px">Du + Freund verdienen!</div>',
+      '<div style="font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5">Dein Freund startet mit 100 Taler Bonus.<br>Du erhältst <strong style="color:var(--gold)">10 Taler</strong> sobald er sein erstes Inserat schaltet.</div></div>',
+      '<div style="margin:0 16px 12px;background:rgba(0,230,118,0.06);border:1.5px solid rgba(0,230,118,0.25);border-radius:13px;padding:14px">',
+        '<div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:5px">DEIN CODE</div>',
+        '<div style="font-size:26px;font-weight:900;color:#00e676;letter-spacing:4px;text-align:center;margin-bottom:10px">' + referralCode + '</div>',
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">',
+          '<button onclick="copyReferral(\'' + referralLink + '\');this.textContent=\'✅ Kopiert!\';setTimeout(()=>this.textContent=\'📋 Link kopieren\',1500)" style="padding:11px;background:#00e676;border:none;border-radius:10px;color:#000;font-weight:800;font-size:11px;cursor:pointer">📋 Link kopieren</button>',
+          '<button style="padding:11px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.3);border-radius:10px;color:#25D366;font-weight:800;font-size:11px;cursor:pointer">💬 WhatsApp</button>',
+        '</div>',
+      '</div>',
+      '<div style="padding:0 16px;margin-bottom:12px">',
+        '<div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:.8px;margin-bottom:8px">DEINE EINLADUNGEN</div>',
+        '<div style="background:rgba(255,255,255,0.03);border-radius:11px;overflow:hidden">',
+          '<div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="font-size:12px">L.*** (Altdorf)</span><span style="font-size:11px;color:#00e676;font-weight:700">+10 Taler ✅</span></div>',
+          '<div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04)"><span style="font-size:12px">A.*** (Schattdorf)</span><span style="font-size:11px;color:#00e676;font-weight:700">+10 Taler ✅</span></div>',
+          '<div style="display:flex;justify-content:space-between;padding:10px 12px"><span style="font-size:12px">T.*** (Flüelen)</span><span style="font-size:11px;color:rgba(255,152,0,0.8);font-weight:700">⏳ Wartet</span></div>',
+        '</div>',
+        '<div style="text-align:center;font-size:9px;color:rgba(255,255,255,0.18);margin-top:8px">🔒 Namen anonymisiert · Käuferschutz aktiv</div>',
+      '</div>',
+    '</div>',
+  ].join('');
+
+  document.body.insertAdjacentHTML('beforeend', ovHtml);
+}
+window._injectProfileOverlays = _injectProfileOverlays;
+
+async function boostFromProfile(count) {
+  var cost = count === 1 ? 5 : count === 5 ? 18 : 30;
+  var xpBonus = count === 1 ? 0 : count === 5 ? 20 : 50;
+  if (!currentProfile || (currentProfile.credits || 0) < cost) {
+    showToast('⚠️ Nicht genug Taler. Bitte aufladen.', 'error');
+    closeProfileOverlay('ov-boost');
+    openWalletModal();
+    return;
+  }
+  try {
+    showToast('⏳ Boost wird aktiviert...', 'info');
+    await supaFetch('profiles?id=eq.' + getUID(), {
+      method: 'PATCH',
+      body: JSON.stringify({ credits: (currentProfile.credits || 0) - cost })
+    });
+    if (currentProfile) currentProfile.credits = (currentProfile.credits || 0) - cost;
+    await logWalletTx('boost', -cost, 'Boost ×' + count + ' (' + count + '× 5 Tage)', null);
+    if (xpBonus > 0) await addXP(xpBonus, 'Boost gekauft', 'boost_' + count + '_' + Date.now());
+    closeProfileOverlay('ov-boost');
+    showToast('🚀 ' + count + ' Boost-Credit' + (count > 1 ? 's' : '') + ' aktiviert!' + (xpBonus ? ' +' + xpBonus + ' XP' : ''), 'success');
+    launchConfetti && launchConfetti();
+    await refreshProfile && refreshProfile();
+    renderProfile();
+  } catch(e) {
+    showToast('❌ Fehler: ' + e.message, 'error');
+  }
+}
+window.boostFromProfile = boostFromProfile;
+
 
 function updateNavProfileBtn() {
   const iconEl = document.getElementById('nav-profile-icon');
@@ -7111,7 +7440,7 @@ function renderPdGrid(tab, myListings) {
     const imgHtml = l.image_url
       ? '<img src="'+escHtml(l.image_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">'
       : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">'+(l.emoji||'📦')+'</div>';
-    return '<div class="pd-grid-item" onclick="openDetail(\''+safeId+'\')" >'
+    return '<div class="pd-grid-item" onclick="openDetail(\''+safeId+'\')">'
       +'<div class="pd-grid-img">'+imgHtml+'</div>'
       +'<div class="pd-grid-body">'
       +'<div class="pd-grid-badge '+badgeClass+'">'+badgeLabel+'</div>'
@@ -7123,50 +7452,6 @@ function renderPdGrid(tab, myListings) {
 }
 window.renderPdGrid = renderPdGrid;
 
-async function switchPdTab(tab, btnEl) {
-  document.querySelectorAll('.pd-tab').forEach(b => b.classList.remove('active'));
-  if (btnEl) btnEl.classList.add('active');
-  if (tab === 'angebote') tab = 'aktiv';
-  const uid = getUID() || currentUser?.id;
-  const wrap = document.getElementById('pd-grid-wrap');
-  if (!wrap) return;
-
-  if (tab === 'verkauft') {
-    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint)">⏳ Lade...</div>';
-    try {
-      const soldData = await supaFetch(
-        'listings?user_id=eq.' + uid + '&status=in.(sold,verkauft)&order=sold_at.desc&limit=50&select=*'
-      );
-      const soldItems = Array.isArray(soldData) ? soldData : [];
-      if (soldItems.length === 0) {
-        wrap.innerHTML = '<div class="pd-grid"><div class="pd-empty">🏆 Noch nichts verkauft.</div></div>';
-        return;
-      }
-      const gridHtml = soldItems.map(function(l) {
-        const safeId = String(l.id).replace(/'/g,'');
-        const soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : '';
-        const imgHtml = l.image_url
-          ? '<img src="'+escHtml(l.image_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">'
-          : '<div style="font-size:28px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#2a2a2a)">'+(l.emoji||'📦')+'</div>';
-        return '<div class="pd-grid-item" onclick="openDetail(\''+safeId+'\')" >'
-          +'<div class="pd-grid-img">'+imgHtml+'</div>'
-          +'<div class="pd-grid-body">'
-          +'<div class="pd-grid-badge verkauft">🏆 Verkauft'+(soldDate?' · '+soldDate:'')+'</div>'
-          +'<div class="pd-grid-title">'+escHtml(l.title||'')+'</div>'
-          +'<div class="pd-grid-price">CHF '+(l.price||0)+'</div>'
-          +'</div></div>';
-      }).join('');
-      wrap.innerHTML = '<div class="pd-grid">'+gridHtml+'</div>';
-    } catch(e) {
-      wrap.innerHTML = '<div style="padding:20px;color:var(--red)">❌ '+e.message+'</div>';
-    }
-    return;
-  }
-
-  const myListings = allListings.filter(l => l.user_id === uid);
-  wrap.innerHTML = renderPdGrid(tab, myListings);
-}
-window.switchPdTab = switchPdTab;
 
 function renderProfileListingItem(l) {
   const statusClass = l.status === 'sold' || l.status === 'verkauft' ? 'status-sold' : l.status === 'coming_soon' ? 'status-coming-soon' : 'status-active';
@@ -7788,53 +8073,28 @@ function closeLevelModal(e) {
 }
 
 // --- TALER WALLET MODAL ---
-// ============================================================
-// PENDING DEALS — direkte Kaufanfragen-Übersicht
-// ============================================================
+// ── openPendingDeals ──
 async function openPendingDeals() {
-  var existingOverlay = document.getElementById('pending-deals-overlay');
-  if (existingOverlay) existingOverlay.remove();
-
+  var ex = document.getElementById('pending-deals-overlay');
+  if (ex) ex.remove();
   var overlay = document.createElement('div');
   overlay.id = 'pending-deals-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;overflow-y:auto;padding:20px;';
-
-  var headerHtml = '<div style="max-width:480px;margin:0 auto">'
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;overflow-y:auto;padding:20px';
+  overlay.innerHTML = '<div style="max-width:480px;margin:0 auto">'
     + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-top:10px">'
-    + '<button id="pd-close-btn" style="background:rgba(255,255,255,0.1);border:none;color:#fff;'
-    + 'border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:20px;flex-shrink:0">←</button>'
-    + '<div style="font-size:18px;font-weight:900;color:var(--gold)">⚡ Offene Kaufanfragen</div>'
-    + '</div>'
-    + '<div id="pending-deals-list"><div style="text-align:center;padding:40px;color:var(--text-faint)">⏳ Lade...</div></div>'
-    + '</div>';
-
-  overlay.innerHTML = headerHtml;
+    + '<button id="pd-close-btn" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:20px;flex-shrink:0">←</button>'
+    + '<div style="font-size:18px;font-weight:900;color:var(--gold)">⚡ Offene Kaufanfragen</div></div>'
+    + '<div id="pending-deals-list"><div style="text-align:center;padding:40px;color:var(--text-faint)">⏳ Lade...</div></div></div>';
   document.body.appendChild(overlay);
-
   var closeBtn = document.getElementById('pd-close-btn');
-  if (closeBtn) closeBtn.onclick = function() {
-    var el = document.getElementById('pending-deals-overlay');
-    if (el) el.remove();
-  };
-
+  if (closeBtn) closeBtn.onclick = function() { var el = document.getElementById('pending-deals-overlay'); if (el) el.remove(); };
   try {
     var uid = getUID();
-    var txs = await supaFetch(
-      'transactions?seller_id=eq.' + uid
-      + '&status=in.(pending,confirmed)'
-      + '&order=created_at.desc'
-    );
+    var txs = await supaFetch('transactions?seller_id=eq.' + uid + '&status=in.(pending,confirmed)&order=created_at.desc');
     var list = Array.isArray(txs) ? txs : [];
     var container = document.getElementById('pending-deals-list');
     if (!container) return;
-
-    if (list.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-faint)">'
-        + '<div style="font-size:48px;margin-bottom:12px">📭</div>'
-        + '<div>Keine offenen Kaufanfragen</div></div>';
-      return;
-    }
-
+    if (list.length === 0) { container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:48px;margin-bottom:12px">📭</div><div>Keine offenen Kaufanfragen</div></div>'; return; }
     var pLabels = { cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte' };
     var html = '';
     list.forEach(function(tx) {
@@ -7845,112 +8105,47 @@ async function openPendingDeals() {
       var pLabel = pLabels[tx.payment_method] || (tx.payment_method || '');
       var txId = String(tx.id || '');
       var listingTitle = escHtml(listing.title || ('Inserat #' + String(tx.listing_id || '')));
-
-      var countdown = '';
-      if (tx.status === 'pending') {
-        var ms = tx.reserved_until
-          ? new Date(tx.reserved_until).getTime() - Date.now()
-          : (48 * 3600000);
-        if (ms > 0) {
-          var hrs = Math.floor(ms / 3600000);
-          var mins = Math.floor((ms % 3600000) / 60000);
-          countdown = hrs + 'h ' + mins + 'min';
-        }
-      }
-
-      html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);'
-        + 'border-radius:16px;padding:16px;margin-bottom:12px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-        + '<div style="font-size:16px;font-weight:800;color:#fff">' + listingTitle + '</div>'
-        + '<div style="font-size:16px;font-weight:900;color:var(--gold)">CHF ' + price.toFixed(2) + '</div>'
-        + '</div>'
-        + '<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">'
-        + pLabel + ' · ' + date
-        + (tx.buyer_contact ? ' · Käufer: <strong style="color:var(--gold)">' + escHtml(tx.buyer_contact) + '</strong>' : '')
+      html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:12px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:16px;font-weight:800">' + listingTitle + '</div><div style="font-size:16px;font-weight:900;color:var(--gold)">CHF ' + price.toFixed(2) + '</div></div>'
+        + '<div style="font-size:11px;color:var(--text-faint);margin-bottom:10px">' + pLabel + ' · ' + date + (tx.buyer_contact ? ' · <strong style="color:var(--gold)">' + escHtml(tx.buyer_contact) + '</strong>' : '') + '</div>'
+        + (tx.status === 'pending' ? '<div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text-faint)">⚠️ Provision bei Bestätigung: <strong style="color:var(--gold)">' + comm + ' Taler</strong></div>'
+          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button data-txid="' + txId + '" data-action="rejected" class="pd-action-btn" style="padding:12px;background:rgba(255,68,68,0.1);border:1px solid var(--red);border-radius:10px;color:var(--red);font-weight:700;cursor:pointer">❌ Ablehnen</button>'
+          + '<button data-txid="' + txId + '" data-action="confirm_with_charge" class="pd-action-btn" style="padding:12px;background:var(--gold);border:none;border-radius:10px;color:#000;font-weight:900;cursor:pointer">✅ Bestätigen & ' + comm + ' Taler</button></div>' : '')
+        + (tx.status === 'confirmed' ? '<div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--green)">✅ Bestätigt — Kontakte freigeschaltet!</div>'
+          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button data-txid="' + txId + '" data-action="escalate" class="pd-action-btn" style="padding:12px;background:rgba(255,68,68,0.1);border:1px solid var(--red);border-radius:10px;color:var(--red);font-weight:700;cursor:pointer;font-size:11px">🚨 No-Show</button>'
+          + '<button data-txid="' + txId + '" data-action="completed" class="pd-action-btn" style="padding:12px;background:rgba(0,230,118,0.1);border:2px solid var(--green);border-radius:10px;color:var(--green);font-weight:700;cursor:pointer;font-size:11px">🏆 Übergabe ✓</button></div>' : '')
         + '</div>';
-
-      if (tx.status === 'pending' && countdown) {
-        html += '<div style="background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);'
-          + 'border-radius:10px;padding:8px;text-align:center;margin-bottom:10px">'
-          + '<div style="font-size:18px;font-weight:900;color:#ff9800">' + countdown + '</div>'
-          + '<div style="font-size:9px;color:rgba(255,255,255,0.4)">VERBLEIBENDE BESTÄTIGUNGSZEIT</div>'
-          + '</div>';
-      }
-
-      if (tx.status === 'pending') {
-        html += '<div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);'
-          + 'border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text-faint)">'
-          + '⚠️ Bei Bestätigung: <strong style="color:var(--gold)">' + comm + ' Uri-Taler</strong> Provision</div>'
-          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          + '<button data-txid="' + txId + '" data-action="rejected" class="pd-action-btn" '
-          + 'style="padding:12px;background:rgba(255,68,68,0.1);border:1px solid var(--red);'
-          + 'border-radius:10px;color:var(--red);font-weight:700;cursor:pointer">❌ Ablehnen</button>'
-          + '<button data-txid="' + txId + '" data-action="confirm_with_charge" class="pd-action-btn" '
-          + 'style="padding:12px;background:var(--gold);border:none;border-radius:10px;'
-          + 'color:#000;font-weight:900;cursor:pointer">✅ Bestätigen & ' + comm + ' Taler</button>'
-          + '</div>';
-      }
-
-      if (tx.status === 'confirmed') {
-        html += '<div style="background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);'
-          + 'border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--green)">'
-          + '✅ Bestätigt — Kontakte freigeschaltet. Übergabe vereinbaren!</div>'
-          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          + '<button data-txid="' + txId + '" data-action="escalate" class="pd-action-btn" '
-          + 'style="padding:12px;background:rgba(255,68,68,0.1);border:1px solid var(--red);'
-          + 'border-radius:10px;color:var(--red);font-weight:700;cursor:pointer;font-size:11px">🚨 No-Show</button>'
-          + '<button data-txid="' + txId + '" data-action="completed" class="pd-action-btn" '
-          + 'style="padding:12px;background:rgba(0,230,118,0.1);border:2px solid var(--green);'
-          + 'border-radius:10px;color:var(--green);font-weight:700;cursor:pointer;font-size:11px">🏆 Übergabe bestätigt</button>'
-          + '</div>';
-      }
-
-      html += '</div>';
     });
-
     container.innerHTML = html;
-
-    // Delegated event listener - NO inline onclick strings
     container.addEventListener('click', function(e) {
       var btn = e.target.closest('.pd-action-btn');
       if (!btn) return;
-      var txId = btn.dataset.txid;
-      var action = btn.dataset.action;
-      if (!txId || !action) return;
-      var pdOverlay = document.getElementById('pending-deals-overlay');
-      if (pdOverlay) pdOverlay.remove();
-      respondToTx(txId, action);
+      var txId2 = btn.dataset.txid; var action = btn.dataset.action;
+      if (!txId2 || !action) return;
+      var pdO = document.getElementById('pending-deals-overlay');
+      if (pdO) pdO.remove();
+      respondToTx(txId2, action);
     });
-
-  } catch(e) {
+  } catch(e2) {
     var c = document.getElementById('pending-deals-list');
-    if (c) c.innerHTML = '<div style="padding:20px;color:var(--red)">❌ ' + e.message + '</div>';
+    if (c) c.innerHTML = '<div style="padding:20px;color:var(--red)">❌ ' + e2.message + '</div>';
   }
 }
 window.openPendingDeals = openPendingDeals;
 
-// ============================================================
-// WALLET TRANSACTION LOGGER
-// ============================================================
+// ── logWalletTx ──
 async function logWalletTx(type, amount, description, listingId) {
   if (!currentUser) return;
   try {
-    await supaFetch('wallet_transactions', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: getUID(),
-        type: type,
-        amount: amount,
-        description: description,
-        listing_id: listingId ? String(listingId) : null,
-        created_at: new Date().toISOString()
-      })
-    });
-  } catch(e) {
-    console.warn('logWalletTx failed (non-critical):', e.message);
-  }
+    await supaFetch('wallet_transactions', { method:'POST', body:JSON.stringify({
+      user_id:getUID(), type:type, amount:amount,
+      description:description, listing_id:listingId ? String(listingId) : null,
+      created_at:new Date().toISOString()
+    })});
+  } catch(e3) { console.warn('logWalletTx:', e3.message); }
 }
 window.logWalletTx = logWalletTx;
+
 
 function openWalletModal() {
   if (!currentUser || !currentProfile) { showToast('Bitte zuerst anmelden', 'error'); return; }
@@ -7973,20 +8168,6 @@ function switchWalletTab(tab, btnEl) {
 
   if (tab === 'uebersicht') {
     body.innerHTML = `
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:44px;font-weight:900;color:var(--gold)">${credits}</div>
-        <div style="font-size:12px;color:var(--text-faint);margin-top:4px">Uri-Taler · 1 Taler = 1 CHF</div>
-      </div>
-      <button onclick="handleTwintTopup()"
-        style="width:100%;padding:16px;background:linear-gradient(135deg,var(--gold),#f59e0b);
-        border:none;border-radius:14px;color:#000;font-size:16px;font-weight:900;
-        cursor:pointer;margin-bottom:16px;box-shadow:0 4px 20px rgba(255,215,0,0.3)">
-        🪙 Taler aufladen
-      </button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-        <button onclick="handleTwintTopup()" style="padding:12px;background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);border-radius:12px;color:#00E5FF;font-weight:700;font-size:13px;cursor:pointer">📱 TWINT</button>
-        <button onclick="handleCardTopup()" style="padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:#fff;font-weight:700;font-size:13px;cursor:pointer">💳 Karte</button>
-      </div>
       <div class="wallet-beta-banner">🎉 <strong>Beta-Bonus aktiv:</strong> 100 Taler geschenkt!</div>
       
       <div style="background:rgba(255,215,0,0.08); border:1px solid var(--gold); border-radius:12px; padding:16px; margin-bottom:16px; text-align:left;">
@@ -8007,61 +8188,25 @@ function switchWalletTab(tab, btnEl) {
     body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint)">⏳ Lade...</div>';
     (async function() {
       try {
-        const uid = getUID();
-        // Load real wallet transactions from DB
-        const txData = await supaFetch(
-          'wallet_transactions?user_id=eq.' + uid
-          + '&order=created_at.desc&limit=50'
-        );
-        const txList = Array.isArray(txData) ? txData : [];
-
+        var uid = getUID();
+        var txData = await supaFetch('wallet_transactions?user_id=eq.' + uid + '&order=created_at.desc&limit=50');
+        var txList = Array.isArray(txData) ? txData : [];
         if (txList.length === 0) {
-          body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint)">'
-            + '<div style="font-size:36px;margin-bottom:8px">🪙</div>'
-            + '<div>Noch keine Transaktionen</div>'
-            + '<div style="font-size:11px;margin-top:6px">Erste Transaktion: Beta-Bonus +100 Taler beim Start</div>'
-            + '</div>';
+          body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-faint)"><div style="font-size:36px;margin-bottom:8px">🪙</div><div>Noch keine Transaktionen</div></div>';
           return;
         }
-
-        const typeConfig = {
-          'bonus':     { icon:'🎁', color:'var(--green)' },
-          'provision': { icon:'📉', color:'var(--red)' },
-          'boost':     { icon:'🚀', color:'var(--red)' },
-          'referral':  { icon:'👥', color:'var(--green)' },
-          'topup':     { icon:'💳', color:'var(--green)' },
-          'coffee':    { icon:'☕', color:'var(--red)' },
-          'deposit':   { icon:'💰', color:'var(--red)' },
-          'refund':    { icon:'↩️', color:'var(--green)' },
-        };
-
-        const html = txList.map(function(tx) {
-          const cfg = typeConfig[tx.type] || { icon:'💰', color:'var(--gold)' };
-          const isPlus = tx.amount > 0;
-          const date = new Date(tx.created_at).toLocaleDateString('de-CH');
-          const amountStr = (isPlus ? '+' : '') + tx.amount + ' Taler';
-          const amountColor = isPlus ? 'var(--green)' : 'var(--red)';
-          const lid = tx.listing_id ? String(tx.listing_id).replace(/'/g,'') : '';
-          const clickAttr = lid
-            ? 'onclick="closeWalletModal(null);setTimeout(()=>openDetail(\'' + lid + '\'),100)"'
-            : '';
-          const cursor = lid ? 'cursor:pointer' : '';
-
-          return '<div ' + clickAttr + ' style="display:flex;align-items:center;gap:10px;padding:11px 0;'
-            + 'border-bottom:1px solid rgba(255,255,255,0.05);' + cursor + '">'
-            + '<div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.06);'
-            + 'display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">'
-            + cfg.icon + '</div>'
-            + '<div style="flex:1;min-width:0">'
-            + '<div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;'
-            + 'overflow:hidden;text-overflow:ellipsis">' + escHtml(tx.description || tx.type || '') + '</div>'
-            + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + date + '</div>'
-            + '</div>'
-            + '<div style="font-size:14px;font-weight:900;color:' + amountColor + ';flex-shrink:0">'
-            + amountStr + '</div>'
-            + '</div>';
+        var typeConfig = { bonus:{icon:'🎁'}, provision:{icon:'📉'}, boost:{icon:'🚀'}, referral:{icon:'👥'}, topup:{icon:'💳'}, refund:{icon:'↩️'} };
+        var html = txList.map(function(tx) {
+          var cfg = typeConfig[tx.type] || {icon:'💰'};
+          var isPlus = tx.amount > 0;
+          var date = new Date(tx.created_at).toLocaleDateString('de-CH');
+          var amtStr = (isPlus ? '+' : '') + tx.amount + ' Taler';
+          var amtColor = isPlus ? 'var(--green)' : 'var(--red)';
+          return '<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,0.05)">'
+            + '<div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">' + cfg.icon + '</div>'
+            + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(tx.description || tx.type || '') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + date + '</div></div>'
+            + '<div style="font-size:14px;font-weight:900;color:' + amtColor + ';flex-shrink:0">' + amtStr + '</div></div>';
         }).join('');
-
         body.innerHTML = html;
       } catch(e) {
         body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">❌ ' + e.message + '</div>';
@@ -9455,16 +9600,6 @@ async function respondToTx(txId, action) {
         );
       }
       showToast('✅ Bestätigt! ' + res.commission_charged + ' Taler abgezogen. Käufer wurde benachrichtigt.', 'success');
-      // Log provision in wallet history
-      const _txForLog = await supaFetch('transactions?id=eq.' + txId).catch(() => []);
-      const _txLog = Array.isArray(_txForLog) ? _txForLog[0] : null;
-      if (_txLog) {
-        const _listing = allListings.find(l => String(l.id) === String(_txLog.listing_id)) || {};
-        await logWalletTx('provision', -res.commission_charged,
-          'Provision: ' + (_listing.title || 'Verkauf'),
-          _txLog.listing_id
-        );
-      }
       await refreshProfile && refreshProfile();
     } else if (action === 'rejected') {
       await supaFetch('transactions?id=eq.' + txId, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) });
