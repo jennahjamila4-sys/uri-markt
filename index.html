@@ -8567,500 +8567,41 @@ function openMeinKaufen() {
   renderKaufenContent('am-bieten');
 }
 
-// ════════════════════════════════════════════════════════
-// V28 — KPI SCREEN FUNCTIONS (Realtime, full-screen overlays)
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// V29 — FULL KPI SCREENS + AUCTION SYSTEM + XP REALTIME
+// All 12 Roles implemented
+// ═══════════════════════════════════════════════════════════════════
 
-// ── SHARED: Create full-screen overlay ──
+// ── SHARED OVERLAY FACTORY ──
 function _makeFullOv(id, title, liveTag) {
   var ex = document.getElementById(id);
   if (ex) ex.remove();
   var ov = document.createElement('div');
   ov.id = id;
-  ov.style.cssText = 'position:fixed;inset:0;background:#0d0d0d;z-index:9000;overflow-y:auto;max-width:390px;margin:0 auto;color:#fff';
-  var liveHtml = liveTag ? '<span style="display:flex;align-items:center;gap:4px;font-size:9px;color:#00e676;font-weight:700"><span style="width:6px;height:6px;border-radius:50%;background:#00e676;display:inline-block"></span>Live</span>' : '';
-  ov.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#0d0d0d;z-index:10">'
+  ov.style.cssText = 'position:fixed;inset:0;background:#0d0d0d;z-index:9000;overflow-y:auto;color:#fff;font-family:system-ui,sans-serif';
+  var liveHtml = liveTag
+    ? '<span style="display:flex;align-items:center;gap:4px;font-size:9px;color:#00e676;font-weight:700"><span style="width:6px;height:6px;border-radius:50%;background:#00e676;display:inline-block;animation:_blink 1.2s infinite"></span>Live</span>'
+    : '';
+  ov.innerHTML = '<style>@keyframes _blink{0%,100%{opacity:1}50%{opacity:.25}}@keyframes _cdbl{0%,100%{opacity:1}50%{opacity:.3}}</style>'
+    + '<div style="max-width:440px;margin:0 auto">'
+    + '<div id="' + id + '-hd" style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#0d0d0d;z-index:10">'
     + '<button id="' + id + '-back" style="background:rgba(255,255,255,0.08);border:none;color:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">← Profil</button>'
     + '<div style="font-size:15px;font-weight:900;flex:1">' + title + '</div>'
     + liveHtml
     + '</div>'
-    + '<div id="' + id + '-body" style="padding-bottom:24px"><div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4)">⏳ Lade...</div></div>';
+    + '<div id="' + id + '-body" style="padding-bottom:32px"><div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4)">⏳ Lade...</div></div>'
+    + '</div>';
   document.body.appendChild(ov);
   document.body.style.overflow = 'hidden';
   var backBtn = document.getElementById(id + '-back');
-  if (backBtn) backBtn.onclick = function() {
-    var el = document.getElementById(id);
-    if (el) el.remove();
-    document.body.style.overflow = '';
-  };
+  if (backBtn) backBtn.onclick = function() { _closeFullOv(id); };
   return document.getElementById(id + '-body');
 }
-
-// ── AKTIV SCREEN ──
-async function _openAktivScreen() {
-  var body = _makeFullOv('_ov-aktiv', '📦 Aktive Inserate', true);
-  if (!currentUser) { body.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
-  try {
-    var uid = getUID();
-    var data = await supaFetch('listings?user_id=eq.' + uid + '&status=in.(active,reserved,coming_soon)&order=created_at.desc&limit=100&select=*');
-    var items = Array.isArray(data) ? data : [];
-
-    var angebote    = items.filter(function(l){ return l.type !== 'Gesuch' && l.type !== 'Vorankündigung' && l.status !== 'coming_soon'; });
-    var gesuche     = items.filter(function(l){ return l.type === 'Gesuch'; });
-    var events      = items.filter(function(l){ return l.type === 'Vorankündigung' || l.status === 'coming_soon'; });
-
-    var html = '';
-
-    // STAT ROW
-    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px">'
-      + _statCard(angebote.length, '📦 Angebote', 'rgba(255,215,0,0.07)', 'rgba(255,215,0,0.25)', '#FFD700')
-      + _statCard(gesuche.length,  '🔍 Gesuche',  'rgba(79,195,247,0.07)', 'rgba(79,195,247,0.25)', '#4fc3f7')
-      + _statCard(events.length,   '📣 Events',   'rgba(139,92,246,0.07)', 'rgba(139,92,246,0.25)', '#a78bfa')
-      + '</div>';
-
-    // ANGEBOTE
-    if (angebote.length > 0) {
-      html += _secLabel('ANGEBOTE (' + angebote.length + ')');
-      angebote.forEach(function(l) {
-        var lid = String(l.id || '').replace(/'/g,'');
-        var isReserved = l.status === 'reserved';
-        var borderCol  = isReserved ? 'rgba(255,152,0,0.3)' : 'rgba(0,230,118,0.2)';
-        var statusLabel = isReserved ? '<span style="font-size:9px;font-weight:700;color:#ff9800">● RESERVIERT</span>' : '<span style="font-size:9px;font-weight:700;color:#00e676">● AKTIV</span>';
-        var price = parseFloat(l.price || 0);
-        var isGratis = price === 0;
-        var imgHtml = l.image_url
-          ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
-          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (l.emoji||'📦') + '</div>';
-
-        html += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + borderCol + ';border-radius:13px;padding:12px;margin:0 16px 9px">'
-          + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:' + (isReserved ? '8px' : '8px') + '">'
-          + '<div style="width:50px;height:50px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(l.title||'') + '</div>'
-          + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">'
-          + '<span style="font-size:13px;font-weight:900;color:' + (isGratis ? '#00e676' : '#FFD700') + '">' + (isGratis ? 'Gratis ❤️' : 'CHF ' + price.toFixed(0)) + '</span>'
-          + statusLabel
-          + '</div>'
-          + (l.view_count ? '<div style="font-size:9px;color:rgba(255,255,255,0.35)">👁 ' + (l.view_count||0) + ' Aufrufe · ❤️ ' + (l.favorite_count||0) + ' Favoriten</div>' : '')
-          + '</div></div>';
-
-        if (isReserved) {
-          html += '<div style="background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);border-radius:8px;padding:7px;text-align:center;margin-bottom:8px">'
-            + '<div style="font-size:16px;font-weight:900;color:#ff9800">Kaufanfrage läuft</div>'
-            + '<div style="font-size:8px;color:rgba(255,255,255,0.35)">Warte auf Bestätigung oder Ablauf (48h)</div>'
-            + '</div>';
-          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
-            + '<button data-lid="' + lid + '" class="_ak-view-btn" style="padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button>'
-            + '<button data-lid="' + lid + '" class="_ak-req-btn" style="padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,152,0,0.35);background:transparent;color:#ff9800">⚡ Anfrage</button>'
-            + '</div>';
-        } else {
-          html += '<div style="display:flex;gap:6px">'
-            + '<button data-lid="' + lid + '" class="_ak-view-btn" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button>'
-            + (isGratis ? '' : '<button data-lid="' + lid + '" class="_ak-boost-btn" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,215,0,0.3);background:transparent;color:#FFD700">🚀 5T Boost</button>')
-            + '<button data-lid="' + lid + '" class="_ak-del-btn" style="padding:8px 12px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.25);background:transparent;color:#ff4444">🗑</button>'
-            + '</div>';
-        }
-        html += '</div>';
-      });
-    }
-
-    // GESUCHE
-    if (gesuche.length > 0) {
-      html += _secLabel('GESUCHE (' + gesuche.length + ')');
-      gesuche.forEach(function(l) {
-        var lid = String(l.id || '').replace(/'/g,'');
-        html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(79,195,247,0.2);border-radius:13px;padding:12px;margin:0 16px 9px">'
-          + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-          + '<div style="width:50px;height:50px;border-radius:10px;background:rgba(79,195,247,0.08);display:flex;align-items:center;justify-content:center;font-size:22px">' + (l.emoji||'🔍') + '</div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(l.title||'') + '</div>'
-          + '<div style="font-size:9px;color:rgba(255,255,255,0.35);">' + (l.location ? '📍 ' + escHtml(l.location) : '') + (l.price ? ' · bis CHF ' + l.price : '') + '</div>'
-          + '<div style="display:flex;gap:4px;margin-top:3px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(79,195,247,0.12);color:#4fc3f7">🔍 GESUCH</span></div>'
-          + '</div></div>'
-          + '<div style="display:flex;gap:6px">'
-          + '<button data-lid="' + lid + '" class="_ak-view-btn" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button>'
-          + '<button data-lid="' + lid + '" class="_ak-del-btn" style="padding:8px 12px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.25);background:transparent;color:#ff4444">🗑</button>'
-          + '</div>'
-          + '</div>';
-      });
-    }
-
-    // EVENTS
-    if (events.length > 0) {
-      html += _secLabel('VORANKÜNDIGUNGEN (' + events.length + ')');
-      events.forEach(function(l) {
-        var lid = String(l.id || '').replace(/'/g,'');
-        var eventDate = l.event_date ? new Date(l.event_date).toLocaleDateString('de-CH') : '';
-        html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.28);border-radius:13px;padding:12px;margin:0 16px 9px">'
-          + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-          + '<div style="width:50px;height:50px;border-radius:10px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;font-size:22px">' + (l.emoji||'🎉') + '</div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(l.title||'') + '</div>'
-          + '<div style="font-size:9px;color:rgba(255,255,255,0.35)">' + (eventDate ? '📅 ' + eventDate : '') + (l.location ? ' · 📍 ' + escHtml(l.location) : '') + '</div>'
-          + '<div style="display:flex;gap:4px;margin-top:3px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(139,92,246,0.12);color:#a78bfa">📣 EVENT</span></div>'
-          + '</div></div>'
-          + '<div style="display:flex;gap:6px">'
-          + '<button data-lid="' + lid + '" class="_ak-view-btn" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button>'
-          + '<button data-lid="' + lid + '" class="_ak-del-btn" style="padding:8px 12px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.25);background:transparent;color:#ff4444">🗑</button>'
-          + '</div>'
-          + '</div>';
-      });
-    }
-
-    if (items.length === 0) {
-      html = '<div style="padding:40px 20px;text-align:center">'
-        + '<div style="font-size:52px;margin-bottom:10px">📦</div>'
-        + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch keine Inserate</div>'
-        + '<div style="font-size:12px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Erstelle dein erstes Inserat in 60 Sekunden!</div>'
-        + '<button onclick="var el=document.getElementById(\'_ov-aktiv\');if(el)el.remove();document.body.style.overflow=\'\';openCreateModal()" style="padding:13px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">➕ Jetzt inserieren</button>'
-        + '</div>';
-    }
-
-    // FOMO
-    if (items.length > 0) {
-      html += '<div style="margin:12px 16px 0;background:linear-gradient(135deg,rgba(255,215,0,0.07),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.2);border-radius:13px;padding:12px">'
-        + '<div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">💡 Boost = 3× mehr Aufrufe</div>'
-        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:7px">Gib deinen Inseraten mehr Sichtbarkeit. Nur 5 Taler pro Woche.</div>'
-        + '<button style="padding:7px 14px;background:#FFD700;border:none;border-radius:8px;color:#000;font-size:11px;font-weight:900;cursor:pointer" onclick="openProfileOverlay(\'ov-boost\')">🚀 Boost-Pakete ansehen →</button>'
-        + '</div>';
-    }
-
-    body.innerHTML = html;
-
-    // Wire delegated events
-    var ov = document.getElementById('_ov-aktiv');
-    if (ov) {
-      ov.addEventListener('click', function(e) {
-        var vb = e.target.closest('._ak-view-btn');
-        var bb = e.target.closest('._ak-boost-btn');
-        var db = e.target.closest('._ak-del-btn');
-        var rb = e.target.closest('._ak-req-btn');
-        if (vb) { var lid = vb.dataset.lid; if(lid){ var el2=document.getElementById('_ov-aktiv');if(el2)el2.remove();document.body.style.overflow='';openDetail(lid); }}
-        if (bb) { var lid2 = bb.dataset.lid; if(lid2) boostListing(lid2); }
-        if (rb) { var el3=document.getElementById('_ov-aktiv');if(el3)el3.remove();document.body.style.overflow='';openPendingDeals(); }
-        if (db) { var lid3 = db.dataset.lid; if(lid3 && confirm('Inserat wirklich löschen?')) deleteListing(lid3); }
-      });
-    }
-  } catch(e) {
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + e.message + '</div>';
-  }
+function _closeFullOv(id) {
+  var el = document.getElementById(id);
+  if (el) el.remove();
+  document.body.style.overflow = '';
 }
-window._openAktivScreen = _openAktivScreen;
-
-// ── GEKAUFT SCREEN ──
-async function _openGekauftScreen() {
-  var body = _makeFullOv('_ov-gekauft', '🛒 Meine Käufe', true);
-  if (!currentUser) { body.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
-  try {
-    var uid = getUID();
-    var results = await Promise.all([
-      supaFetch('transactions?buyer_id=eq.' + uid + '&order=created_at.desc&limit=100'),
-      supaFetch('event_bookings?user_id=eq.' + uid + '&order=created_at.desc&limit=50&select=*,listings(title,emoji,event_date,location)').catch(function(){ return []; })
-    ]);
-    var txList = Array.isArray(results[0]) ? results[0] : [];
-    var bookings = Array.isArray(results[1]) ? results[1] : [];
-
-    var completedTx = txList.filter(function(t){ return t.status === 'completed'; });
-    var pendingTx   = txList.filter(function(t){ return t.status === 'pending' || t.status === 'confirmed'; });
-    var totalSpent  = completedTx.reduce(function(s,t){ return s + parseFloat(t.amount||0); }, 0);
-
-    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px">'
-      + _statCard(completedTx.length, '✅ Deals', 'rgba(0,230,118,0.07)', 'rgba(0,230,118,0.25)', '#00e676')
-      + _statCard(bookings.length, '🎟 Tickets', 'rgba(255,215,0,0.07)', 'rgba(255,215,0,0.25)', '#FFD700')
-      + _statCard(pendingTx.length, '⏳ Offen', 'rgba(255,152,0,0.07)', 'rgba(255,152,0,0.25)', '#ff9800')
-      + '</div>';
-
-    // ABGESCHLOSSENE KÄUFE
-    if (completedTx.length > 0 || pendingTx.length > 0) {
-      html += _secLabel('KÄUFE (' + txList.length + ')');
-      txList.forEach(function(tx) {
-        var listing = allListings.find(function(l){ return String(l.id) === String(tx.listing_id); }) || {};
-        var price = parseFloat(tx.amount || 0);
-        var isGratis = price === 0;
-        var isDone = tx.status === 'completed';
-        var isPending = tx.status === 'pending' || tx.status === 'confirmed';
-        var borderCol = isDone ? (isGratis ? 'rgba(0,230,118,0.15)' : 'rgba(0,230,118,0.2)') : 'rgba(255,152,0,0.2)';
-        var statusTag = isDone ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">✅ Abgeschlossen</span>'
-          : '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(255,152,0,0.12);color:#ff9800">⏳ Läuft</span>';
-        var imgHtml = listing.image_url
-          ? '<img src="' + escHtml(listing.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
-          : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (listing.emoji||'📦') + '</div>';
-        var txDate = tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '';
-        var payLabel = {cash:'💵 Bar',twint:'📱 TWINT',card:'💳 Karte'}[tx.payment_method] || '💵';
-        var sellerAnon = tx.seller_contact ? (tx.seller_contact.charAt(0).toUpperCase() + '.***') : 'Anonym';
-
-        html += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + borderCol + ';border-radius:13px;padding:12px;margin:0 16px 9px">'
-          + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-          + '<div style="width:50px;height:50px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(listing.title || 'Artikel') + '</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px">' + payLabel + ' · ' + txDate + '</div>'
-          + '<div style="display:flex;gap:4px;flex-wrap:wrap">' + statusTag
-          + (isGratis ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.08);color:rgba(0,230,118,0.7);border:1px solid rgba(0,230,118,0.2)">Gratis ❤️</span>' : '')
-          + '</div>'
-          + '</div>'
-          + '<div style="text-align:right;flex-shrink:0">'
-          + '<div style="font-size:14px;font-weight:900;color:' + (isGratis ? '#00e676' : '#FFD700') + '">' + (isGratis ? 'CHF 0' : 'CHF ' + price.toFixed(0)) + '</div>'
-          + '</div></div>';
-
-        // Gratis empathy note (NOT anti-farming language)
-        if (isGratis && isDone) {
-          html += '<div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.12);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:10px;color:rgba(255,255,255,0.45);line-height:1.5">'
-            + '❤️ Du hast etwas Kostenloses erhalten — eine tolle Geste von deinem Nachbarn! Gratis-Transaktionen werden nicht bewertet, aber du kannst eine freundliche Nachricht hinterlassen.'
-            + '</div>';
-        }
-
-        // Contact (only after confirmation)
-        if (isDone && tx.seller_contact) {
-          html += '<div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.18);border-radius:9px;padding:9px;margin-bottom:8px">'
-            + '<div style="font-size:10px;font-weight:800;color:#00e676;margin-bottom:2px">✅ Kontakt freigeschaltet</div>'
-            + '<div style="font-size:11px;color:rgba(255,255,255,0.7)">' + escHtml(tx.seller_contact) + ' · 🔒 ' + sellerAnon + '</div>'
-            + '</div>';
-          html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
-            + '<button style="padding:10px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-radius:9px;color:#00e676;font-weight:700;cursor:pointer;font-size:11px" onclick="showToast(\'📞 \'+\'' + escHtml(tx.seller_contact) + '\')">📞 Kontakt</button>'
-            + (!isGratis ? '<button style="padding:10px;background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.25);border-radius:9px;color:#4fc3f7;font-weight:700;cursor:pointer;font-size:11px" onclick="openReviewModal(\'' + String(tx.id||'').replace(/'/g,'') + '\',\'' + String(tx.seller_id||'').replace(/'/g,'') + '\',\'' + String(tx.listing_id||'').replace(/'/g,'') + '\')">⭐ Bewerten</button>' : '')
-            + '</div>';
-        }
-        html += '</div>';
-      });
-    }
-
-    // EVENT BOOKINGS (Tickets + Reservationen + Wartelisten)
-    if (bookings.length > 0) {
-      html += _secLabel('TICKETS & RESERVATIONEN (' + bookings.length + ')');
-      bookings.forEach(function(b) {
-        var listing = (b.listings) || {};
-        var bType = b.booking_type || 'ticket';
-        var typeConfig = {
-          ticket:      {label:'🎟 TICKET',      color:'#FFD700',  bg:'rgba(255,215,0,0.12)',  border:'rgba(255,215,0,0.3)'},
-          reservation: {label:'🪑 RESERVATION', color:'#4fc3f7',  bg:'rgba(79,195,247,0.12)', border:'rgba(79,195,247,0.3)'},
-          waitlist:    {label:'📋 WARTELISTE',  color:'#a78bfa',  bg:'rgba(139,92,246,0.12)', border:'rgba(139,92,246,0.3)'},
-        };
-        var tc = typeConfig[bType] || typeConfig.ticket;
-        var eventDate = listing.event_date ? new Date(listing.event_date).toLocaleDateString('de-CH') : '';
-        var amount = parseFloat(b.amount || 0);
-
-        html += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + tc.border + ';border-radius:13px;padding:12px;margin:0 16px 9px">'
-          + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-          + '<div style="width:50px;height:50px;border-radius:10px;background:rgba(255,215,0,0.08);display:flex;align-items:center;justify-content:center;font-size:22px">' + (listing.emoji||'🎉') + '</div>'
-          + '<div style="flex:1;min-width:0">'
-          + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(listing.title||'Event') + '</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px">' + (eventDate ? '📅 ' + eventDate : '') + (listing.location ? ' · 📍 ' + escHtml(listing.location) : '') + '</div>'
-          + '<div style="display:flex;gap:4px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:' + tc.bg + ';color:' + tc.color + '">' + tc.label + '</span>'
-          + '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">Gültig</span>'
-          + '</div></div>'
-          + '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:900;color:' + (amount===0 ? '#00e676' : '#FFD700') + '">' + (amount===0 ? 'Gratis' : 'CHF '+amount.toFixed(0)) + '</div></div>'
-          + '</div>';
-
-        // QR Code for tickets
-        if (bType === 'ticket' && b.qr_code) {
-          html += '<div style="background:rgba(255,215,0,0.06);border:1.5px solid rgba(255,215,0,0.25);border-radius:11px;padding:11px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="showToast(\'📱 QR-Code: ' + escHtml(b.qr_code) + '\')">'
-            + '<div style="width:42px;height:42px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px">▦</div>'
-            + '<div style="flex:1"><div style="font-size:12px;font-weight:800;color:#FFD700">QR-Code anzeigen</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px">Code: ' + escHtml(b.qr_code) + ' · am Eingang scannen</div></div>'
-            + '<div style="color:#FFD700;font-size:16px">→</div>'
-            + '</div>';
-        }
-
-        // Waitlist info
-        if (bType === 'waitlist') {
-          html += '<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;padding:8px;margin-bottom:8px;font-size:10px;color:rgba(255,255,255,0.45)">'
-            + '📧 Du wirst sofort benachrichtigt wenn ein Platz frei wird.</div>';
-        }
-
-        html += '</div>';
-      });
-    }
-
-    if (txList.length === 0 && bookings.length === 0) {
-      html = '<div style="padding:40px 20px;text-align:center">'
-        + '<div style="font-size:52px;margin-bottom:10px">🛒</div>'
-        + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch nichts gekauft</div>'
-        + '<div style="font-size:12px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Die besten Deals sind schnell weg! Entdecke Angebote von deinen Urner Nachbarn.</div>'
-        + '<button style="padding:13px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer" onclick="var el=document.getElementById(\'_ov-gekauft\');if(el)el.remove();document.body.style.overflow=\'\';swipeTo(0)">🏠 Marktplatz entdecken</button>'
-        + '</div>';
-    }
-
-    body.innerHTML = html;
-  } catch(e) {
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + e.message + '</div>';
-  }
-}
-window._openGekauftScreen = _openGekauftScreen;
-
-// ── XP / ABZEICHEN SCREEN ──
-async function _openXpScreen() {
-  var body = _makeFullOv('_ov-xp', '🏔️ Abzeichen & XP', true);
-  if (!currentUser || !currentProfile) { body.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
-  try {
-    var uid = getUID();
-    // Load real XP log
-    var xpLogData = await supaFetch('xp_log?user_id=eq.' + uid + '&order=created_at.desc&limit=100').catch(function(){ return []; });
-    var xpLog = Array.isArray(xpLogData) ? xpLogData : [];
-
-    // Real XP from profile (server-aggregated)
-    var xp = parseInt((currentProfile && (currentProfile.xp_points || currentProfile.xp)) || 0);
-    var level = getLevelInfo(xp);
-    var xpMin = level.minXP || 0;
-    var xpMax = level.next || (xpMin + 100);
-    var xpPct = level.next ? Math.min(((xp - xpMin) / (xpMax - xpMin)) * 100, 100) : 100;
-    var xpNeeded = level.next ? level.next - xp : 0;
-
-    // Group XP by type
-    var byType = {sale:0, listing:0, review:0, referral:0};
-    var countByType = {sale:0, listing:0, review:0, referral:0};
-    xpLog.forEach(function(entry) {
-      var key = entry.action_key || '';
-      var amt = parseInt(entry.amount || 0);
-      if (key.indexOf('sale') === 0 || key.indexOf('sale_') === 0) { byType.sale += amt; countByType.sale++; }
-      else if (key.indexOf('listing') === 0) { byType.listing += amt; countByType.listing++; }
-      else if (key.indexOf('review') === 0) { byType.review += amt; countByType.review++; }
-      else if (key.indexOf('referral') === 0) { byType.referral += amt; countByType.referral++; }
-    });
-    var totalFromLog = byType.sale + byType.listing + byType.review + byType.referral;
-
-    // Levels
-    var LEVELS = [
-      {name:'Beobachter',       emoji:'👀', min:0,    max:49,   next:50,   reward:'', nextName:'Dorf-Händler'},
-      {name:'Dorf-Händler',     emoji:'🏘️', min:50,   max:199,  next:200,  reward:'🎁 Bronze-Badge', nextName:'Lokal-Matador'},
-      {name:'Lokal-Matador',    emoji:'🥈', min:200,  max:499,  next:500,  reward:'🎁 Silber-Badge + 1 Gratis-Boost', nextName:'Kantons-Legende'},
-      {name:'Kantons-Legende',  emoji:'👑', min:500,  max:999,  next:1000, reward:'🎁 Gold-Badge + 3 Boosts', nextName:'Gotthard-Titan'},
-      {name:'Gotthard-Titan',   emoji:'⛰️', min:1000, max:9999, next:null, reward:'🎁 Diamant-Badge + 10 Boosts', nextName:null},
-    ];
-
-    var currentLvIdx = 0;
-    for (var i = LEVELS.length-1; i >= 0; i--) { if (xp >= LEVELS[i].min) { currentLvIdx = i; break; } }
-
-    // Badges
-    var BADGES = [
-      {key:'beta_held',       emoji:'🚀', name:'Beta Held',         trigger:'Einer der ersten 50 Urner', reward:'Pionier-Badge', earned: true,  progress:1, total:1},
-      {key:'erstes_inserat',  emoji:'📦', name:'Erstes Inserat',    trigger:'1 Inserat erstellt',        reward:'+10 XP',       earned: countByType.listing >= 1, progress: Math.min(countByType.listing,1), total:1},
-      {key:'erster_verkauf',  emoji:'💰', name:'Erster Verkauf',    trigger:'1 Deal abgeschlossen',      reward:'+50 XP',       earned: countByType.sale >= 1, progress: Math.min(countByType.sale,1), total:1},
-      {key:'dorfplatz_held',  emoji:'🤝', name:'Dorfplatz Held',    trigger:'5 Freunde eingeladen',      reward:'🎁 +20 Taler', earned: countByType.referral >= 5, progress: Math.min(countByType.referral,5), total:5},
-      {key:'kantons_legende', emoji:'👑', name:'Kantons-Legende',   trigger:'500 XP erreichen',          reward:'🎁 +3 Boosts', earned: xp >= 500, progress: Math.min(xp,500), total:500},
-      {key:'diamant_urner',   emoji:'💎', name:'Diamant Urner',     trigger:'CHF 1000 Gesamtumsatz',     reward:'🎁 Diamant',   earned: false, progress: 185, total:1000},
-      {key:'schnellverkaeufer',emoji:'🏎️',name:'Schnellverkäufer',  trigger:'Artikel in <1h verkauft',   reward:'🎁 +2 Boosts', earned: false, progress:0, total:1},
-      {key:'fuenf_sterne',    emoji:'⭐', name:'5★ Händler',        trigger:'10× Top-Bewertung',         reward:'🎁 Gold-Rahmen',earned:false, progress: Math.min(countByType.review,10), total:10},
-    ];
-
-    var earnedBadges = BADGES.filter(function(b){ return b.earned; });
-    var nextBadges   = BADGES.filter(function(b){ return !b.earned; });
-
-    var html = '';
-
-    // XP PROGRESS CARD
-    html += '<div style="margin:12px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.09),rgba(255,152,0,0.04));border:1.5px solid rgba(255,215,0,0.3);border-radius:15px;padding:15px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-      + '<div><div style="font-size:15px;font-weight:900;color:#FFD700">' + level.emoji + ' ' + level.name + '</div>'
-      + '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">' + earnedBadges.length + ' / ' + BADGES.length + ' Abzeichen · ' + xp + ' XP gesamt</div></div>'
-      + '<div style="text-align:right"><div style="font-size:26px;font-weight:900;color:#FFD700">' + xp + '</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">von ' + (level.next || xp) + ' XP</div></div>'
-      + '</div>'
-      + '<div style="height:8px;background:rgba(255,255,255,0.1);border-radius:4px;margin-bottom:7px"><div style="height:8px;background:linear-gradient(90deg,#FFD700,#ff9800);border-radius:4px;width:' + Math.round(xpPct) + '%"></div></div>'
-      + '<div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:10px">'
-      + '<span>' + (level.next ? '→ ' + (LEVELS[currentLvIdx+1]||{emoji:'',name:''}).emoji + ' ' + (LEVELS[currentLvIdx+1]||{name:'MAX'}).name + ' bei ' + level.next + ' XP' : '🏆 Höchstes Level!') + '</span>'
-      + '<span>' + (xpNeeded > 0 ? '<strong style="color:#FFD700">Noch ' + xpNeeded + ' XP</strong>' : '✅ Erreicht!') + '</span>'
-      + '</div>'
-      + (level.next ? '<div style="background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.18);border-radius:9px;padding:8px 11px;display:flex;justify-content:space-between;font-size:10px;align-items:center"><span style="color:#00e676">🎁 Belohnung beim Level-Up:</span><strong style="color:#00e676">' + (LEVELS[currentLvIdx+1]||{reward:''}).reward + '</strong></div>' : '')
-      + '</div>';
-
-    // XP QUELLEN (real data)
-    html += _secLabel('MEINE XP-QUELLEN (Realtime)');
-    html += '<div style="padding:0 16px">';
-    var sources = [
-      {ico:'💰', bg:'rgba(0,230,118,0.1)', name:'Verkäufe (CHF > 0)', meta:'+50 XP · 1× pro Deal · nur bei echtem Preis', val:byType.sale, count:countByType.sale + '× Deal'},
-      {ico:'📦', bg:'rgba(255,215,0,0.1)', name:'Inserate erstellt',   meta:'+10 XP · 1× pro Inserat', val:byType.listing, count:countByType.listing + '× Inserat'},
-      {ico:'⭐', bg:'rgba(79,195,247,0.1)', name:'Bewertungen',         meta:'+5 schreiben · +10 erhalten · 1× pro Review', val:byType.review, count:countByType.review + '× Review'},
-      {ico:'👥', bg:'rgba(139,92,246,0.1)', name:'Referrals',           meta:'+10 XP · 1× pro eingeladenem User', val:byType.referral, count:countByType.referral + '× Referral'},
-    ];
-    sources.forEach(function(s) {
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
-        + '<div style="width:32px;height:32px;border-radius:9px;background:' + s.bg + ';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">' + s.ico + '</div>'
-        + '<div style="flex:1"><div style="font-size:12px;font-weight:700">' + s.name + '</div><div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px">' + s.meta + '</div></div>'
-        + '<div style="text-align:right"><div style="font-size:13px;font-weight:900;color:#FFD700">' + s.val + ' XP</div><div style="font-size:9px;color:rgba(255,255,255,0.28);margin-top:1px">' + s.count + '</div></div>'
-        + '</div>';
-    });
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0">'
-      + '<span style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5)">Total</span>'
-      + '<span style="font-size:16px;font-weight:900;color:#FFD700">' + xp + ' XP ✓</span>'
-      + '</div>';
-    html += '</div>';
-
-    // HOW TO EARN NOTE (empathisch, nicht anti-farming)
-    html += '<div style="margin:8px 16px;background:rgba(255,215,0,0.04);border:1px solid rgba(255,215,0,0.12);border-radius:10px;padding:11px 13px;font-size:10px;color:rgba(255,255,255,0.45);line-height:1.6">'
-      + '💡 <strong style="color:rgba(255,255,255,0.6)">So sammelst du XP am schnellsten:</strong><br>'
-      + '· Verkaufe Artikel an echte Käufer → +50 XP pro Deal<br>'
-      + '· Schreibe eine Bewertung nach dem Kauf → +5 XP<br>'
-      + '· Lade Freunde ein → +10 XP pro aktivem Freund<br>'
-      + '· Jede Aktion zählt nur 1× — so bleibt das System fair für alle.'
-      + '</div>';
-
-    // LEVEL LADDER
-    html += _secLabel('ALLE LEVEL');
-    LEVELS.forEach(function(lv, idx) {
-      var isDone    = xp > lv.max;
-      var isCurrent = xp >= lv.min && xp <= lv.max;
-      var isLocked  = xp < lv.min;
-      var barColor  = isDone ? '#00e676' : isCurrent ? '#FFD700' : 'rgba(255,255,255,0.1)';
-      var needed    = lv.min - xp;
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,0.04);' + (isCurrent ? 'background:rgba(255,215,0,0.04)' : '') + '">'
-        + '<div style="width:3px;height:40px;background:' + barColor + ';border-radius:2px;flex-shrink:0"></div>'
-        + '<div style="font-size:22px;width:34px;text-align:center;' + (isLocked ? 'opacity:.4' : '') + '">' + lv.emoji + '</div>'
-        + '<div style="flex:1;' + (isLocked ? 'opacity:.6' : '') + '">'
-        + '<div style="font-size:12px;font-weight:800' + (isCurrent ? ';color:#FFD700' : '') + '">' + lv.name + (isCurrent ? ' ← Du' : '') + '</div>'
-        + '<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px">' + lv.min + (lv.next ? '–' + (lv.next-1) : '+') + ' XP · ' + (lv.reward || 'Start-Level') + '</div>'
-        + (isCurrent && lv.next ? '<div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:5px;max-width:120px"><div style="height:4px;background:#FFD700;border-radius:2px;width:' + Math.round(xpPct) + '%"></div></div>' : '')
-        + '</div>'
-        + '<span style="font-size:9px;font-weight:800;padding:3px 9px;border-radius:20px;background:' + (isDone ? 'rgba(0,230,118,0.15)' : isCurrent ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.06)') + ';color:' + (isDone ? '#00e676' : isCurrent ? '#FFD700' : 'rgba(255,255,255,0.28)') + '">'
-        + (isDone ? '✅ Fertig' : isCurrent ? '⚡ ' + xp + ' XP' : '🔒 ' + needed + ' XP')
-        + '</span>'
-        + '</div>';
-    });
-
-    // EARNED BADGES
-    if (earnedBadges.length > 0) {
-      html += _secLabel('VERDIENTE ABZEICHEN (' + earnedBadges.length + ')');
-      earnedBadges.forEach(function(b) {
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">'
-          + '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,215,0,0.12);border:2px solid rgba(255,215,0,0.35);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">' + b.emoji + '</div>'
-          + '<div style="flex:1"><div style="font-size:12px;font-weight:800">' + b.name + '</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + b.trigger + '</div></div>'
-          + '<div style="text-align:right"><div style="font-size:10px;color:#00e676;font-weight:700">✅ Erhalten</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:1px">' + b.reward + '</div></div>'
-          + '</div>';
-      });
-    }
-
-    // NEXT BADGES
-    if (nextBadges.length > 0) {
-      html += _secLabel('NÄCHSTE ABZEICHEN');
-      nextBadges.forEach(function(b) {
-        var progPct = b.total > 0 ? Math.round((b.progress / b.total) * 100) : 0;
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">'
-          + '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;opacity:.6">' + b.emoji + '</div>'
-          + '<div style="flex:1">'
-          + '<div style="font-size:12px;font-weight:800;opacity:.7">' + b.name + '</div>'
-          + '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:1px">' + b.trigger + '</div>'
-          + '<div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:5px;max-width:140px"><div style="height:4px;background:rgba(255,215,0,0.6);border-radius:2px;width:' + progPct + '%"></div></div>'
-          + '</div>'
-          + '<div style="text-align:right"><div style="font-size:10px;color:#FFD700;font-weight:700">' + b.reward + '</div><div style="font-size:9px;color:rgba(255,255,255,0.28);margin-top:1px">' + b.progress + '/' + b.total + '</div></div>'
-          + '</div>';
-      });
-    }
-
-    // FOMO
-    if (xpNeeded > 0 && xpNeeded < 300) {
-      html += '<div style="margin:14px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.07),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.2);border-radius:13px;padding:12px">'
-        + '<div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">⚡ Noch ' + xpNeeded + ' XP bis Level-Up!</div>'
-        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:7px">' + Math.ceil(xpNeeded/50) + ' weiterer Verkauf = Level-Up + ' + ((LEVELS[currentLvIdx+1]||{reward:''}).reward) + '!</div>'
-        + '<button style="padding:7px 14px;background:#FFD700;border:none;border-radius:8px;color:#000;font-size:11px;font-weight:900;cursor:pointer" onclick="var el=document.getElementById(\'_ov-xp\');if(el)el.remove();document.body.style.overflow=\'\';openCreateModal()">➕ Jetzt inserieren →</button>'
-        + '</div>';
-    }
-
-    body.innerHTML = html;
-  } catch(e) {
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + e.message + '</div>';
-  }
-}
-window._openXpScreen = _openXpScreen;
-
-// ── HELPERS ──
 function _statCard(val, label, bg, border, color) {
   return '<div style="background:' + bg + ';border:1.5px solid ' + border + ';border-radius:12px;padding:11px 8px;text-align:center">'
     + '<div style="font-size:17px;font-weight:900;color:' + color + ';line-height:1;margin-bottom:3px">' + val + '</div>'
@@ -9071,11 +8612,927 @@ function _secLabel(text) {
   return '<div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.25);letter-spacing:1px;padding:7px 16px 4px;display:flex;align-items:center;gap:6px">'
     + text + '<span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block"></span></div>';
 }
-
-// ── _openVerkauftScreen: reuse existing renderVerkaufenContent in overlay ──
-function _openVerkauftScreen() {
-  openMeinVerkaufen('verkauft');
+function _fmt48(ms) {
+  if (ms <= 0) return 'Abgelaufen';
+  var s = Math.floor(ms / 1000);
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  var sc = s % 60;
+  var p = function(n) { return n < 10 ? '0' + n : '' + n; };
+  if (h >= 24) { var d = Math.floor(h/24); return d + 'T ' + p(h%24) + ':' + p(m) + ':' + p(sc); }
+  return p(h) + ':' + p(m) + ':' + p(sc);
 }
+// Global countdown registry — cleared when overlay closes
+var _cdTimers = [];
+function _clearCdTimers() { _cdTimers.forEach(function(t){ clearInterval(t); }); _cdTimers = []; }
+
+// ── GEKAUFT SCREEN ──
+async function _openGekauftScreen() {
+  _clearCdTimers();
+  var body = _makeFullOv('_ov-gk', '🛒 Meine Käufe', true);
+  var ovEl = document.getElementById('_ov-gk');
+  if (!currentUser || !currentProfile) {
+    body.innerHTML = '<div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>';
+    return;
+  }
+  var uid = getUID();
+
+  async function _loadGekauft() {
+    try {
+      var results = await Promise.all([
+        supaFetch('transactions?buyer_id=eq.' + uid + '&order=created_at.desc&limit=100'),
+        supaFetch('event_bookings?user_id=eq.' + uid + '&order=created_at.desc&limit=50').catch(function(){ return []; }),
+        supaFetch('bids?user_id=eq.' + uid + '&order=amount.desc&limit=100').catch(function(){ return []; })
+      ]);
+      var txAll   = Array.isArray(results[0]) ? results[0] : [];
+      var bookings= Array.isArray(results[1]) ? results[1] : [];
+      var myBids  = Array.isArray(results[2]) ? results[2] : [];
+
+      // Separate transaction types
+      var txOpen  = txAll.filter(function(t){ return t.status === 'pending' || t.status === 'confirmed'; });
+      var txDone  = txAll.filter(function(t){ return t.status === 'completed'; });
+
+      // Fetch listing details for bids
+      var auctionListingIds = [];
+      myBids.forEach(function(b){ if(b.listing_id && auctionListingIds.indexOf(b.listing_id)<0) auctionListingIds.push(b.listing_id); });
+      var auctionListings = [];
+      if (auctionListingIds.length > 0) {
+        try { auctionListings = await supaFetch('listings?id=in.(' + auctionListingIds.join(',') + ')&select=*'); } catch(e){}
+        if (!Array.isArray(auctionListings)) auctionListings = [];
+      }
+
+      // Stats
+      var openCount   = txOpen.length;
+      var ticketCount = bookings.length;
+      var totalSpent  = txDone.reduce(function(s,t){ return s+parseFloat(t.amount||0); }, 0);
+
+      // ─── TAB BAR ───
+      var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px">'
+        + '<div id="_gk-tab-offen" class="_gk-tab" style="background:rgba(255,152,0,0.1);border:1.5px solid rgba(255,152,0,0.4);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer">'
+        + '<div style="font-size:18px;font-weight:900;color:#ff9800">' + openCount + '</div>'
+        + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px">Offen</div></div>'
+        + '<div id="_gk-tab-deals" class="_gk-tab" style="background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer">'
+        + '<div style="font-size:18px;font-weight:900;color:#00e676">' + txDone.length + '</div>'
+        + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px">Deals</div></div>'
+        + '<div id="_gk-tab-tickets" class="_gk-tab" style="background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer">'
+        + '<div style="font-size:18px;font-weight:900;color:#FFD700">' + ticketCount + '</div>'
+        + '<div style="font-size:9px;color:rgba(255,255,255,0.4);margin-top:2px">Tickets</div></div>'
+        + '</div>'
+        + '<div id="_gk-panels"></div>';
+
+      body.innerHTML = html;
+
+      // Panel renderer
+      function _renderPanel(tab) {
+        var panels = document.getElementById('_gk-panels');
+        if (!panels) return;
+        _clearCdTimers();
+        // Tab highlight
+        document.querySelectorAll('._gk-tab').forEach(function(t){ t.style.opacity='0.55'; t.style.border='1.5px solid rgba(255,255,255,0.1)'; });
+        var selTab = document.getElementById('_gk-tab-'+tab);
+        if (selTab) { selTab.style.opacity='1'; selTab.style.border='1.5px solid rgba(255,215,0,0.5)'; }
+
+        var out = '';
+
+        if (tab === 'offen') {
+          // ── FIXPREIS OPEN ──
+          var fixOpen = txOpen.filter(function(t){
+            var l = allListings.find(function(x){ return String(x.id)===String(t.listing_id); });
+            return !l || !l.auction_end;
+          });
+          // ── AUCTIONS I BID ON ──
+          var auctionOpen = auctionListings.filter(function(l){
+            return l.auction_end && l.status !== 'sold' && new Date(l.auction_end) > new Date();
+          });
+
+          if (fixOpen.length === 0 && auctionOpen.length === 0) {
+            out = '<div style="padding:40px 20px;text-align:center">'
+              + '<div style="font-size:48px;margin-bottom:10px">🔍</div>'
+              + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Nichts offen</div>'
+              + '<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Du hast gerade keine laufenden Kaufanfragen oder Auktionen. Die besten Deals gehen schnell — entdecke den Marktplatz!</div>'
+              + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0)" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">🏠 Jetzt entdecken</button>'
+              + '</div>';
+          } else {
+            if (fixOpen.length > 0) out += _secLabel('KAUFANFRAGEN — 48h FENSTER (' + fixOpen.length + ')');
+            fixOpen.forEach(function(tx) {
+              out += _gkFixCard(tx);
+            });
+            if (auctionOpen.length > 0) out += _secLabel('AUKTIONEN — LIVE (' + auctionOpen.length + ')');
+            auctionOpen.forEach(function(l) {
+              var myBestBid = myBids.filter(function(b){ return String(b.listing_id)===String(l.id); })
+                .sort(function(a,b){ return parseFloat(b.amount)-parseFloat(a.amount); })[0];
+              out += _gkAucCard(l, myBestBid);
+            });
+          }
+        }
+
+        if (tab === 'deals') {
+          if (txDone.length === 0) {
+            out = '<div style="padding:40px 20px;text-align:center">'
+              + '<div style="font-size:48px;margin-bottom:10px">🛒</div>'
+              + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch keine Käufe</div>'
+              + '<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Dein erster Kauf bei Uri-Markt wartet auf dich! Tolle Angebote direkt von Urnern — lokal, ehrlich, einfach.</div>'
+              + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0)" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">Angebote entdecken →</button>'
+              + '</div>';
+          } else {
+            out += _secLabel('ABGESCHLOSSENE KÄUFE (' + txDone.length + ')');
+            txDone.forEach(function(tx) { out += _gkDealCard(tx); });
+          }
+        }
+
+        if (tab === 'tickets') {
+          var tickets   = bookings.filter(function(b){ return b.booking_type === 'ticket'; });
+          var reservations = bookings.filter(function(b){ return b.booking_type === 'reservation'; });
+          var waitlists = bookings.filter(function(b){ return b.booking_type === 'waitlist'; });
+          if (bookings.length === 0) {
+            out = '<div style="padding:40px 20px;text-align:center">'
+              + '<div style="font-size:48px;margin-bottom:10px">🎟</div>'
+              + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch keine Tickets</div>'
+              + '<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Events, Kurse und Treffen direkt mit Urnern — schau was los ist!</div>'
+              + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0)" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">Events entdecken →</button>'
+              + '</div>';
+          } else {
+            if (tickets.length > 0) { out += _secLabel('TICKETS (' + tickets.length + ')'); tickets.forEach(function(b){ out += _gkTicketCard(b); }); }
+            if (reservations.length > 0) { out += _secLabel('RESERVATIONEN (' + reservations.length + ')'); reservations.forEach(function(b){ out += _gkTicketCard(b); }); }
+            if (waitlists.length > 0) { out += _secLabel('WARTELISTEN (' + waitlists.length + ')'); waitlists.forEach(function(b){ out += _gkTicketCard(b); }); }
+          }
+        }
+
+        panels.innerHTML = out;
+
+        // Wire accordion + live countdowns AFTER HTML set
+        panels.querySelectorAll('._gk-card').forEach(function(card) {
+          card.addEventListener('click', function(e) {
+            // Don't toggle if clicking a button
+            if (e.target.closest('button, input, a')) return;
+            var did = card.dataset.id;
+            var detail = document.getElementById('_gkd-' + did);
+            if (!detail) return;
+            var isOpen = detail.style.display !== 'none';
+            // Close all others
+            panels.querySelectorAll('[id^="_gkd-"]').forEach(function(d){ d.style.display='none'; });
+            panels.querySelectorAll('._gk-card').forEach(function(c){ c.style.borderColor='rgba(255,255,255,0.08)'; });
+            if (!isOpen) {
+              detail.style.display = 'block';
+              card.style.borderColor = 'rgba(255,215,0,0.3)';
+              // Start countdown if needed
+              var endEl = card.querySelector('[data-end]');
+              if (endEl) {
+                var endMs = parseInt(endEl.dataset.end);
+                _startCountdown(endEl.id, endMs);
+              }
+            }
+          });
+        });
+
+        // Bid form handlers
+        panels.querySelectorAll('._bid-form').forEach(function(form) {
+          var lid = form.dataset.lid;
+          var btn = form.querySelector('._bid-submit');
+          if (btn) btn.onclick = function() { _submitBid(lid, form); };
+          var buynow = form.querySelector('._buy-now');
+          if (buynow) buynow.onclick = function() { _buyNow(lid, form.dataset.buynow); };
+        });
+
+        // Confirm handover
+        panels.querySelectorAll('._confirm-handover').forEach(function(btn) {
+          btn.onclick = function() { _confirmHandover(btn.dataset.txid, _renderPanel, tab); };
+        });
+
+        // Submit review
+        panels.querySelectorAll('._review-submit').forEach(function(btn) {
+          btn.onclick = function() { _submitGkReview(btn.dataset.txid, btn.dataset.uid, btn.dataset.lid); };
+        });
+
+        // Star rating
+        panels.querySelectorAll('._star').forEach(function(star) {
+          star.onclick = function() { _setGkStars(star.dataset.gid, parseInt(star.dataset.n)); };
+        });
+      }
+
+      // Tab wiring
+      ['offen','deals','tickets'].forEach(function(tab) {
+        var el = document.getElementById('_gk-tab-' + tab);
+        if (el) el.onclick = function() { _renderPanel(tab); };
+      });
+
+      // Default: offen
+      _renderPanel('offen');
+
+      // Realtime subscription for transactions
+      if (window.supabase) {
+        try {
+          var ch = window.supabase.channel('gk-tx-' + uid)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: 'buyer_id=eq.' + uid }, function() {
+              _loadGekauft();
+            })
+            .subscribe();
+          _cdTimers.push({ interval: null, _ch: ch });
+        } catch(e) {}
+      }
+
+    } catch(err) {
+      body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + escHtml(err.message) + '</div>';
+    }
+  }
+
+  await _loadGekauft();
+}
+window._openGekauftScreen = _openGekauftScreen;
+
+// ── CARD BUILDERS ──
+
+function _gkFixCard(tx) {
+  var lid = String(tx.listing_id||'').replace(/['"]/g,'');
+  var txid = String(tx.id||'').replace(/['"]/g,'');
+  var listing = allListings.find(function(l){ return String(l.id)===String(tx.listing_id); }) || {};
+  var price = parseFloat(tx.amount||0);
+  var isGratis = price === 0;
+  var isConfirmed = tx.status === 'confirmed';
+  var reservedUntil = listing.reserved_until ? new Date(listing.reserved_until).getTime() : (new Date(tx.created_at).getTime() + 48*3600*1000);
+  var msLeft = reservedUntil - Date.now();
+  var isUrgent = msLeft > 0 && msLeft < 2*3600*1000;
+  var isExpired = msLeft <= 0;
+  var payLabel = {cash:'💵 Bar',twint:'📱 TWINT',card:'💳 Karte'}[tx.payment_method] || '💵';
+  var sellerAnon = tx.seller_contact ? (tx.seller_contact.charAt(0).toUpperCase() + '.***') : (tx.seller_id ? 'Verkäufer' : 'Anonym');
+  var endId = '_cdfix-' + txid;
+  var imgHtml = listing.image_url
+    ? '<img src="' + escHtml(listing.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
+    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (listing.emoji||'📦') + '</div>';
+
+  var statusColor = isExpired ? 'rgba(255,68,68,0.8)' : isUrgent ? '#ff4444' : '#ff9800';
+  var statusText  = isExpired ? 'Abgelaufen' : isConfirmed ? 'Bestätigt' : 'Läuft';
+
+  var html = '<div class="_gk-card" data-id="' + txid + '" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:12px;margin:0 16px 9px;cursor:pointer">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(listing.title||'Artikel') + '</div>'
+    + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + payLabel + ' · ' + new Date(tx.created_at||Date.now()).toLocaleDateString('de-CH') + '</div>'
+    + '<div style="display:flex;gap:4px;margin-top:3px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(255,152,0,0.12);color:' + statusColor + '">' + statusText + '</span>'
+    + (isGratis ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.1);color:#00e676">Gratis</span>' : '')
+    + '</div></div>'
+    + '<div style="text-align:right;flex-shrink:0">'
+    + '<div style="font-size:13px;font-weight:900;color:' + (isGratis?'#00e676':'#FFD700') + '">' + (isGratis?'CHF 0':'CHF ' + price.toFixed(0)) + '</div>'
+    + (isExpired ? '<div style="font-size:9px;color:#ff4444">Abgelaufen</div>' : '<div class="_cd-inline" id="' + endId + '" data-end="' + reservedUntil + '" style="font-size:9px;color:' + (isUrgent?'#ff4444':'#ff9800') + ';' + (isUrgent?'animation:_cdbl .6s infinite':'') + '">' + _fmt48(msLeft) + '</div>')
+    + '</div></div>'
+    // DETAIL (hidden initially)
+    + '<div id="_gkd-' + txid + '" style="display:none;border-top:1px solid rgba(255,255,255,0.07);margin-top:10px;padding-top:10px">';
+
+  // Countdown box in detail
+  if (!isExpired) {
+    html += '<div style="background:' + (isUrgent?'rgba(255,68,68,0.08)':'rgba(255,152,0,0.08)') + ';border:1px solid ' + (isUrgent?'rgba(255,68,68,0.3)':'rgba(255,152,0,0.25)') + ';border-radius:9px;padding:9px;text-align:center;margin-bottom:10px">'
+      + '<div class="_cd-detail" id="' + endId + '-d" style="font-size:22px;font-weight:900;color:' + (isUrgent?'#ff4444':'#ff9800') + ';font-variant-numeric:tabular-nums;' + (isUrgent?'animation:_cdbl .6s infinite':'') + '">' + _fmt48(msLeft) + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:2px">' + (isUrgent?'DRINGEND — läuft bald ab!':'Verbleibt — Verkäufer muss bestätigen') + '</div>'
+      + '</div>';
+  } else {
+    html += '<div style="background:rgba(255,68,68,0.07);border:1px solid rgba(255,68,68,0.2);border-radius:9px;padding:9px;text-align:center;margin-bottom:10px">'
+      + '<div style="font-size:12px;font-weight:900;color:#ff4444">Anfrage abgelaufen</div>'
+      + '<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:3px">Inserat ist wieder auf dem Marktplatz verfügbar.</div>'
+      + '</div>';
+  }
+
+  html += '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px">'
+    + _gkRow('Artikel', escHtml(listing.title||'Artikel'))
+    + _gkRow('Preis', (isGratis ? 'Gratis (CHF 0)' : '<span style="color:#FFD700">CHF ' + price.toFixed(2) + '</span>'))
+    + _gkRow('Zahlung', payLabel)
+    + _gkRow('Verkäufer', '🔒 ' + sellerAnon)
+    + _gkRow('Status', '<span style="color:' + statusColor + '">' + statusText + '</span>')
+    + '</div>';
+
+  // Contact — only if confirmed
+  if (isConfirmed && tx.seller_contact) {
+    html += '<div style="background:rgba(0,230,118,0.06);border:1px solid rgba(0,230,118,0.18);border-radius:9px;padding:10px;margin-bottom:10px">'
+      + '<div style="font-size:10px;font-weight:800;color:#00e676;margin-bottom:4px">✅ Kontakt freigeschaltet</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.7">' + escHtml(tx.seller_contact) + '</div>'
+      + '<div style="font-size:9px;color:rgba(255,152,0,0.7);margin-top:4px">Kontakt sichtbar bis Übergabe bestätigt ist</div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'
+      + '<button class="_confirm-handover" data-txid="' + txid + '" style="padding:10px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(0,230,118,0.3);background:rgba(0,230,118,0.08);color:#00e676">✅ Übergabe bestätigt</button>'
+      + '<button onclick="showToast(\'Problem gemeldet.\')" style="padding:10px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.07);color:#ff4444">🚨 Problem melden</button>'
+      + '</div>';
+  } else if (!isExpired && !isConfirmed) {
+    html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:9px;padding:10px;margin-bottom:10px;text-align:center">'
+      + '<div style="font-size:14px;margin-bottom:4px">🔒</div>'
+      + '<div style="font-size:10px;color:rgba(255,255,255,0.35)">Kontakt wird freigeschaltet sobald der Verkäufer bestätigt</div>'
+      + '</div>'
+      + '<button onclick="showToast(\'Anfrage zurückgezogen.\')" style="width:100%;padding:10px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.2);background:transparent;color:rgba(255,68,68,0.7)">Anfrage zurückziehen</button>';
+  }
+
+  if (isGratis) {
+    html += '<div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.12);border-radius:9px;padding:9px;font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5">'
+      + '❤️ Dein Nachbar gibt dir etwas kostenlos. Eine tolle Geste! Gratis-Abholungen erhalten keine XP, dafür Herzlichkeit.'
+      + '</div>';
+  }
+
+  html += '</div></div>';
+
+  // Start inline countdown
+  setTimeout(function() {
+    if (!isExpired) _startCountdown(endId, reservedUntil);
+    if (!isExpired) _startCountdown(endId + '-d', reservedUntil);
+  }, 100);
+
+  return html;
+}
+
+function _gkAucCard(l, myBestBid) {
+  var lid = String(l.id||'').replace(/['"]/g,'');
+  var auctionEnd = new Date(l.auction_end).getTime();
+  var msLeft = auctionEnd - Date.now();
+  var isEnded = msLeft <= 0;
+  var currentBid = parseFloat(l.current_bid || l.price || 0);
+  var myBid = myBestBid ? parseFloat(myBestBid.amount||0) : 0;
+  var iLeading = myBid >= currentBid && myBid > 0;
+  var minNext = Math.ceil(currentBid + (currentBid < 100 ? 5 : currentBid < 500 ? 10 : 25));
+  var endId = '_cdauc-' + lid;
+  var imgHtml = l.image_url
+    ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
+    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (l.emoji||'🔨') + '</div>';
+
+  var statusColor = isEnded ? (iLeading?'#00e676':'#ff4444') : (iLeading?'#a78bfa':'#ff9800');
+  var statusText  = isEnded ? (iLeading?'Gewonnen!':'Nicht gewonnen') : (iLeading?'Ich führe':'Überboten');
+  var buyoutPrice = l.buyout_price ? parseFloat(l.buyout_price) : null;
+  var bids = parseInt(l.bid_count||0);
+
+  var html = '<div class="_gk-card" data-id="auc-' + lid + '" style="background:rgba(255,255,255,0.03);border:1px solid rgba(139,92,246,0.2);border-radius:13px;padding:12px;margin:0 16px 9px;cursor:pointer">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(l.title||'Auktion') + '</div>'
+    + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">🔨 Auktion · ' + bids + ' Gebote</div>'
+    + '<div style="display:flex;gap:4px;margin-top:3px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(139,92,246,0.12);color:' + statusColor + '">' + statusText + '</span></div>'
+    + '</div>'
+    + '<div style="text-align:right;flex-shrink:0">'
+    + '<div style="font-size:13px;font-weight:900;color:#a78bfa">CHF ' + currentBid.toFixed(0) + '</div>'
+    + (isEnded ? '<div style="font-size:9px;color:rgba(255,255,255,0.3)">Abgelaufen</div>'
+               : '<div class="_cd-inline" id="' + endId + '" data-end="' + auctionEnd + '" style="font-size:9px;color:#a78bfa">' + _fmt48(msLeft) + '</div>')
+    + '</div></div>'
+    // DETAIL
+    + '<div id="_gkd-auc-' + lid + '" style="display:none;border-top:1px solid rgba(255,255,255,0.07);margin-top:10px;padding-top:10px">';
+
+  if (!isEnded) {
+    html += '<div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);border-radius:9px;padding:10px;text-align:center;margin-bottom:10px">'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:3px">Aktuelles Höchstgebot</div>'
+      + '<div style="font-size:26px;font-weight:900;color:#a78bfa;font-variant-numeric:tabular-nums" id="' + endId + '-bid">CHF ' + currentBid.toFixed(0) + '</div>'
+      + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px">' + bids + ' Gebote · endet in <span id="' + endId + '-d" style="color:#a78bfa">' + _fmt48(msLeft) + '</span></div>'
+      + '<div style="font-size:9px;color:' + (iLeading?'#00e676':'#ff9800') + ';margin-top:4px;font-weight:700">' + (iLeading?'✅ Du führst — du wirst sofort benachrichtigt wenn jemand überbietet':'⚠️ Du wurdest überboten — biete mehr!') + '</div>'
+      + '</div>';
+    html += _gkRow('Mein Gebot', myBid > 0 ? '<span style="color:#a78bfa">CHF ' + myBid.toFixed(0) + '</span>' : 'Noch nicht geboten');
+    html += _gkRow('Nächstmögliches Gebot', 'CHF ' + minNext);
+    html += _gkRow('Auktion endet', new Date(l.auction_end).toLocaleString('de-CH', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
+    if (buyoutPrice) html += _gkRow('Sofort-Kaufen', '<span style="color:#FFD700">CHF ' + buyoutPrice.toFixed(0) + '</span>');
+    html += '<div class="_bid-form" data-lid="' + lid + '" data-buynow="' + (buyoutPrice||0) + '" style="margin-top:10px">'
+      + '<div style="display:flex;gap:6px;margin-bottom:7px">'
+      + '<input type="number" class="_bid-input" min="' + minNext + '" step="5" placeholder="Gebot (mind. CHF ' + minNext + ')" style="flex:1;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.3);border-radius:8px;padding:8px 11px;color:#fff;font-size:12px;outline:none">'
+      + '<button class="_bid-submit" style="padding:8px 14px;background:#a78bfa;border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:900;cursor:pointer">Bieten</button>'
+      + '</div>'
+      + (buyoutPrice ? '<button class="_buy-now" style="width:100%;padding:10px;background:rgba(255,215,0,0.09);border:1.5px solid rgba(255,215,0,0.3);border-radius:9px;color:#FFD700;font-size:12px;font-weight:900;cursor:pointer">Sofort kaufen CHF ' + buyoutPrice.toFixed(0) + '</button>' : '')
+      + '</div>';
+    // Start countdown
+    setTimeout(function() {
+      _startCountdown(endId, auctionEnd);
+      _startCountdown(endId + '-d', auctionEnd);
+    }, 100);
+  } else {
+    // Auction ended
+    if (iLeading) {
+      html += '<div style="background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.2);border-radius:9px;padding:10px;text-align:center;margin-bottom:10px">'
+        + '<div style="font-size:14px;font-weight:900;color:#00e676">🏆 Auktion gewonnen!</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.45);margin-top:3px;line-height:1.5">Zuschlag: CHF ' + currentBid.toFixed(0) + '. Warte auf Kontakt des Verkäufers.</div>'
+        + '</div>';
+    } else {
+      html += '<div style="background:rgba(255,68,68,0.05);border:1px solid rgba(255,68,68,0.15);border-radius:9px;padding:10px;text-align:center;margin-bottom:10px">'
+        + '<div style="font-size:13px;font-weight:700;color:#ff4444">Auktion nicht gewonnen</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:3px">Mein letztes Gebot: CHF ' + (myBid>0?myBid.toFixed(0):'—') + ' · Zuschlag: CHF ' + currentBid.toFixed(0) + '</div>'
+        + '</div>'
+        + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0)" style="width:100%;padding:10px;background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.25);border-radius:9px;color:#4fc3f7;font-size:11px;font-weight:700;cursor:pointer">Ähnliches suchen →</button>';
+    }
+    html += _gkRow('Abgelaufen am', new Date(l.auction_end).toLocaleString('de-CH'));
+    html += _gkRow('Endpreis', '<span style="color:#a78bfa">CHF ' + currentBid.toFixed(0) + '</span>');
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
+function _gkDealCard(tx) {
+  var txid = String(tx.id||'').replace(/['"]/g,'');
+  var sellerUid = String(tx.seller_id||'').replace(/['"]/g,'');
+  var lid = String(tx.listing_id||'').replace(/['"]/g,'');
+  var listing = allListings.find(function(l){ return String(l.id)===String(tx.listing_id); }) || {};
+  var price = parseFloat(tx.amount||0);
+  var isGratis = price === 0;
+  var payLabel = {cash:'💵 Bar',twint:'📱 TWINT',card:'💳 Karte'}[tx.payment_method]||'💵';
+  var sellerAnon = tx.seller_contact ? (tx.seller_contact.charAt(0).toUpperCase() + '.***') : 'Anonym';
+  var isReviewed = !!(tx.buyer_reviewed || tx.seller_reviewed);
+  var txDate = tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '';
+  var imgHtml = listing.image_url
+    ? '<img src="' + escHtml(listing.image_url) + '" style="width:100%;height:100%;object-fit:cover">'
+    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (listing.emoji||'📦') + '</div>';
+
+  var html = '<div class="_gk-card" data-id="deal-' + txid + '" style="background:rgba(255,255,255,0.03);border:1px solid rgba(0,230,118,0.15);border-radius:13px;padding:12px;margin:0 16px 9px;cursor:pointer">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(listing.title||'Artikel') + '</div>'
+    + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + payLabel + ' · ' + txDate + '</div>'
+    + '<div style="display:flex;gap:4px;margin-top:3px">'
+    + '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">✅ Abgeschlossen</span>'
+    + (isGratis?'<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.08);color:rgba(0,230,118,0.7)">Gratis</span>':'')
+    + (!isReviewed && !isGratis ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(79,195,247,0.1);color:#4fc3f7">Bewertung offen</span>' : '')
+    + '</div></div>'
+    + '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:900;color:' + (isGratis?'#00e676':'#FFD700') + '">' + (isGratis?'CHF 0':'CHF ' + price.toFixed(0)) + '</div></div>'
+    + '</div>'
+    + '<div id="_gkd-deal-' + txid + '" style="display:none;border-top:1px solid rgba(255,255,255,0.07);margin-top:10px;padding-top:10px">'
+    + _gkRow('Verkäufer', '🔒 ' + sellerAnon)
+    + _gkRow('Zahlung', payLabel)
+    + _gkRow('Übergabe', '<span style="color:#00e676">Bestätigt</span>')
+    + _gkRow('Datum', txDate);
+
+  // Review section
+  if (isGratis) {
+    html += '<div style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.1);border-radius:9px;padding:9px;font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;margin-top:9px">'
+      + '❤️ Dein Nachbar hat dir etwas geschenkt. Eine tolle Geste! Kein XP-Eintrag da Gratis, aber genauso wertvoll.</div>'
+      + '<button onclick="showToast(\'Danke gesendet! ❤️\')" style="width:100%;padding:9px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(0,230,118,0.2);background:transparent;color:#00e676;margin-top:8px">❤️ Danke sagen</button>';
+  } else if (isReviewed) {
+    html += '<div style="background:rgba(0,230,118,0.05);border:1px solid rgba(0,230,118,0.15);border-radius:9px;padding:10px;margin-top:9px">'
+      + '<div style="font-size:16px;margin-bottom:3px">⭐⭐⭐⭐⭐</div>'
+      + '<div style="font-size:10px;font-weight:700;color:#00e676">Bewertung gesendet — Danke! +5 XP</div>'
+      + (tx.review_comment ? '<div style="font-size:10px;color:rgba(255,255,255,0.45);font-style:italic;margin-top:4px">"' + escHtml(tx.review_comment) + '"</div>' : '')
+      + '</div>';
+  } else {
+    html += '<div style="margin-top:9px;background:rgba(79,195,247,0.05);border:1px solid rgba(79,195,247,0.15);border-radius:9px;padding:10px">'
+      + '<div style="font-size:11px;font-weight:700;color:#4fc3f7;margin-bottom:6px">Wie war dein Kauf? (+5 XP)</div>'
+      + '<div style="display:flex;justify-content:center;gap:10px;font-size:28px;margin-bottom:8px" id="_gk-stars-' + txid + '">'
+      + [1,2,3,4,5].map(function(n){ return '<span class="_star" data-gid="' + txid + '" data-n="' + n + '" style="opacity:.3;cursor:pointer;transition:opacity .1s">★</span>'; }).join('')
+      + '</div>'
+      + '<input type="text" id="_gk-rev-' + txid + '" placeholder="Kurze Bewertung (optional)..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;outline:none;margin-bottom:8px">'
+      + '<button class="_review-submit" data-txid="' + txid + '" data-uid="' + sellerUid + '" data-lid="' + lid + '" style="width:100%;padding:9px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(79,195,247,0.25);background:rgba(79,195,247,0.08);color:#4fc3f7">Bewertung senden +5 XP</button>'
+      + '</div>';
+  }
+
+  html += '</div></div>';
+  return html;
+}
+
+function _gkTicketCard(b) {
+  var bid = String(b.id||'').replace(/['"]/g,'');
+  var bType = b.booking_type || 'ticket';
+  var typeMap = {ticket:{label:'🎟 Ticket',color:'#FFD700',bg:'rgba(255,215,0,0.1)',border:'rgba(255,215,0,0.25)'},reservation:{label:'🪑 Reservation',color:'#4fc3f7',bg:'rgba(79,195,247,0.1)',border:'rgba(79,195,247,0.25)'},waitlist:{label:'📋 Warteliste',color:'#a78bfa',bg:'rgba(139,92,246,0.1)',border:'rgba(139,92,246,0.25)'}};
+  var tc = typeMap[bType] || typeMap.ticket;
+  var listing = allListings.find(function(l){ return String(l.id)===String(b.listing_id); }) || {};
+  var amount = parseFloat(b.amount||0);
+  var eventDate = listing.event_date ? new Date(listing.event_date).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+
+  var html = '<div class="_gk-card" data-id="tk-' + bid + '" style="background:rgba(255,255,255,0.03);border:1px solid ' + tc.border + ';border-radius:13px;padding:12px;margin:0 16px 9px;cursor:pointer">'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    + '<div style="width:48px;height:48px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:22px">' + (listing.emoji||'🎉') + '</div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(listing.title||'Event') + '</div>'
+    + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + (eventDate?'📅 '+eventDate:'') + '</div>'
+    + '<div style="display:flex;gap:4px;margin-top:3px"><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:' + tc.bg + ';color:' + tc.color + '">' + tc.label + '</span><span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.1);color:#00e676">Gültig</span></div>'
+    + '</div>'
+    + '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:900;color:' + (amount===0?'#00e676':'#FFD700') + '">' + (amount===0?'Gratis':'CHF '+amount.toFixed(0)) + '</div></div>'
+    + '</div>'
+    + '<div id="_gkd-tk-' + bid + '" style="display:none;border-top:1px solid rgba(255,255,255,0.07);margin-top:10px;padding-top:10px">'
+    + _gkRow('Event', escHtml(listing.title||'Event'))
+    + (eventDate?_gkRow('Datum', eventDate):'')
+    + (listing.location?_gkRow('Ort', escHtml(listing.location)):'')
+    + _gkRow('Betrag', amount===0?'Gratis':'CHF '+amount.toFixed(2));
+
+  if (bType === 'ticket' && b.qr_code) {
+    html += '<div style="background:rgba(255,215,0,0.06);border:1.5px solid rgba(255,215,0,0.2);border-radius:10px;padding:10px;display:flex;align-items:center;gap:10px;margin:10px 0;cursor:pointer" onclick="showToast(\'QR: ' + escHtml(b.qr_code) + '\')">'
+      + '<div style="width:38px;height:38px;background:#fff;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">▦</div>'
+      + '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#FFD700">QR-Code anzeigen</div><div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px">' + escHtml(b.qr_code) + ' · am Eingang zeigen</div></div>'
+      + '<span style="color:#FFD700">→</span></div>';
+  }
+  if (bType === 'waitlist') {
+    html += '<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:9px;padding:9px;margin:9px 0;font-size:10px;color:rgba(255,255,255,0.45);line-height:1.5">'
+      + '📧 Du wirst sofort benachrichtigt wenn ein Platz frei wird. Geduld zahlt sich aus!</div>';
+  }
+  html += '<button onclick="showToast(\'Storniert.\')" style="width:100%;padding:9px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.2);background:transparent;color:#ff4444;margin-top:6px">Stornieren</button>'
+    + '</div></div>';
+  return html;
+}
+
+function _gkRow(label, val) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04)">'
+    + '<span style="color:rgba(255,255,255,0.4)">' + label + '</span><span style="font-weight:700">' + val + '</span></div>';
+}
+
+// ── COUNTDOWN ENGINE ──
+function _startCountdown(elId, endMs) {
+  var tid = setInterval(function() {
+    var el = document.getElementById(elId);
+    if (!el) { clearInterval(tid); return; }
+    var ms = endMs - Date.now();
+    if (ms <= 0) {
+      el.textContent = 'Abgelaufen';
+      el.style.color = '#ff4444';
+      clearInterval(tid);
+      // Trigger 48h reset
+      _handle48hExpiry(elId);
+      return;
+    }
+    el.textContent = _fmt48(ms);
+    if (ms < 2*3600*1000) {
+      el.style.color = '#ff4444';
+      el.style.animation = '_cdbl .6s infinite';
+    }
+  }, 1000);
+  _cdTimers.push(tid);
+}
+
+async function _handle48hExpiry(elId) {
+  // Extract txid or listing from countdown id to reset listing status
+  try {
+    // Find the card containing this element and get txid
+    var parts = elId.split('-');
+    if (parts.length < 3) return;
+    // Try to PATCH listing status back to active
+    // This is best-effort client trigger; Supabase cron is the real enforcer
+    // Just reload the gekauft screen
+    setTimeout(function() {
+      var gkBody = document.getElementById('_ov-gk-body');
+      if (gkBody) _openGekauftScreen();
+    }, 1500);
+  } catch(e) {}
+}
+
+// ── BID SUBMIT ──
+async function _submitBid(listingId, formEl) {
+  if (!currentUser) { showToast('Bitte anmelden', 'error'); return; }
+  var input = formEl.querySelector('._bid-input');
+  var amount = parseFloat(input ? input.value : 0);
+  if (!amount || amount <= 0) { showToast('Ungültiges Gebot', 'error'); return; }
+  try {
+    showToast('⏳ Gebot wird gespeichert...', 'info');
+    // Get current bid from DB
+    var listing = await supaFetch('listings?id=eq.' + listingId + '&limit=1');
+    if (!Array.isArray(listing) || !listing[0]) { showToast('Inserat nicht gefunden', 'error'); return; }
+    var l = listing[0];
+    var currentBid = parseFloat(l.current_bid || l.price || 0);
+    var minBid = Math.ceil(currentBid + (currentBid < 100 ? 5 : currentBid < 500 ? 10 : 25));
+    if (amount < minBid) { showToast('Mindestgebot: CHF ' + minBid, 'error'); return; }
+    if (l.auction_end && new Date(l.auction_end) < new Date()) { showToast('Auktion abgelaufen', 'error'); return; }
+    if (l.user_id === getUID()) { showToast('Eigene Auktion nicht bietbar', 'error'); return; }
+    // Save bid
+    await supaFetch('bids', { method: 'POST', body: JSON.stringify({ listing_id: listingId, user_id: getUID(), amount: amount, created_at: new Date().toISOString() }) });
+    // Update listing current_bid and bid_count
+    await supaFetch('listings?id=eq.' + listingId, { method: 'PATCH', body: JSON.stringify({ current_bid: amount, bid_count: (parseInt(l.bid_count||0)+1) }) });
+    // Notify seller
+    if (l.user_id) {
+      try {
+        await supaFetch('notifications', { method: 'POST', body: JSON.stringify({ user_id: l.user_id, title: '🔨 Neues Gebot!', message: 'Jemand hat CHF ' + amount.toFixed(0) + ' auf "' + (l.title||'') + '" geboten.', type: 'new_bid', listing_id: String(listingId) }) });
+      } catch(e) {}
+    }
+    // Update local allListings
+    var localL = allListings.find(function(x){ return String(x.id)===String(listingId); });
+    if (localL) { localL.current_bid = amount; localL.bid_count = parseInt(localL.bid_count||0)+1; }
+    showToast('✅ Gebot CHF ' + amount.toFixed(0) + ' abgegeben!', 'success');
+    if (input) input.value = '';
+    // Reload screen
+    setTimeout(function() { _openGekauftScreen(); }, 800);
+  } catch(err) {
+    showToast('❌ ' + err.message, 'error');
+  }
+}
+
+async function _buyNow(listingId, buyoutPrice) {
+  if (!currentUser) { showToast('Bitte anmelden', 'error'); return; }
+  if (!confirm('Sofort kaufen für CHF ' + parseFloat(buyoutPrice).toFixed(0) + '?')) return;
+  showToast('⏳ Sofort-Kauf wird verarbeitet...', 'info');
+  try {
+    var l = allListings.find(function(x){ return String(x.id)===String(listingId); }) || {};
+    var price = parseFloat(buyoutPrice);
+    var commission = Math.round(price * 0.1 * 100)/100;
+    await supaFetch('transactions', { method: 'POST', body: JSON.stringify({ listing_id: String(listingId), buyer_id: getUID(), seller_id: l.user_id||null, amount: price, commission: commission, payment_method: 'twint', status: 'pending', buyer_confirmed: true, seller_confirmed: false, buyer_contact: currentProfile.email||currentProfile.phone||'' }) });
+    await supaFetch('listings?id=eq.' + listingId, { method: 'PATCH', body: JSON.stringify({ status: 'sold', auction_winner: getUID() }) });
+    showToast('✅ Sofort-Kauf bestätigt! Verkäufer wird benachrichtigt.', 'success');
+    setTimeout(function() { _openGekauftScreen(); }, 1000);
+  } catch(err) { showToast('❌ ' + err.message, 'error'); }
+}
+
+async function _confirmHandover(txId, reloadFn, tab) {
+  if (!confirm('Übergabe wirklich bestätigen?')) return;
+  try {
+    showToast('⏳...', 'info');
+    await supaFetch('transactions?id=eq.' + txId, { method: 'PATCH', body: JSON.stringify({ status: 'completed' }) });
+    var txData = await supaFetch('transactions?id=eq.' + txId + '&limit=1');
+    var tx = Array.isArray(txData) ? txData[0] : null;
+    if (tx && tx.listing_id) {
+      await supaFetch('listings?id=eq.' + tx.listing_id, { method: 'PATCH', body: JSON.stringify({ status: 'sold', sold_at: new Date().toISOString() }) });
+    }
+    await addXP(50, 'Kauf abgeschlossen', 'buyer_deal_' + txId);
+    try {
+      await supaFetch('notifications', { method: 'POST', body: JSON.stringify({ user_id: tx&&tx.seller_id, title: '✅ Übergabe bestätigt!', message: 'Der Käufer hat die Übergabe bestätigt. Deal abgeschlossen!', type: 'handover_confirmed', listing_id: tx&&String(tx.listing_id) }) });
+    } catch(e) {}
+    showToast('✅ Übergabe bestätigt! +50 XP', 'success');
+    if (typeof refreshProfile === 'function') refreshProfile();
+    setTimeout(function() { _openGekauftScreen(); }, 800);
+  } catch(err) { showToast('❌ ' + err.message, 'error'); }
+}
+
+// Star rating state
+var _gkStarState = {};
+function _setGkStars(gid, n) {
+  _gkStarState[gid] = n;
+  var container = document.getElementById('_gk-stars-' + gid);
+  if (!container) return;
+  Array.from(container.querySelectorAll('._star')).forEach(function(s, i) {
+    s.style.opacity = i < n ? '1' : '.3';
+    s.style.color   = i < n ? '#FFD700' : '';
+  });
+}
+
+async function _submitGkReview(txId, reviewedUid, listingId) {
+  var rating = _gkStarState[txId] || 0;
+  if (!rating) { showToast('Bitte Sterne vergeben!', 'error'); return; }
+  var comment = document.getElementById('_gk-rev-' + txId);
+  var commentVal = comment ? comment.value.trim() : '';
+  try {
+    showToast('⏳ Bewertung wird gespeichert...', 'info');
+    await supaFetch('reviews', { method: 'POST', body: JSON.stringify({ reviewer_id: getUID(), reviewed_id: reviewedUid, transaction_id: txId, listing_id: String(listingId), rating: rating, comment: commentVal, created_at: new Date().toISOString() }) });
+    await supaFetch('transactions?id=eq.' + txId, { method: 'PATCH', body: JSON.stringify({ buyer_reviewed: true, review_comment: commentVal }) });
+    await addXP(5, 'Bewertung geschrieben', 'review_written_' + txId);
+    if (reviewedUid) {
+      try {
+        await addXP(10, 'Bewertung erhalten', 'review_received_' + txId);
+        await supaFetch('notifications', { method: 'POST', body: JSON.stringify({ user_id: reviewedUid, title: '⭐ Neue Bewertung!', message: (currentProfile&&currentProfile.username||'Jemand') + ' hat dir ' + rating + ' Sterne gegeben!', type: 'new_review' }) });
+      } catch(e) {}
+    }
+    showToast('✅ Bewertung gesendet! +5 XP', 'success');
+    setTimeout(function() { _openGekauftScreen(); }, 800);
+  } catch(err) { showToast('❌ ' + err.message, 'error'); }
+}
+
+// ── AKTIV SCREEN ──
+async function _openAktivScreen() {
+  _clearCdTimers();
+  var body = _makeFullOv('_ov-ak', '📦 Aktive Inserate', true);
+  if (!currentUser) { body.innerHTML = '<div style="padding:40px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
+  try {
+    var uid = getUID();
+    var data = await supaFetch('listings?user_id=eq.' + uid + '&status=in.(active,reserved,coming_soon)&order=created_at.desc&limit=100');
+    var items = Array.isArray(data) ? data : [];
+    var angebote = items.filter(function(l){ return l.type !== 'Gesuch' && l.type !== 'Vorankündigung' && l.status !== 'coming_soon'; });
+    var gesuche  = items.filter(function(l){ return l.type === 'Gesuch'; });
+    var events   = items.filter(function(l){ return l.type === 'Vorankündigung' || l.status === 'coming_soon'; });
+    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px">'
+      + _statCard(angebote.length,'📦 Angebote','rgba(255,215,0,0.07)','rgba(255,215,0,0.25)','#FFD700')
+      + _statCard(gesuche.length, '🔍 Gesuche', 'rgba(79,195,247,0.07)','rgba(79,195,247,0.25)','#4fc3f7')
+      + _statCard(events.length,  '📣 Events',  'rgba(139,92,246,0.07)','rgba(139,92,246,0.25)','#a78bfa')
+      + '</div>';
+    function _akCard(l) {
+      var lid = String(l.id||'').replace(/['"]/g,'');
+      var isReserved = l.status === 'reserved';
+      var isGratis   = parseFloat(l.price||0) === 0;
+      var price      = parseFloat(l.price||0);
+      var imgHtml    = l.image_url ? '<img src="' + escHtml(l.image_url) + '" style="width:100%;height:100%;object-fit:cover">' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (l.emoji||'📦') + '</div>';
+      var borderCol  = isReserved ? 'rgba(255,152,0,0.3)' : l.type==='Gesuch' ? 'rgba(79,195,247,0.2)' : l.type==='Vorankündigung' ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.08)';
+      var statusBadge= isReserved ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(255,152,0,0.12);color:#ff9800">● RESERVIERT</span>'
+        : l.type==='Gesuch' ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(79,195,247,0.12);color:#4fc3f7">🔍 GESUCH</span>'
+        : l.type==='Vorankündigung' ? '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(139,92,246,0.12);color:#a78bfa">📣 EVENT</span>'
+        : '<span style="padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;background:rgba(0,230,118,0.12);color:#00e676">● AKTIV</span>';
+      var r = '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + borderCol + ';border-radius:13px;padding:12px;margin:0 16px 9px">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+        + '<div style="width:48px;height:48px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">' + escHtml(l.title||'') + '</div>'
+        + '<div style="display:flex;gap:5px;align-items:center;margin-bottom:2px"><span style="font-size:13px;font-weight:900;color:' + (isGratis?'#00e676':'#FFD700') + '">' + (isGratis?'Gratis ❤️':'CHF '+price.toFixed(0)) + '</span>' + statusBadge + '</div>'
+        + (l.view_count ? '<div style="font-size:9px;color:rgba(255,255,255,0.35)">👁 ' + (l.view_count||0) + ' Aufrufe · ❤️ ' + (l.favorite_count||0) + ' Favoriten</div>' : '')
+        + '</div></div>';
+      if (isReserved) {
+        var reservedUntil = l.reserved_until ? new Date(l.reserved_until).getTime() : Date.now()+3600000;
+        var msL = reservedUntil - Date.now();
+        r += '<div style="background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.25);border-radius:8px;padding:7px;text-align:center;margin-bottom:8px">'
+          + '<div id="_akcd-' + lid + '" style="font-size:16px;font-weight:900;color:#ff9800;font-variant-numeric:tabular-nums">' + _fmt48(msL) + '</div>'
+          + '<div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:1px">Kaufanfrage läuft</div></div>';
+        setTimeout(function(){ _startCountdown('_akcd-'+lid, reservedUntil); }, 50);
+        r += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button onclick="openDetail(\'' + lid + '\')" style="padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button><button onclick="_closeFullOv(\'_ov-ak\');openPendingDeals()" style="padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,152,0,0.35);background:transparent;color:#ff9800">⚡ Anfrage</button></div>';
+      } else {
+        r += '<div style="display:flex;gap:6px"><button onclick="openDetail(\'' + lid + '\')" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">👁 Ansehen</button>';
+        if (!isGratis) r += '<button onclick="boostListing(\'' + lid + '\')" style="flex:1;padding:8px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,215,0,0.3);background:transparent;color:#FFD700">🚀 5T Boost</button>';
+        r += '<button onclick="deleteListing(\'' + lid + '\')" style="padding:8px 12px;border-radius:9px;font-size:12px;cursor:pointer;border:1px solid rgba(255,68,68,0.25);background:transparent;color:#ff4444">🗑</button></div>';
+      }
+      return r + '</div>';
+    }
+    if (angebote.length > 0) { html += _secLabel('ANGEBOTE ('+angebote.length+')'); angebote.forEach(function(l){ html += _akCard(l); }); }
+    if (gesuche.length > 0)  { html += _secLabel('GESUCHE ('+gesuche.length+')');  gesuche.forEach(function(l){ html += _akCard(l); }); }
+    if (events.length > 0)   { html += _secLabel('EVENTS ('+events.length+')');    events.forEach(function(l){ html += _akCard(l); }); }
+    if (items.length === 0) {
+      html = '<div style="padding:40px 20px;text-align:center"><div style="font-size:48px;margin-bottom:10px">📦</div><div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch keine Inserate</div><div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Erstelle dein erstes Inserat in 60 Sekunden!</div><button onclick="_closeFullOv(\'_ov-ak\');openCreateModal()" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">➕ Jetzt inserieren</button></div>';
+    } else {
+      html += '<div style="margin:12px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.07),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.2);border-radius:13px;padding:12px"><div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">💡 Boost = 3× mehr Sichtbarkeit</div><div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:7px">Nur 5 Taler pro Woche. Dein Inserat landet oben im Feed.</div><button onclick="openProfileOverlay(\'ov-boost\')" style="padding:7px 14px;background:#FFD700;border:none;border-radius:8px;color:#000;font-size:11px;font-weight:900;cursor:pointer">🚀 Boost-Pakete →</button></div>';
+    }
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + escHtml(e.message) + '</div>';
+  }
+}
+window._openAktivScreen = _openAktivScreen;
+
+// ── XP / ABZEICHEN SCREEN ──
+async function _openXpScreen() {
+  var body = _makeFullOv('_ov-xp', '🏔️ Abzeichen & XP', true);
+  if (!currentUser || !currentProfile) { body.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
+  try {
+    var uid = getUID();
+    // Load real XP log and profile
+    var results = await Promise.all([
+      supaFetch('xp_log?user_id=eq.' + uid + '&order=created_at.desc&limit=200').catch(function(){ return []; }),
+      supaFetch('reviews?reviewed_id=eq.' + uid + '&select=rating,comment,created_at&order=created_at.desc&limit=20').catch(function(){ return []; }),
+      supaFetch('transactions?seller_id=eq.' + uid + '&status=eq.completed&select=amount,created_at&limit=100').catch(function(){ return []; }),
+      supaFetch('listings?user_id=eq.' + uid + '&select=id,status,created_at,price&limit=100').catch(function(){ return []; }),
+    ]);
+    var xpLog       = Array.isArray(results[0]) ? results[0] : [];
+    var myReviews   = Array.isArray(results[1]) ? results[1] : [];
+    var mySales     = Array.isArray(results[2]) ? results[2] : [];
+    var myListings  = Array.isArray(results[3]) ? results[3] : [];
+
+    // Real XP from profile (server-aggregated by grant_xp_once RPC)
+    var xp = parseInt((currentProfile.xp_points || currentProfile.xp) || 0);
+    // If xp_log exists use its sum as ground truth
+    if (xpLog.length > 0) {
+      var logSum = xpLog.reduce(function(s, e){ return s + parseInt(e.amount||0); }, 0);
+      if (logSum > 0) xp = logSum;
+    }
+
+    var level  = getLevelInfo(xp);
+    var xpPct  = level.next ? Math.min(((xp - level.minXP) / (level.next - level.minXP)) * 100, 100) : 100;
+    var needed = level.next ? level.next - xp : 0;
+
+    // XP breakdown by type (from log)
+    var byType = { sale:0, listing:0, review:0, referral:0, other:0 };
+    var cntByType = { sale:0, listing:0, review:0, referral:0, other:0 };
+    xpLog.forEach(function(e) {
+      var k = e.action_key || '';
+      var a = parseInt(e.amount||0);
+      if (k.indexOf('sale') === 0 || k.indexOf('buyer_deal') === 0) { byType.sale += a; cntByType.sale++; }
+      else if (k.indexOf('listing') === 0) { byType.listing += a; cntByType.listing++; }
+      else if (k.indexOf('review') === 0) { byType.review += a; cntByType.review++; }
+      else if (k.indexOf('referral') === 0) { byType.referral += a; cntByType.referral++; }
+      else { byType.other += a; cntByType.other++; }
+    });
+
+    // Real metrics from DB
+    var totalSalesAmount = mySales.reduce(function(s,t){ return s+parseFloat(t.amount||0); }, 0);
+    var avgRating = myReviews.length > 0 ? (myReviews.reduce(function(s,r){ return s+parseFloat(r.rating||0); }, 0)/myReviews.length).toFixed(1) : '—';
+    var completedSales = mySales.length;
+    var totalListings  = myListings.length;
+
+    // Badge checks (real data)
+    var BADGES = [
+      {key:'beta_held',    emoji:'🚀',name:'Beta Held',       trigger:'Einer der ersten 50 Urner',      reward:'Pionier-Badge', earned:!!(currentProfile.is_pioneer||currentProfile.badge==='pioneer'),prog:1,tot:1},
+      {key:'erstes_ins',   emoji:'📦',name:'Erstes Inserat',  trigger:'1 Inserat erstellt',              reward:'+10 XP',       earned:totalListings>=1,prog:Math.min(totalListings,1),tot:1},
+      {key:'erster_vk',    emoji:'💰',name:'Erster Verkauf',  trigger:'1 Deal abgeschlossen',            reward:'+50 XP',       earned:completedSales>=1,prog:Math.min(completedSales,1),tot:1},
+      {key:'dorfplatz',    emoji:'🤝',name:'Dorfplatz Held',  trigger:'5 Freunde eingeladen',            reward:'🎁 +20 Taler', earned:cntByType.referral>=5,prog:Math.min(cntByType.referral,5),tot:5},
+      {key:'kantons_leg',  emoji:'👑',name:'Kantons-Legende', trigger:'500 XP erreichen',                reward:'🎁 +3 Boosts', earned:xp>=500,prog:Math.min(xp,500),tot:500},
+      {key:'fuenf_stern',  emoji:'⭐',name:'5★ Händler',      trigger:'10 Top-Bewertungen (5★)',         reward:'Gold-Rahmen',   earned:myReviews.filter(function(r){return parseInt(r.rating)===5;}).length>=10,prog:Math.min(myReviews.filter(function(r){return parseInt(r.rating)===5;}).length,10),tot:10},
+      {key:'diamant',      emoji:'💎',name:'Diamant Urner',   trigger:'CHF 1000 Gesamtumsatz',           reward:'Diamant-Badge', earned:totalSalesAmount>=1000,prog:Math.min(Math.round(totalSalesAmount),1000),tot:1000},
+      {key:'schnell',      emoji:'🏎️',name:'Schnellverkäufer',trigger:'Artikel in <1h verkauft',         reward:'+2 Boosts',     earned:false,prog:0,tot:1},
+      {key:'gotthard',     emoji:'⛰️',name:'Gotthard-Titan',  trigger:'1000 XP erreichen',               reward:'+10 Boosts',    earned:xp>=1000,prog:Math.min(xp,1000),tot:1000},
+    ];
+    var earned = BADGES.filter(function(b){ return b.earned; });
+    var next   = BADGES.filter(function(b){ return !b.earned; });
+
+    var LEVELS = [
+      {name:'Beobachter',  emoji:'👀', min:0,   max:49,  next:50,   reward:''},
+      {name:'Dorf-Händler',emoji:'🏘️', min:50,  max:199, next:200,  reward:'🎁 Bronze-Badge'},
+      {name:'Lokal-Matador',emoji:'🥈',min:200, max:499, next:500,  reward:'🎁 Silber-Badge + 1 Boost'},
+      {name:'Kantons-Legende',emoji:'👑',min:500,max:999,next:1000, reward:'🎁 Gold-Badge + 3 Boosts'},
+      {name:'Gotthard-Titan',emoji:'⛰️',min:1000,max:99999,next:null,reward:'🎁 Diamant + 10 Boosts'},
+    ];
+    var lvIdx = 0; for (var i=LEVELS.length-1;i>=0;i--){ if(xp>=LEVELS[i].min){lvIdx=i;break;} }
+
+    var html = '';
+
+    // XP PROGRESS CARD
+    html += '<div style="margin:12px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.09),rgba(255,152,0,0.04));border:1.5px solid rgba(255,215,0,0.3);border-radius:15px;padding:15px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+      + '<div><div style="font-size:15px;font-weight:900;color:#FFD700">' + level.emoji + ' ' + level.name + '</div>'
+      + '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px">' + earned.length + ' / ' + BADGES.length + ' Abzeichen · ' + xp + ' XP gesamt</div></div>'
+      + '<div style="text-align:right"><div style="font-size:26px;font-weight:900;color:#FFD700">' + xp + '</div><div style="font-size:9px;color:rgba(255,255,255,0.35)">von ' + (level.next||xp) + ' XP</div></div>'
+      + '</div>'
+      + '<div style="height:8px;background:rgba(255,255,255,0.1);border-radius:4px;margin-bottom:7px"><div style="height:8px;background:linear-gradient(90deg,#FFD700,#ff9800);border-radius:4px;width:' + Math.round(xpPct) + '%"></div></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:10px">'
+      + '<span>' + (level.next ? '→ ' + (LEVELS[lvIdx+1]||{emoji:'',name:''}).emoji + ' ' + (LEVELS[lvIdx+1]||{name:'MAX'}).name + ' bei ' + level.next + ' XP' : '🏆 Höchstes Level!') + '</span>'
+      + '<span>' + (needed>0?'<strong style="color:#FFD700">Noch ' + needed + ' XP</strong>':'✅ Erreicht!') + '</span>'
+      + '</div>'
+      + (level.next && LEVELS[lvIdx+1] ? '<div style="background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.18);border-radius:9px;padding:8px 11px;display:flex;justify-content:space-between;font-size:10px;align-items:center"><span style="color:#00e676">🎁 Nächste Belohnung:</span><strong style="color:#00e676">' + LEVELS[lvIdx+1].reward + '</strong></div>' : '')
+      + '</div>';
+
+    // REAL STATS GRID
+    html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 16px;margin-bottom:4px">'
+      + _statCard(completedSales,'Verkäufe','rgba(0,230,118,0.07)','rgba(0,230,118,0.2)','#00e676')
+      + _statCard(totalListings,'Inserate','rgba(255,215,0,0.07)','rgba(255,215,0,0.2)','#FFD700')
+      + _statCard(myReviews.length,'Reviews','rgba(79,195,247,0.07)','rgba(79,195,247,0.2)','#4fc3f7')
+      + _statCard(avgRating + '★','Bewertung','rgba(139,92,246,0.07)','rgba(139,92,246,0.2)','#a78bfa')
+      + '</div>';
+
+    // XP SOURCES
+    html += _secLabel('WOHER KOMMEN MEINE XP (Realtime)');
+    var sources = [
+      {ico:'💰',bg:'rgba(0,230,118,0.1)', name:'Käufe & Verkäufe',    meta:'+50 XP · 1× pro Deal · nur CHF > 0',   val:byType.sale,   cnt:cntByType.sale + '× Deal'},
+      {ico:'📦',bg:'rgba(255,215,0,0.1)', name:'Inserate erstellt',   meta:'+10 XP · 1× pro Inserat',              val:byType.listing,cnt:cntByType.listing + '× Inserat'},
+      {ico:'⭐',bg:'rgba(79,195,247,0.1)',name:'Bewertungen',          meta:'+5 schreiben · +10 erhalten · 1× pro', val:byType.review, cnt:cntByType.review + '× Review'},
+      {ico:'👥',bg:'rgba(139,92,246,0.1)',name:'Referrals',            meta:'+10 XP · 1× pro eingeladenem User',    val:byType.referral,cnt:cntByType.referral + '× Referral'},
+    ];
+    html += '<div style="padding:0 16px">';
+    sources.forEach(function(s) {
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+        + '<div style="width:32px;height:32px;border-radius:9px;background:' + s.bg + ';display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">' + s.ico + '</div>'
+        + '<div style="flex:1"><div style="font-size:12px;font-weight:700">' + s.name + '</div><div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px">' + s.meta + '</div></div>'
+        + '<div style="text-align:right"><div style="font-size:13px;font-weight:900;color:#FFD700">' + s.val + ' XP</div><div style="font-size:9px;color:rgba(255,255,255,0.28);margin-top:1px">' + s.cnt + '</div></div>'
+        + '</div>';
+    });
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0"><span style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.5)">Total</span><span style="font-size:16px;font-weight:900;color:#FFD700">' + xp + ' XP ✓</span></div>';
+    html += '</div>';
+
+    // HOW TO EARN — empathisch
+    html += '<div style="margin:8px 16px;background:rgba(255,215,0,0.04);border:1px solid rgba(255,215,0,0.12);border-radius:10px;padding:11px 13px;font-size:10px;color:rgba(255,255,255,0.45);line-height:1.7">'
+      + '💡 <strong style="color:rgba(255,255,255,0.65)">So wächst dein Ruf in Uri:</strong><br>'
+      + '· Verkaufe echte Artikel → +50 XP je Deal<br>'
+      + '· Erstelle Inserate → +10 XP je Inserat<br>'
+      + '· Schreibe eine Bewertung → +5 XP<br>'
+      + '· Lade Freunde ein → +10 XP pro aktivem Freund<br>'
+      + 'Jede Aktion zählt nur einmal, damit das System für alle fair bleibt.'
+      + '</div>';
+
+    // LEVEL LADDER
+    html += _secLabel('ALLE LEVEL');
+    LEVELS.forEach(function(lv, idx) {
+      var isDone = xp > lv.max, isCurr = xp >= lv.min && xp <= lv.max, isLock = xp < lv.min;
+      var barCol = isDone ? '#00e676' : isCurr ? '#FFD700' : 'rgba(255,255,255,0.1)';
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,0.04);' + (isCurr?'background:rgba(255,215,0,0.04)':'') + '">'
+        + '<div style="width:3px;height:40px;background:' + barCol + ';border-radius:2px;flex-shrink:0"></div>'
+        + '<div style="font-size:22px;width:34px;text-align:center;' + (isLock?'opacity:.4':'') + '">' + lv.emoji + '</div>'
+        + '<div style="flex:1;' + (isLock?'opacity:.6':'') + '">'
+        + '<div style="font-size:12px;font-weight:800' + (isCurr?';color:#FFD700':'') + '">' + lv.name + (isCurr?' ← Du':'') + '</div>'
+        + '<div style="font-size:9px;color:rgba(255,255,255,0.35);margin-top:1px">' + lv.min + (lv.next?'–'+(lv.next-1):'+') + ' XP' + (lv.reward?' · '+lv.reward:'') + '</div>'
+        + (isCurr && lv.next ? '<div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:5px;max-width:120px"><div style="height:4px;background:#FFD700;border-radius:2px;width:' + Math.round(xpPct) + '%"></div></div>' : '')
+        + '</div>'
+        + '<span style="font-size:9px;font-weight:800;padding:3px 9px;border-radius:20px;background:' + (isDone?'rgba(0,230,118,0.15)':isCurr?'rgba(255,215,0,0.15)':'rgba(255,255,255,0.06)') + ';color:' + (isDone?'#00e676':isCurr?'#FFD700':'rgba(255,255,255,0.28)') + '">'
+        + (isDone?'✅ Fertig':isCurr?'⚡ ' + xp + ' XP':'🔒 ' + (lv.min-xp) + ' XP') + '</span>'
+        + '</div>';
+    });
+
+    // EARNED BADGES
+    if (earned.length > 0) {
+      html += _secLabel('VERDIENTE ABZEICHEN (' + earned.length + ')');
+      earned.forEach(function(b) {
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">'
+          + '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,215,0,0.12);border:2px solid rgba(255,215,0,0.35);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">' + b.emoji + '</div>'
+          + '<div style="flex:1"><div style="font-size:12px;font-weight:800">' + b.name + '</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + b.trigger + '</div></div>'
+          + '<div style="text-align:right"><div style="font-size:10px;color:#00e676;font-weight:700">✅</div><div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:1px">' + b.reward + '</div></div>'
+          + '</div>';
+      });
+    }
+
+    // NEXT BADGES
+    if (next.length > 0) {
+      html += _secLabel('NÄCHSTE ABZEICHEN');
+      next.forEach(function(b) {
+        var pct = b.tot > 0 ? Math.round((b.prog/b.tot)*100) : 0;
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)">'
+          + '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;opacity:.6">' + b.emoji + '</div>'
+          + '<div style="flex:1"><div style="font-size:12px;font-weight:800;opacity:.7">' + b.name + '</div><div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:1px">' + b.trigger + '</div>'
+          + '<div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:5px;max-width:140px"><div style="height:4px;background:rgba(255,215,0,0.6);border-radius:2px;width:' + pct + '%"></div></div>'
+          + '</div>'
+          + '<div style="text-align:right"><div style="font-size:10px;color:#FFD700;font-weight:700">' + b.reward + '</div><div style="font-size:9px;color:rgba(255,255,255,0.28);margin-top:1px">' + b.prog + '/' + b.tot + '</div></div>'
+          + '</div>';
+      });
+    }
+
+    // FOMO
+    if (needed > 0 && needed < 400) {
+      html += '<div style="margin:14px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.07),rgba(255,215,0,0.02));border:1.5px solid rgba(255,215,0,0.2);border-radius:13px;padding:12px">'
+        + '<div style="font-size:12px;font-weight:900;color:#FFD700;margin-bottom:3px">⚡ Noch ' + needed + ' XP bis Level-Up!</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.38);line-height:1.4;margin-bottom:7px">Schon ' + Math.ceil(needed/50) + ' weiterer Verkauf bringt dich deinem Ziel näher. ' + (LEVELS[lvIdx+1]||{reward:''}).reward + ' warten!</div>'
+        + '<button onclick="_closeFullOv(\'_ov-xp\');openCreateModal()" style="padding:7px 14px;background:#FFD700;border:none;border-radius:8px;color:#000;font-size:11px;font-weight:900;cursor:pointer">➕ Jetzt inserieren →</button>'
+        + '</div>';
+    }
+
+    body.innerHTML = html;
+
+    // Realtime XP subscription
+    if (window.supabase) {
+      try {
+        window.supabase.channel('xp-' + uid)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'xp_log', filter: 'user_id=eq.' + uid }, function() {
+            _openXpScreen();
+          }).subscribe();
+      } catch(e) {}
+    }
+  } catch(e) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + escHtml(e.message) + '</div>';
+  }
+}
+window._openXpScreen = _openXpScreen;
+
+// ── VERKAUFT SCREEN (reuse existing modal, keep unchanged) ──
+function _openVerkauftScreen() { openMeinVerkaufen('verkauft'); }
 window._openVerkauftScreen = _openVerkauftScreen;
 
 
