@@ -3354,7 +3354,7 @@ async function checkSession() {
       await refreshProfile();
       updateAuthUI();
       setTimeout(function() {
-        initRealtimeNotifications && initRealtimeNotifications();
+        initRealtimeNotifications && initRealtimeNotifications(); initFullRealtime && initFullRealtime();
       }, 1000);
     } catch(e) {
       // Session-Fehler still ignorieren (abgelaufene Tokens sind normal)
@@ -3858,7 +3858,7 @@ async function doLogin() {
     await refreshProfile();
     updateAuthUI();
     setTimeout(function() {
-      initRealtimeNotifications && initRealtimeNotifications();
+      initRealtimeNotifications && initRealtimeNotifications(); initFullRealtime && initFullRealtime();
     }, 500);
     showToast('✅ Willkommen zurück!');
     loadListings();
@@ -4474,7 +4474,7 @@ function renderCard(l, i) {
     style="animation-delay:${i*0.05}s;${cardOpacity}">
     ${l.is_promoted ? '<div class="card-promoted-badge">⭐ HIGHLIGHT</div>' : ''}
     ${l.image_url
-      ? '<div class="card-img-wrap" style="width:100%;aspect-ratio:4/3;overflow:hidden;background:var(--dark3)"><img src="' + escHtml(l.image_url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>'
+      ? '<div class="card-img-wrap" style="width:100%;aspect-ratio:4/3;overflow:hidden;background:var(--dark3);position:relative">' + (l._wiederErhaeltlich ? '<div style="position:absolute;top:8px;left:8px;background:rgba(0,230,118,0.92);border-radius:20px;padding:3px 10px;font-size:9px;font-weight:700;color:#000;z-index:2;pointer-events:none">🔄 Wieder erhältlich</div>' : '') + '<img src="' + escHtml(l.image_url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover"></div>'
       : '<div class="card-img-placeholder">' + (l.emoji || getCategoryEmoji(l.category)) + '</div>'}
     ${showSoldStamp ? '<div class="card-sold-stamp">VERKAUFT</div>' : ''}
     ${isReserved ? `
@@ -4539,7 +4539,29 @@ function openDetail(id, directListing) {
         ← Zurück
       </button>
     </div>
-    <div class="modal-img-placeholder">${l.emoji || getCategoryEmoji(l.category)}</div>
+    <!-- MULTI-IMAGE SCROLL -->
+    <div style="position:relative">
+      ${(function() {
+        var imgs = [l.image_url, l.image_detail, l.image_mangel].filter(Boolean);
+        if (imgs.length === 0) {
+          return '<div class="modal-img-placeholder" style="font-size:64px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.03)">' + (l.emoji || getCategoryEmoji(l.category)) + '</div>';
+        }
+        if (imgs.length === 1) {
+          return '<div style="width:100%;aspect-ratio:4/3;overflow:hidden;background:#111"><img src="' + escHtml(imgs[0]) + '" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'"></div>';
+        }
+        // Multiple images: horizontal scroll
+        return '<div style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-ms-overflow-style:none">'
+          + imgs.map(function(src) {
+            return '<div style="flex-shrink:0;width:100%;aspect-ratio:4/3;scroll-snap-align:start;overflow:hidden;background:#111"><img src="' + escHtml(src) + '" alt="" style="width:100%;height:100%;object-fit:cover"></div>';
+          }).join('')
+          + '</div>'
+          + '<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px">'
+          + imgs.map(function(_, i) { return '<div style="width:6px;height:6px;border-radius:50%;background:' + (i===0?'#FFD700':'rgba(255,255,255,0.4)') + '"></div>'; }).join('')
+          + '</div>';
+      })()}
+      <!-- WIEDER ERHÄLTLICH STICKER -->
+      ${l._wiederErhaeltlich ? '<div style="position:absolute;top:10px;left:10px;background:rgba(0,230,118,0.9);border-radius:20px;padding:4px 12px;font-size:10px;font-weight:700;color:#000">🔄 Wieder erhältlich</div>' : ''}
+    </div>
     <div class="modal-body">
       <div class="modal-tags">
         <span class="modal-tag ${l.type==='Gesuch'?'badge-gesuch':'badge-angebot'}">${l.type==='Gesuch'?'🔍 GESUCH':'🏷️ ANGEBOT'}</span>
@@ -4550,6 +4572,46 @@ function openDetail(id, directListing) {
       <div class="modal-title">${escHtml(l.title)}</div>
       ${l.price > 0 ? `<div class="modal-price">CHF ${l.price}</div>` : '<div class="modal-price" style="color:var(--green)">Gratis</div>'}
       <div class="modal-location">📍 ${escHtml(l.location||l.gemeinde||'Uri')} · ${l.category||''}</div>
+      <!-- AUCTION LIVE BLOCK -->
+      ${l.auction_end ? `
+        <div id="auction-block-${l.id}" style="background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.3);border-radius:14px;padding:14px;margin:10px 0">
+          <div style="text-align:center;margin-bottom:10px">
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:3px">Aktuelles Höchstgebot</div>
+            <div style="font-size:28px;font-weight:900;color:#a78bfa" id="auc-currentbid-${l.id}">CHF ${parseFloat(l.current_bid||l.price||0).toFixed(0)}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px">${parseInt(l.bid_count||0)} Gebote · endet in <strong style="color:#a78bfa" id="auc-detail-cd-${l.id}">...</strong></div>
+          </div>
+          ${l.buyout_price ? '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.06)"><span style="color:rgba(255,255,255,0.4)">Sofort-Kaufen</span><span style="font-weight:700;color:#FFD700">CHF ' + parseFloat(l.buyout_price).toFixed(0) + '</span></div>' : ''}
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:11px;margin-bottom:10px"><span style="color:rgba(255,255,255,0.4)">Enddatum</span><span style="font-weight:700">${new Date(l.auction_end).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>
+          ${currentUser && l.user_id !== getUID() ? `
+          <div style="display:flex;gap:7px;margin-bottom:7px">
+            <input type="number" id="bid-input-${l.id}" min="${Math.ceil(parseFloat(l.current_bid||l.price||0)+(parseFloat(l.current_bid||0)<100?5:10))}" step="5" placeholder="Gebot (mind. CHF ${Math.ceil(parseFloat(l.current_bid||l.price||0)+(parseFloat(l.current_bid||0)<100?5:10))})" style="flex:1;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.3);border-radius:9px;padding:9px;color:#fff;font-size:12px;outline:none">
+            <button onclick="submitAuctionBid('${l.id}')" style="padding:9px 14px;background:#a78bfa;border:none;border-radius:9px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Bieten</button>
+          </div>
+          ${l.buyout_price ? '<button onclick="auctionBuyNow(\''+l.id+'\','+parseFloat(l.buyout_price)+')" style="width:100%;padding:10px;background:rgba(255,215,0,0.09);border:1.5px solid rgba(255,215,0,0.3);border-radius:9px;color:#FFD700;font-size:12px;font-weight:900;cursor:pointer">Sofort kaufen CHF ' + parseFloat(l.buyout_price).toFixed(0) + '</button>' : ''}
+          ` : ''}
+        </div>
+        <script>
+          (function() {
+            var endMs = new Date('${l.auction_end}').getTime();
+            var cdEl = document.getElementById('auc-detail-cd-${l.id}');
+            function fmt(ms) {
+              if(ms<=0)return'Abgelaufen';
+              var d=Math.floor(ms/86400000),h=Math.floor((ms%86400000)/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000);
+              var p=function(n){return n<10?'0'+n:''+n;};
+              return (d>0?d+'T ':'')+p(h)+':'+p(m)+':'+p(s);
+            }
+            if(cdEl) {
+              cdEl.textContent=fmt(endMs-Date.now());
+              var tid=setInterval(function(){
+                var ms=endMs-Date.now();
+                if(!document.getElementById('auc-detail-cd-${l.id}')){clearInterval(tid);return;}
+                cdEl.textContent=fmt(ms);
+                if(ms<=0){clearInterval(tid);}
+              },1000);
+            }
+          })();
+        </scr` + `ipt>
+      ` : ''}
       <div class="modal-fomo-bar">
         <span class="fomo-dot"></span>
         <span class="modal-fomo-text">🔥 ${viewers} Personen schauen gerade auf dieses Inserat</span>
@@ -5623,7 +5685,10 @@ function setType(type, el) {
 // ============================================================
 // VORANKÜNDIGUNG TEASER SUBMIT + VOICE + KI-BOOSTER
 // ============================================================
+var _submitTeaserLock = false;
 async function submitTeaser() {
+  if (_submitTeaserLock) { showToast('⏳ Bitte warten...', 'info'); return; }
+  _submitTeaserLock = true;
   if (!currentUser) { openAuth(); return; }
   const _userId = getUID() || currentUser?.id;
   if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
@@ -6542,7 +6607,10 @@ function loadGesuchDraft() {
 }
 window.loadGesuchDraft = loadGesuchDraft;
 
+var _submitGesuchLock = false;
 async function submitGesuch() {
+  if (_submitGesuchLock) { showToast('⏳ Bitte warten...', 'info'); return; }
+  _submitGesuchLock = true;
   if (!currentUser) { openAuth(); return; }
   const _userId = (getUID()) || (currentUser?.id) || null;
   if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
@@ -6625,7 +6693,10 @@ async function submitGesuch() {
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Gesuch veröffentlichen'; }
   }
 }
+var _submitListingLock = false;
 async function submitListing() {
+  if (_submitListingLock) { showToast('⏳ Bitte warten...', 'info'); return; }
+  _submitListingLock = true;
   if (!currentUser) { openAuth(); return; }
   const _userId = (getUID()) || (currentUser?.id) || null;
   if (!_userId) { showToast('❌ Bitte neu einloggen', 'error'); doLogout(); openAuth(); return; }
@@ -6694,6 +6765,7 @@ async function submitListing() {
   } finally {
     btn.disabled = false;
     btn.textContent = '✨ Inserat veröffentlichen';
+    _submitListingLock = false;
   }
 }
 
@@ -7910,6 +7982,7 @@ window.addEventListener('DOMContentLoaded', () => {
       // Start Realtime after session loaded
       if (typeof initRealtimeNotifications === 'function') {
         setTimeout(initRealtimeNotifications, 1200);
+        setTimeout(initFullRealtime, 1500);
       }
     });
   }
@@ -8100,7 +8173,7 @@ async function openPendingDeals() {
     list.forEach(function(tx) {
       var listing = allListings.find(function(l) { return String(l.id) === String(tx.listing_id); }) || {};
       var price = parseFloat(tx.amount || 0);
-      var comm = Math.ceil(parseFloat(tx.commission || 0));
+      var comm = Math.max(1, Math.round(parseFloat(tx.commission || tx.amount * 0.1 || 0)));
       var date = new Date(tx.created_at).toLocaleDateString('de-CH');
       var pLabel = pLabels[tx.payment_method] || (tx.payment_method || '');
       var txId = String(tx.id || '');
@@ -8749,7 +8822,7 @@ async function _openGekauftScreen() {
               + '<div style="font-size:48px;margin-bottom:10px">🎟</div>'
               + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Noch keine Tickets</div>'
               + '<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Events, Kurse und Treffen direkt mit Urnern — schau was los ist!</div>'
-              + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0)" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">Events entdecken →</button>'
+              + '<button onclick="_closeFullOv(\'_ov-gk\');swipeTo(0);setTimeout(function(){var cats=document.querySelectorAll(\'.category-filter-btn\');cats.forEach(function(c){if(c.textContent.includes(\'Event\')||c.textContent.includes(\'Ankündigung\')){c.click();}});},400)" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">Events entdecken →</button>'
               + '</div>';
           } else {
             if (tickets.length > 0) { out += _secLabel('TICKETS (' + tickets.length + ')'); tickets.forEach(function(b){ out += _gkTicketCard(b); }); }
@@ -8838,6 +8911,62 @@ async function _openGekauftScreen() {
 
   await _loadGekauft();
 }
+// ═══════════════════════════════
+// AUCTION BID from openDetail
+// ═══════════════════════════════
+async function submitAuctionBid(listingId) {
+  if (!currentUser) { showToast('Bitte anmelden', 'error'); return; }
+  var input = document.getElementById('bid-input-' + listingId);
+  var amount = parseFloat(input ? input.value : 0);
+  if (!amount || amount <= 0) { showToast('Ungültiges Gebot', 'error'); return; }
+  try {
+    var listing = await supaFetch('listings?id=eq.' + listingId + '&limit=1');
+    if (!Array.isArray(listing) || !listing[0]) { showToast('Inserat nicht gefunden', 'error'); return; }
+    var l = listing[0];
+    var curBid = parseFloat(l.current_bid || l.price || 0);
+    var minBid = Math.ceil(curBid + (curBid < 100 ? 5 : curBid < 500 ? 10 : 25));
+    if (amount < minBid) { showToast('Mindestgebot: CHF ' + minBid, 'error'); return; }
+    if (l.auction_end && new Date(l.auction_end) < new Date()) { showToast('Auktion abgelaufen', 'error'); return; }
+    if (l.user_id === getUID()) { showToast('Eigene Auktion nicht bietbar', 'error'); return; }
+    showToast('⏳ Gebot wird gespeichert...', 'info');
+    await supaFetch('bids', { method: 'POST', body: JSON.stringify({ listing_id: listingId, user_id: getUID(), amount: amount, created_at: new Date().toISOString() }) });
+    var newBidCount = parseInt(l.bid_count||0) + 1;
+    await supaFetch('listings?id=eq.' + listingId, { method: 'PATCH', body: JSON.stringify({ current_bid: amount, bid_count: newBidCount }) });
+    // Update DOM
+    var bidEl = document.getElementById('auc-currentbid-' + listingId);
+    if (bidEl) bidEl.textContent = 'CHF ' + amount.toFixed(0);
+    var localL = allListings.find(function(x){ return String(x.id)===String(listingId); });
+    if (localL) { localL.current_bid = amount; localL.bid_count = newBidCount; }
+    // Notify seller
+    if (l.user_id) {
+      try { await supaFetch('notifications', { method: 'POST', body: JSON.stringify({ user_id: l.user_id, title: '🔨 Neues Gebot!', message: 'CHF ' + amount.toFixed(0) + ' auf "' + (l.title||'') + '"', type: 'new_bid', listing_id: String(listingId) }) }); } catch(e) {}
+    }
+    if (input) input.value = '';
+    showToast('✅ Gebot CHF ' + amount.toFixed(0) + ' abgegeben!', 'success');
+  } catch(err) { showToast('❌ ' + err.message, 'error'); }
+}
+window.submitAuctionBid = submitAuctionBid;
+
+async function auctionBuyNow(listingId, buyoutPrice) {
+  if (!currentUser) { showToast('Bitte anmelden', 'error'); return; }
+  if (!confirm('Sofort kaufen für CHF ' + parseFloat(buyoutPrice).toFixed(0) + '?')) return;
+  showToast('⏳ Sofort-Kauf...', 'info');
+  try {
+    var l = allListings.find(function(x){ return String(x.id)===String(listingId); }) || {};
+    var price = parseFloat(buyoutPrice);
+    var commission = Math.max(1, Math.round(price * 0.1));
+    await supaFetch('transactions', { method: 'POST', body: JSON.stringify({ listing_id: String(listingId), buyer_id: getUID(), seller_id: l.user_id||null, amount: price, commission: commission, payment_method: 'twint', status: 'pending', buyer_confirmed: true, seller_confirmed: false, buyer_contact: (currentProfile&&(currentProfile.email||currentProfile.phone))||'' }) });
+    await supaFetch('listings?id=eq.' + listingId, { method: 'PATCH', body: JSON.stringify({ status: 'sold', auction_winner: getUID() }) });
+    var localL = allListings.find(function(x){ return String(x.id)===String(listingId); });
+    if (localL) { localL.status = 'sold'; }
+    showToast('✅ Sofort-Kauf bestätigt! Verkäufer wird benachrichtigt.', 'success');
+    closeDetail && closeDetail();
+    loadListings && loadListings();
+  } catch(err) { showToast('❌ ' + err.message, 'error'); }
+}
+window.auctionBuyNow = auctionBuyNow;
+
+
 window._openGekauftScreen = _openGekauftScreen;
 
 // ── CARD BUILDERS ──
@@ -9062,13 +9191,14 @@ function _gkDealCard(tx) {
       + (tx.review_comment ? '<div style="font-size:10px;color:rgba(255,255,255,0.45);font-style:italic;margin-top:4px">"' + escHtml(tx.review_comment) + '"</div>' : '')
       + '</div>';
   } else {
-    html += '<div style="margin-top:9px;background:rgba(79,195,247,0.05);border:1px solid rgba(79,195,247,0.15);border-radius:9px;padding:10px">'
+    html += '<div onclick="event.stopPropagation()" style="margin-top:9px;background:rgba(79,195,247,0.05);border:1px solid rgba(79,195,247,0.15);border-radius:9px;padding:10px">'
       + '<div style="font-size:11px;font-weight:700;color:#4fc3f7;margin-bottom:6px">Wie war dein Kauf? (+5 XP)</div>'
-      + '<div style="display:flex;justify-content:center;gap:10px;font-size:28px;margin-bottom:8px" id="_gk-stars-' + txid + '">'
-      + [1,2,3,4,5].map(function(n){ return '<span class="_star" data-gid="' + txid + '" data-n="' + n + '" style="opacity:.3;cursor:pointer;transition:opacity .1s">★</span>'; }).join('')
+      + '<div style="display:flex;justify-content:center;gap:10px;font-size:28px;margin-bottom:8px" id="_gk-stars-' + txid + '" onclick="event.stopPropagation()">'
+      + [1,2,3,4,5].map(function(n){ return '<span class="_star" data-gid="' + txid + '" data-n="' + n + '" onclick="event.stopPropagation();_setGkStars(\'' + txid + '\',' + n + ')" style="opacity:.3;cursor:pointer;transition:opacity .1s;user-select:none">★</span>'; }).join('')
       + '</div>'
-      + '<input type="text" id="_gk-rev-' + txid + '" placeholder="Kurze Bewertung (optional)..." style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;outline:none;margin-bottom:8px">'
-      + '<button class="_review-submit" data-txid="' + txid + '" data-uid="' + sellerUid + '" data-lid="' + lid + '" style="width:100%;padding:9px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(79,195,247,0.25);background:rgba(79,195,247,0.08);color:#4fc3f7">Bewertung senden +5 XP</button>'
+      + '<div id="_gk-rev-hint-' + txid + '" style="text-align:center;font-size:9px;color:rgba(79,195,247,0.7);min-height:14px;margin-bottom:5px"></div>'
+      + '<input type="text" id="_gk-rev-' + txid + '" placeholder="Kurze Bewertung (optional)..." onclick="event.stopPropagation()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:7px 10px;color:#fff;font-size:11px;outline:none;margin-bottom:8px">'
+      + '<button class="_review-submit" id="_gk-revbtn-' + txid + '" data-txid="' + txid + '" data-uid="' + sellerUid + '" data-lid="' + lid + '" onclick="event.stopPropagation()" style="width:100%;padding:9px;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(79,195,247,0.25);background:rgba(79,195,247,0.08);color:#4fc3f7;transition:all .2s">Tippe auf Sterne zum Bewerten</button>'
       + '</div>';
   }
 
@@ -9236,6 +9366,7 @@ async function _confirmHandover(txId, reloadFn, tab) {
 
 // Star rating state
 var _gkStarState = {};
+var _gkStarHints = ['','😕 Nicht gut','😐 Geht so','🙂 Ok','😊 Gut — danke!','🤩 Ausgezeichnet!'];
 function _setGkStars(gid, n) {
   _gkStarState[gid] = n;
   var container = document.getElementById('_gk-stars-' + gid);
@@ -9244,6 +9375,17 @@ function _setGkStars(gid, n) {
     s.style.opacity = i < n ? '1' : '.3';
     s.style.color   = i < n ? '#FFD700' : '';
   });
+  // Update hint
+  var hint = document.getElementById('_gk-rev-hint-' + gid);
+  if (hint) hint.textContent = _gkStarHints[n] || '';
+  // Highlight submit button
+  var btn = document.getElementById('_gk-revbtn-' + gid);
+  if (btn) {
+    btn.textContent = '★ Bewertung senden +5 XP';
+    btn.style.background = '#4fc3f7';
+    btn.style.color = '#000';
+    btn.style.fontWeight = '900';
+  }
 }
 
 async function _submitGkReview(txId, reviewedUid, listingId) {
@@ -9721,7 +9863,7 @@ async function renderVerkaufenContent(tab) {
 
     // Netto = sum of (amount - commission) for completed tx
     var bruttoTotal = completedTx.reduce(function(s,t){ return s + parseFloat(t.amount||0); }, 0);
-    var provTotal   = completedTx.reduce(function(s,t){ return s + parseFloat(t.commission||t.amount*0.1||0); }, 0);
+    var provTotal   = completedTx.reduce(function(s,t){ return s + Math.max(1, Math.round(parseFloat(t.commission||t.amount*0.1||0))); }, 0);
     var nettoTotal  = bruttoTotal - provTotal;
 
     // Real rating from reviews table
@@ -9834,7 +9976,7 @@ async function renderVerkaufenContent(tab) {
         var lid = String(l.id || '').replace(/'/g,'');
         var tx  = txByListing[lid] || {};
         var price = parseFloat(l.price || 0);
-        var prov  = Math.round(parseFloat(tx.commission || price * 0.1));
+        var prov  = Math.max(1, Math.round(parseFloat(tx.commission || price * 0.1)));
         var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH') : (tx.created_at ? new Date(tx.created_at).toLocaleDateString('de-CH') : '');
         var payLabel = {cash:'💵 Bar', twint:'📱 TWINT', card:'💳 Karte'}[tx.payment_method] || '💵 Bar';
         var buyerAnon = tx.buyer_contact ? (tx.buyer_contact.charAt(0).toUpperCase() + '.***') : 'Anonym';
@@ -9991,7 +10133,7 @@ async function _openVerkaufDetail(listingId) {
     var rev = (Array.isArray(results[2]) ? results[2][0] : null) || null;
 
     var price    = parseFloat(l.price || 0);
-    var prov     = Math.round(parseFloat(tx.commission || price * 0.1));
+    var prov     = Math.max(1, Math.round(parseFloat(tx.commission || price * 0.1)));
     var netto    = price - prov;
     var soldDate = l.sold_at ? new Date(l.sold_at).toLocaleDateString('de-CH')
                  : tx.updated_at ? new Date(tx.updated_at).toLocaleDateString('de-CH') : '';
@@ -10245,6 +10387,124 @@ function switchDashTab(tab, btn) {
 }
 
 // ============================================================
+
+// ═══════════════════════════════════════
+// FULL REALTIME — Listings + Transactions + Bids
+// Supabase WebSocket — no webhook needed
+// ═══════════════════════════════════════
+function initFullRealtime() {
+  if (!window.supabase || !currentUser) return;
+  var uid = getUID();
+  if (!uid) return;
+
+  // Close existing channels
+  if (window._rtListings) try { window._rtListings.unsubscribe(); } catch(e) {}
+  if (window._rtTxSeller) try { window._rtTxSeller.unsubscribe(); } catch(e) {}
+  if (window._rtBids) try { window._rtBids.unsubscribe(); } catch(e) {}
+
+  // 1. LISTINGS — any change to user's own listings
+  //    e.g. status: reserved→active (48h reset by pg_cron)
+  //    → reload feed + show "Wieder erhältlich" sticker
+  window._rtListings = window.supabase
+    .channel('rt-listings-' + uid)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'listings',
+      filter: 'user_id=eq.' + uid
+    }, function(payload) {
+      var changed = payload.new || {};
+      // If listing went from reserved → active: show sticker
+      if (payload.old && payload.old.status === 'reserved' && changed.status === 'active') {
+        _showWiederSticker(changed.id, changed.title);
+      }
+      // Reload feed
+      if (typeof loadListings === 'function') loadListings();
+      if (typeof renderProfile === 'function') renderProfile();
+    })
+    .subscribe();
+
+  // 2. TRANSACTIONS — seller side (incoming purchase requests)
+  window._rtTxSeller = window.supabase
+    .channel('rt-tx-seller-' + uid)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'transactions',
+      filter: 'seller_id=eq.' + uid
+    }, function(payload) {
+      if (typeof renderProfile === 'function') renderProfile();
+      // Reload open Kaufanfragen panel if open
+      var ovGk = document.getElementById('_ov-gk');
+      if (ovGk) _openGekauftScreen && _openGekauftScreen();
+      // Reload seller dashboard if open
+      var ov = document.getElementById('seller-dashboard-overlay');
+      if (ov) {
+        var lid = ov.dataset.listingId;
+        if (lid) _loadSellerTx && _loadSellerTx(lid);
+      }
+    })
+    .subscribe();
+
+  // 3. BIDS — on any listing I've bid on or own
+  window._rtBids = window.supabase
+    .channel('rt-bids-' + uid)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'bids'
+    }, function(payload) {
+      var bid = payload.new || {};
+      // If I was the leading bidder and someone outbid me, notify
+      if (bid.user_id !== uid) {
+        // Check if I had a bid on this listing
+        // Reload Gekauft if open
+        var ovGk = document.getElementById('_ov-gk');
+        if (ovGk) _openGekauftScreen && _openGekauftScreen();
+        // Reload feed to update current_bid shown
+        if (typeof renderListings === 'function') renderListings();
+      }
+    })
+    .subscribe();
+
+  // 4. ALL LISTINGS (public feed) — new listings, status changes
+  if (window._rtFeed) try { window._rtFeed.unsubscribe(); } catch(e) {}
+  window._rtFeed = window.supabase
+    .channel('rt-feed')
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'listings'
+    }, function(payload) {
+      var changed = payload.new || {};
+      var old = payload.old || {};
+      // Wieder-erhältlich sticker: reserved → active
+      if (old.status === 'reserved' && changed.status === 'active') {
+        _showWiederStickerFeed(changed);
+      }
+      // Throttle feed reload
+      clearTimeout(window._rtFeedTimer);
+      window._rtFeedTimer = setTimeout(function() {
+        if (typeof loadListings === 'function') loadListings();
+      }, 800);
+    })
+    .subscribe();
+}
+window.initFullRealtime = initFullRealtime;
+
+// Show "Wieder erhältlich" sticker on own listing in profil
+function _showWiederSticker(listingId, title) {
+  showToast('🔄 "' + (title||'Inserat') + '" ist wieder verfügbar!', 'success', 5000);
+  // Update local allListings
+  var l = allListings.find(function(x){ return String(x.id)===String(listingId); });
+  if (l) { l.status = 'active'; l.reserved_until = null; l._wiederErhaeltlich = true; }
+  if (typeof renderProfile === 'function') renderProfile();
+}
+
+// Inject "Wieder erhältlich" overlay on feed item
+function _showWiederStickerFeed(listing) {
+  var l = allListings.find(function(x){ return String(x.id)===String(listing.id); });
+  if (l) {
+    l.status = 'active';
+    l.reserved_until = null;
+    l._wiederErhaeltlich = true;
+    if (typeof renderListings === 'function') renderListings();
+  }
+}
+
+
 // SUPABASE REALTIME — In-App Notifications
 // ============================================================
 function initRealtimeNotifications() {
@@ -10591,7 +10851,7 @@ async function confirmPurchase(listingId, paymentMethod) {
   }
 
   const price = parseFloat(listing.price) || 0;
-  const commission = Math.round(price * 0.10 * 100) / 100;
+  const commission = Math.max(1, Math.round(price * 0.1));
   const buyerContact = currentProfile?.phone
     || currentProfile?.email || '';
   const payLabel = {
@@ -10871,7 +11131,7 @@ async function _loadSellerTx(listingId) {
       const label = sLabels[tx.status]||tx.status;
       const pLabel = pLabels[tx.payment_method]||tx.payment_method;
       const price = parseFloat(tx.amount||0);
-      const comm = Math.ceil(parseFloat(tx.commission||0));
+      const comm = Math.max(1, Math.round(parseFloat(tx.commission || tx.amount * 0.1 || 0)));
       const date = new Date(tx.created_at).toLocaleDateString('de-CH');
       return `
         <div style="background:#1a1a1a;border-radius:16px;padding:18px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.08)">
