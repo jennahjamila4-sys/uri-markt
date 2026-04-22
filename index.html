@@ -2682,6 +2682,7 @@ window.addEventListener('unhandledrejection', function(e) {
           <input type="datetime-local" class="form-input" id="form-countdown">
         </div>
         <button class="submit-btn" onclick="submitListing()" id="submit-btn" data-i18n="inserat_veroeffentlichen">✨ Inserat veröffentlichen</button>
+      <button type="button" onclick="_saveDraftFromForm()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:rgba(255,255,255,0.6);font-size:12px;font-weight:700;cursor:pointer">💾 Als Entwurf speichern</button>
       </div>
 
       <!-- VORANKÜNDIGUNGS-FORMULAR (TEASER) -->
@@ -7076,6 +7077,12 @@ async function renderProfile() {
     boughtCount = Array.isArray(txData) ? txData.length : 0;
   } catch(e2) { boughtCount = 0; }
 
+  var draftCount = 0;
+  try {
+    var draftData = await supaFetch('listings?user_id=eq.' + uid + '&status=eq.draft&select=id&limit=50');
+    draftCount = Array.isArray(draftData) ? draftData.length : 0;
+  } catch(e3) { draftCount = 0; }
+
   var displayName = escHtml(p.username || p.full_name || 'Urner');
   var initial = displayName.charAt(0).toUpperCase();
   var avatarHtml = p.avatar_url
@@ -7137,8 +7144,8 @@ async function renderProfile() {
       '<div onclick="_openGekauftScreen()" style="background:rgba(79,195,247,0.07);border:1.5px solid rgba(79,195,247,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
         '<div style="font-size:20px;font-weight:900;color:#4fc3f7">' + boughtCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">🛒 Gekauft</div>',
       '</div>',
-      '<div onclick="openWalletModal()" style="background:rgba(255,100,0,0.07);border:1.5px solid rgba(255,100,0,0.28);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
-        '<div style="font-size:20px;font-weight:900;color:#ff6400">' + credits + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">🪙 Taler</div>',
+      '<div onclick="_openDraftScreen()" style="background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.14);border-radius:11px;padding:11px 5px;text-align:center;cursor:pointer">',
+        '<div style="font-size:20px;font-weight:900;color:rgba(255,255,255,0.7)">' + draftCount + '</div><div style="font-size:8px;color:rgba(255,255,255,0.38);margin-top:2px">📝 Entwürfe</div>',
       '</div>',
     '</div>',
 
@@ -7928,11 +7935,28 @@ function closeLegalIfBg(e) { if (e.target === document.getElementById('legal-mod
 // ============================================================
 // UTILITIES
 // ============================================================
-function showToast(msg, duration = 3000) {
+function showToast(msg, type, duration) {
+  // Support both showToast(msg) and showToast(msg, type, duration)
+  if (typeof type === 'number') { duration = type; type = 'info'; }
+  if (!duration || typeof duration !== 'number') duration = type === 'error' ? 5000 : 3000;
+  if (!type) type = 'info';
+
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
+
+  // Error: always on top, prominent
+  if (type === 'error') {
+    t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(220,20,20,0.98);color:#fff;font-weight:700;padding:12px 18px;border-radius:12px;font-size:13px;z-index:99999;border:2px solid rgba(255,68,68,0.8);box-shadow:0 6px 28px rgba(255,0,0,0.45);max-width:340px;text-align:center;display:block';
+    setTimeout(function(){ t.style.cssText = ''; t.classList.remove('show'); }, duration);
+    return;
+  }
+  if (type === 'success') {
+    t.style.zIndex = '9999';
+  }
+
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+  setTimeout(function(){ t.classList.remove('show'); t.style.cssText = ''; }, duration);
 }
 
 function launchConfetti() {
@@ -9468,6 +9492,169 @@ async function _submitGkReview(txId, reviewedUid, listingId) {
 }
 
 // ── AKTIV SCREEN ──
+
+// ════════════════════════════════════════
+// ENTWÜRFE SCREEN — Gespeicherte Entwürfe
+// ════════════════════════════════════════
+async function _openDraftScreen() {
+  var body = _makeFullOv('_ov-draft', '📝 Entwürfe', true);
+  if (!currentUser) { body.innerHTML = '<div style="padding:30px;text-align:center;color:rgba(255,255,255,0.4)">Bitte anmelden</div>'; return; }
+  try {
+    var uid = getUID();
+    var data = await supaFetch('listings?user_id=eq.' + uid + '&status=eq.draft&order=created_at.desc&limit=50');
+    var drafts = Array.isArray(data) ? data : [];
+
+    if (drafts.length === 0) {
+      body.innerHTML = '<div style="padding:40px 20px;text-align:center">'
+        + '<div style="font-size:48px;margin-bottom:10px">📝</div>'
+        + '<div style="font-size:15px;font-weight:900;color:#FFD700;margin-bottom:5px">Keine Entwürfe</div>'
+        + '<div style="font-size:11px;color:rgba(255,255,255,0.38);line-height:1.6;margin-bottom:14px">Fang an, ein Inserat zu erstellen und speichere es als Entwurf um es später zu veröffentlichen.</div>'
+        + '<button onclick="_closeFullOv(\"_ov-draft\");openCreateModal()" style="padding:12px 22px;background:#FFD700;border:none;border-radius:12px;color:#000;font-size:13px;font-weight:900;cursor:pointer">➕ Jetzt inserieren</button>'
+        + '</div>';
+      return;
+    }
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px">'
+      + _statCard(drafts.length, '📝 Gespeichert', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0.7)')
+      + _statCard(drafts.filter(function(d){ return d.price > 0; }).length, '💰 Mit Preis', 'rgba(255,215,0,0.06)', 'rgba(255,215,0,0.2)', '#FFD700')
+      + _statCard(drafts.filter(function(d){ return d.image_url; }).length, '📷 Mit Foto', 'rgba(0,230,118,0.06)', 'rgba(0,230,118,0.2)', '#00e676')
+      + '</div>';
+
+    html += _secLabel('DEINE ENTWÜRFE (' + drafts.length + ')');
+
+    drafts.forEach(function(l) {
+      var lid = String(l.id || '').replace(/['"]/g, '');
+      var price = parseFloat(l.price || 0);
+      var imgHtml = l.image_url
+        ? '<img src="' + escHtml(l.image_url) + '" alt="" style="width:100%;height:100%;object-fit:cover">'
+        : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,0.05)">' + (l.emoji || '📝') + '</div>';
+      var createdDate = l.created_at ? new Date(l.created_at).toLocaleDateString('de-CH', {timeZone:'Europe/Zurich'}) : '';
+      var isComplete = !!(l.title && l.price && l.image_url);
+
+      html += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + (isComplete ? 'rgba(0,230,118,0.2)' : 'rgba(255,255,255,0.08)') + ';border-radius:13px;padding:12px;margin:0 16px 9px">'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        + '<div style="width:50px;height:50px;border-radius:10px;overflow:hidden;flex-shrink:0">' + imgHtml + '</div>'
+        + '<div style="flex:1;min-width:0">'
+        + '<div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(l.title || 'Ohne Titel') + '</div>'
+        + '<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px">' + (price > 0 ? 'CHF ' + price.toFixed(2) : 'Kein Preis') + ' · ' + createdDate + '</div>'
+        + '<div style="font-size:9px;margin-top:3px;color:' + (isComplete ? '#00e676' : '#ff9800') + '">' + (isComplete ? '✅ Bereit zur Veröffentlichung' : '⚠️ Unvollständig') + '</div>'
+        + '</div></div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px">'
+        + '<button data-lid="' + lid + '" class="_draft-edit-btn" style="padding:9px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7)">✏️ Bearbeiten</button>'
+        + '<button data-lid="' + lid + '" class="_draft-pub-btn" style="padding:9px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(0,230,118,0.3);background:rgba(0,230,118,0.08);color:#00e676"' + (!isComplete ? ' disabled style="opacity:.4;cursor:not-allowed;padding:9px;border-radius:9px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.3)"' : '') + '>✅ Veröffentlichen</button>'
+        + '<button data-lid="' + lid + '" class="_draft-del-btn" style="padding:9px;border-radius:9px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid rgba(255,68,68,0.25);background:transparent;color:#ff4444">🗑 Löschen</button>'
+        + '</div>'
+        + '</div>';
+    });
+
+    body.innerHTML = html;
+
+    // Wire buttons via delegation
+    var ov = document.getElementById('_ov-draft');
+    if (ov) {
+      ov.addEventListener('click', function(e) {
+        var editBtn = e.target.closest('._draft-edit-btn');
+        var pubBtn  = e.target.closest('._draft-pub-btn');
+        var delBtn  = e.target.closest('._draft-del-btn');
+        if (editBtn) {
+          _closeFullOv('_ov-draft');
+          openEditListing && openEditListing(editBtn.dataset.lid);
+        }
+        if (pubBtn && !pubBtn.disabled) {
+          _publishDraft(pubBtn.dataset.lid);
+        }
+        if (delBtn) {
+          if (confirm('Entwurf wirklich löschen?')) {
+            _deleteDraft(delBtn.dataset.lid);
+          }
+        }
+      });
+    }
+  } catch(err) {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,68,68,0.8)">❌ ' + escHtml(err.message) + '</div>';
+  }
+}
+window._openDraftScreen = _openDraftScreen;
+
+async function _publishDraft(listingId) {
+  try {
+    showToast('⏳ Wird veröffentlicht...', 'info');
+    await supaFetch('listings?id=eq.' + listingId, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'active' })
+    });
+    var l = allListings.find(function(x){ return String(x.id) === String(listingId); });
+    if (l) l.status = 'active';
+    showToast('✅ Inserat veröffentlicht!', 'success');
+    if (typeof addXP === 'function') addXP(10, 'Inserat erstellt', 'listing_created_' + listingId);
+    _closeFullOv('_ov-draft');
+    if (typeof loadListings === 'function') loadListings();
+    if (typeof renderProfile === 'function') renderProfile();
+  } catch(err) {
+    showToast('❌ ' + err.message, 'error');
+  }
+}
+window._publishDraft = _publishDraft;
+
+async function _deleteDraft(listingId) {
+  try {
+    await supaFetch('listings?id=eq.' + listingId, { method: 'DELETE' });
+    var idx = allListings.findIndex(function(x){ return String(x.id) === String(listingId); });
+    if (idx >= 0) allListings.splice(idx, 1);
+    showToast('Entwurf gelöscht.', 'info');
+    _openDraftScreen(); // Reload
+  } catch(err) {
+    showToast('❌ ' + err.message, 'error');
+  }
+}
+window._deleteDraft = _deleteDraft;
+
+// Save listing as draft (called from createModal with "Als Entwurf speichern" button)
+
+// Save current create form state as draft
+function _saveDraftFromForm() {
+  var title   = document.getElementById('cm-title')  ? document.getElementById('cm-title').value.trim()  : '';
+  var desc    = document.getElementById('cm-desc')   ? document.getElementById('cm-desc').value.trim()   : '';
+  var price   = parseFloat(document.getElementById('cm-price') ? document.getElementById('cm-price').value : 0) || 0;
+  var gemeinde = document.getElementById('cm-ort')   ? document.getElementById('cm-ort').value.trim()    : '';
+  var category = typeof createSelectedCategory !== 'undefined' ? createSelectedCategory : '';
+  var uid = getUID();
+  if (!uid) { showToast('Bitte anmelden', 'error'); return; }
+  var payload = {
+    user_id: uid,
+    title: title || 'Entwurf ' + new Date().toLocaleString('de-CH', {timeZone:'Europe/Zurich'}),
+    description: desc,
+    price: price,
+    location: gemeinde,
+    gemeinde: gemeinde,
+    category: category,
+    type: typeof createSelectedType !== 'undefined' ? createSelectedType : 'Angebot',
+    status: 'draft',
+    image_url: (window._uploadedPhotos && window._uploadedPhotos['main']) || null,
+    image_detail: (window._uploadedPhotos && window._uploadedPhotos['detail']) || null,
+    image_mangel: (window._uploadedPhotos && window._uploadedPhotos['mangel']) || null,
+    emoji: typeof getCategoryEmoji === 'function' ? getCategoryEmoji(category) : '📦',
+  };
+  _saveDraft(payload);
+}
+window._saveDraftFromForm = _saveDraftFromForm;
+
+
+async function _saveDraft(payload) {
+  try {
+    payload.status = 'draft';
+    var data = await supaFetch('listings', { method: 'POST', body: JSON.stringify(payload) });
+    if (Array.isArray(data) && data[0]) allListings.unshift(data[0]);
+    showToast('💾 Als Entwurf gespeichert!', 'success');
+    closeCreateModal && closeCreateModal();
+    renderProfile && renderProfile();
+  } catch(err) {
+    showToast('❌ ' + err.message, 'error');
+  }
+}
+window._saveDraft = _saveDraft;
+
+
 async function _openAktivScreen() {
   _clearCdTimers();
   var body = _makeFullOv('_ov-ak', '📦 Aktive Inserate', true);
