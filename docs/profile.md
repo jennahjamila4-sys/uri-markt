@@ -1,0 +1,4 @@
+# Profil & öffentliches Profil
+> Status: ⏳ Ausstehend
+> Zuletzt aktualisiert: 29.05.2026
+> Abhängigkeiten: auth-onboarding, gamification
