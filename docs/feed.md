@@ -1,4 +1,4 @@
 # Feed
-> Status: ⏳ Ausstehend
-> Zuletzt aktualisiert: 29.05.2026
+> Status: ✅ Fertig
+> Zuletzt aktualisiert: 02.06.2026
 > Abhängigkeiten: auth-onboarding, create-listing

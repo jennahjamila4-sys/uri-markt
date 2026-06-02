@@ -114,7 +114,7 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
 
 | Phase | Status | Beschreibung |
 |---|---|---|
-| Phase 1 – Fundament | ⏳ Ausstehend | Setup, Auth, Feed-Basis, Inserat erstellen |
+| Phase 1 – Fundament | 🔄 In Arbeit | Setup, Auth, Feed-Basis, Inserat erstellen |
 | Phase 2 – Kern-Features | ⏳ Ausstehend | Deal-Flow, Gamification, FOMO, Gesuche |
 | Phase 3 – KI + Events + Wallet | ⏳ Ausstehend | Claude AI, Tickets, QR, Notifications |
 | Phase 4 – Stripe + Launch | ⏳ Ausstehend | Echte Zahlungen, DSGVO, PWA, Admin |
