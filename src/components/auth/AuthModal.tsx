@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { RegisterSchema, LoginSchema } from '@/lib/validations/auth'
 import { useAppStore } from '@/store/appStore'
 import { GEMEINDEN } from '@/types'
+import type { Profile } from '@/types'
 import { toast } from 'sonner'
 
 export function AuthModal() {
@@ -32,7 +33,7 @@ export function AuthModal() {
   })
 
   const onRegister = async (data: typeof RegisterSchema._type) => {
-    registerForm.setError('root', undefined)
+    registerForm.setError('root', { message: '' })
     try {
       const { error: signUpError } = await supabase.auth.signUp({
         email: data.email,
@@ -64,7 +65,7 @@ export function AuthModal() {
   }
 
   const onLogin = async (data: typeof LoginSchema._type) => {
-    loginForm.setError('root', undefined)
+    loginForm.setError('root', { message: '' })
     try {
       const { data: session, error } = await supabase.auth.signInWithPassword({
         email: data.email,
@@ -86,7 +87,7 @@ export function AuthModal() {
           .select('id,username,full_name,avatar_url,gemeinde')
           .eq('id', session.user.id)
           .single()
-        setUser(profile)
+        setUser(profile as Profile | null)
         toast.success('Willkommen! 🎉')
       }
     } catch {

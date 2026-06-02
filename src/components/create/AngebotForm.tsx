@@ -20,7 +20,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [isUploading, setIsUploading] = useState(false)
 
-  const form = useForm({
+  const form = useForm<typeof AngebotSchema._type>({
     resolver: zodResolver(AngebotSchema),
     defaultValues: {
       title: '',

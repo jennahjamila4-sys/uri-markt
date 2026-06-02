@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAppStore } from '@/store/appStore'
+import type { Profile } from '@/types'
 
 export function useAuth() {
   const supabase = createClient()
@@ -22,7 +23,7 @@ export function useAuth() {
         )
         .eq('id', u.id)
         .single()
-        .then(({ data }) => setUser(data))
+        .then(({ data }) => setUser(data as Profile | null))
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -38,7 +39,7 @@ export function useAuth() {
           )
           .eq('id', session.user.id)
           .single()
-        setUser(data)
+        setUser(data as Profile | null)
       }
     )
     return () => subscription.unsubscribe()

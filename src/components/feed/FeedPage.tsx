@@ -35,6 +35,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
                 `
               id, title, description, type, status, price, price_type,
               category, gemeinde, image_url, is_boosted,
+              image_urls,
               boost_expires_at, fomo_expires_at, views, created_at, user_id,
               profiles!listings_user_id_fkey (
                 id, username, avatar_url, avg_rating, level
@@ -93,6 +94,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
             `
               id, title, description, type, status, price, price_type,
               category, gemeinde, image_url, is_boosted,
+              image_urls,
               boost_expires_at, fomo_expires_at, views, created_at, user_id,
               profiles!listings_user_id_fkey (
                 id, username, avatar_url, avg_rating, level

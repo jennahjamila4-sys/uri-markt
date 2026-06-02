@@ -10,7 +10,6 @@ export type Transaction = T<'transactions'>
 export type EventBooking = T<'event_bookings'>
 export type Notification = T<'notifications'>
 export type WalletTransaction = T<'wallet_transactions'>
-export type SmartMatch = T<'smart_matches'>
 export type Review = T<'reviews'>
 
 export type ListingWithProfile = Listing & {
