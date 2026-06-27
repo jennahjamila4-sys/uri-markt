@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      comments: {
+        Row: {
+          censored_text: string | null
+          created_at: string | null
+          id: string
+          listing_id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          censored_text?: string | null
+          created_at?: string | null
+          id?: string
+          listing_id: string
+          text: string
+          user_id: string
+        }
+        Update: {
+          censored_text?: string | null
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_bookings: {
         Row: {
           created_at: string | null
@@ -268,33 +310,109 @@ export type Database = {
           },
         ]
       }
-      transactions: {
+      smart_matches: {
         Row: {
-          amount: number | null
-          buyer_id: string | null
           created_at: string | null
+          dismissed: boolean | null
+          dismissed_at: string | null
+          gesuch_id: string
           id: string
-          listing_id: string | null
-          seller_id: string | null
-          status: string | null
+          matched_listing_id: string
+          score: number
+          user_id: string
         }
         Insert: {
-          amount?: number | null
-          buyer_id?: string | null
           created_at?: string | null
+          dismissed?: boolean | null
+          dismissed_at?: string | null
+          gesuch_id: string
           id?: string
-          listing_id?: string | null
-          seller_id?: string | null
-          status?: string | null
+          matched_listing_id: string
+          score?: number
+          user_id: string
         }
         Update: {
-          amount?: number | null
-          buyer_id?: string | null
+          created_at?: string | null
+          dismissed?: boolean | null
+          dismissed_at?: string | null
+          gesuch_id?: string
+          id?: string
+          matched_listing_id?: string
+          score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_matches_gesuch_id_fkey"
+            columns: ["gesuch_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_matches_matched_listing_id_fkey"
+            columns: ["matched_listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_matches_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          amount: number
+          buyer_contact: string | null
+          buyer_id: string
+          commission: number
+          completed_at: string | null
+          confirmed_at: string | null
+          created_at: string | null
+          id: string
+          listing_id: string
+          no_show_reported_at: string | null
+          payment_method: string | null
+          seller_contact: string | null
+          seller_id: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          buyer_contact?: string | null
+          buyer_id: string
+          commission?: number
+          completed_at?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           id?: string
-          listing_id?: string | null
-          seller_id?: string | null
-          status?: string | null
+          listing_id: string
+          no_show_reported_at?: string | null
+          payment_method?: string | null
+          seller_contact?: string | null
+          seller_id: string
+          status?: string
+        }
+        Update: {
+          amount?: number
+          buyer_contact?: string | null
+          buyer_id?: string
+          commission?: number
+          completed_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string | null
+          id?: string
+          listing_id?: string
+          no_show_reported_at?: string | null
+          payment_method?: string | null
+          seller_contact?: string | null
+          seller_id?: string
+          status?: string
         }
         Relationships: [
           {
@@ -394,11 +512,46 @@ export type Database = {
           p_reason: string
           p_user_id: string
         }
-        Returns: undefined
+        Returns: Json
+      }
+      calculate_level: {
+        Args: { p_xp_points: number }
+        Returns: string
+      }
+      create_buy_intent: {
+        Args: {
+          p_buyer_contact: string
+          p_buyer_id: string
+          p_listing_id: string
+          p_payment_method: string
+        }
+        Returns: Json
+      }
+      escalate_no_show: {
+        Args: { p_seller_id: string; p_transaction_id: string }
+        Returns: { success: boolean; error?: string; message?: string }
       }
       process_transaction_commission: {
-        Args: { p_tx_id: string }
-        Returns: undefined
+        Args: { p_seller_id: string; p_transaction_id: string }
+        Returns: {
+          success: boolean
+          error?: string
+          message?: string
+          amount?: number
+          commission?: number
+          balance?: number
+          needed?: number
+        }
+      }
+      send_notification: {
+        Args: {
+          p_listing_id?: string
+          p_message: string
+          p_recipient_id: string
+          p_title: string
+          p_type: string
+        }
+        Returns: Json
       }
     }
     Enums: {

@@ -64,10 +64,9 @@ export async function confirmSaleAction(transaction_id: string) {
 
   try {
     // Verify seller ownership (optional, RPC prüft auch)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: tx } = await (supabase
+    const { data: tx } = await supabase
       .from('transactions')
-      .select('seller_id, listing_id, buyer_id, amount, commission') as any)
+      .select('seller_id, listing_id, buyer_id, amount, commission')
       .eq('id', transaction_id)
       .single()
 
@@ -100,7 +99,7 @@ export async function confirmSaleAction(transaction_id: string) {
     revalidatePath('/profile')
     revalidatePath('/')
 
-    return { success: true, ...result }
+    return { ...result, success: true }
   } catch (err) {
     console.error('[confirmSale]', err)
     throw err
@@ -312,7 +311,7 @@ export async function submitReviewAction(rawData: unknown) {
 
     if (reviews && reviews.length > 0) {
       const avgRating =
-        reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+        reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviews.length
       await supabase
         .from('profiles')
         .update({
