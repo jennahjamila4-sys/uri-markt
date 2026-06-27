@@ -27,7 +27,7 @@ export function useXPWatcher() {
 
     // Show level up modal
     if (user.level !== prevLevel.current && prevLevel.current !== null) {
-      showLevelUpModal(user.level, user.xp_points)
+      showLevelUpModal(user.level, user.xp_points ?? 0)
     }
 
     prevXP.current = user.xp_points ?? 0
