@@ -527,6 +527,10 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_transaction: {
+        Args: { p_seller_id: string; p_transaction_id: string }
+        Returns: { success: boolean; error?: string; message?: string }
+      }
       escalate_no_show: {
         Args: { p_seller_id: string; p_transaction_id: string }
         Returns: { success: boolean; error?: string; message?: string }

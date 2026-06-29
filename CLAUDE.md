@@ -67,7 +67,7 @@ State:       Zustand
 Forms:       React Hook Form + Zod
 Backend:     Supabase (PostgreSQL, Auth, Storage, Realtime, Edge Functions)
 Payments:    Stripe
-AI:          Claude API (claude-sonnet-4-20250514)
+AI:          Claude API (claude-sonnet-4-6 · zentral in src/lib/ai.ts)
 E-Mail:      Resend
 Hosting:     Vercel (mit GitHub CI/CD)
 ```
@@ -115,7 +115,7 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
 | Phase | Status | Beschreibung |
 |---|---|---|
 | Phase 1 – Fundament | ✅ Abgeschlossen | Setup, Auth, Feed-Basis, Inserat erstellen |
-| Phase 2 – Kern-Features | 🔄 In Arbeit | Deal-Flow, Gamification, FOMO, Gesuche |
+| Phase 2 – Kern-Features | ✅ Abgeschlossen | Deal-Flow, Gamification, FOMO, Gesuche, Profil, Notifications |
 | Phase 3 – KI + Events + Wallet | ⏳ Ausstehend | Claude AI, Tickets, QR, Notifications |
 | Phase 4 – Stripe + Launch | ⏳ Ausstehend | Echte Zahlungen, DSGVO, PWA, Admin |
 

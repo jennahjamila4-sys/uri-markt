@@ -107,6 +107,65 @@ export async function confirmSaleAction(transaction_id: string) {
 }
 
 /**
+ * Verkäufer lehnt eine ausstehende Kaufanfrage ab
+ * Transaktion wird storniert, Inserat wieder aktiv geschaltet
+ */
+export async function rejectTransactionAction(transaction_id: string) {
+  const supabase = createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('Nicht angemeldet')
+  }
+
+  try {
+    const { data: tx } = await supabase
+      .from('transactions')
+      .select('seller_id, buyer_id, listing_id, status')
+      .eq('id', transaction_id)
+      .single()
+
+    if (!tx || tx.seller_id !== user.id) {
+      throw new Error('Nicht berechtigt')
+    }
+    if (tx.status !== 'pending') {
+      throw new Error('Anfrage kann nicht mehr abgelehnt werden')
+    }
+
+    // Transaktion stornieren
+    const { error: updateError } = await supabase
+      .from('transactions')
+      .update({ status: 'cancelled' })
+      .eq('id', transaction_id)
+
+    if (updateError) throw updateError
+
+    // Inserat wieder aktiv schalten
+    await supabase
+      .from('listings')
+      .update({ status: 'active' })
+      .eq('id', tx.listing_id)
+
+    // Käufer benachrichtigen
+    await supabase.rpc('send_notification', {
+      p_recipient_id: tx.buyer_id,
+      p_title: 'Kaufanfrage abgelehnt',
+      p_message: 'Der Verkäufer hat deine Kaufanfrage leider abgelehnt.',
+      p_type: 'tx_rejected',
+      p_listing_id: tx.listing_id,
+    })
+
+    revalidatePath('/profile')
+    revalidatePath('/')
+
+    return { success: true }
+  } catch (err) {
+    console.error('[rejectTransaction]', err)
+    throw err
+  }
+}
+
+/**
  * Käufer/Verkäufer markiert Transaktion als abgeschlossen
  * Vergabe von XP und automatische Benachrichtigungen
  */
@@ -119,10 +178,12 @@ export async function completeTransactionAction(transaction_id: string) {
   }
 
   try {
-    // Get transaction
+    // Transaktion laden, um den Aufrufer zu autorisieren und der RPC die
+    // korrekte seller_id zu übergeben (der Abschluss darf von Käufer ODER
+    // Verkäufer ausgelöst werden).
     const { data: tx, error: txError } = await supabase
       .from('transactions')
-      .select('id, buyer_id, seller_id, listing_id, amount, status')
+      .select('seller_id, buyer_id')
       .eq('id', transaction_id)
       .single()
 
@@ -134,63 +195,22 @@ export async function completeTransactionAction(transaction_id: string) {
       throw new Error('Nicht berechtigt')
     }
 
-    // Mark as completed
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', transaction_id)
-
-    if (updateError) throw updateError
-
-    // Mark listing as sold and set fomo_expires_at
-    await supabase
-      .from('listings')
-      .update({
-        status: 'sold',
-        fomo_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .eq('id', tx.listing_id)
-
-    // Award XP for seller
-    await supabase.rpc('award_xp', {
-      p_user_id: tx.seller_id,
-      p_amount: 50,
-      p_reason: 'Verkauf abgeschlossen',
-      p_idempotency_key: `listing_sold_${transaction_id}`,
+    // Deal atomar abschliessen: Status, FOMO, XP und Benachrichtigungen laufen
+    // in der DB-Funktion in EINER Transaktion. Ersetzt die frühere manuelle
+    // 4-Schritt-Version, die halb-fertig hängen bleiben konnte.
+    const { data: result, error } = await supabase.rpc('complete_transaction', {
+      p_transaction_id: transaction_id,
+      p_seller_id: tx.seller_id,
     })
 
-    // Award XP for buyer
-    await supabase.rpc('award_xp', {
-      p_user_id: tx.buyer_id,
-      p_amount: 10,
-      p_reason: 'Kauf abgeschlossen',
-      p_idempotency_key: `listing_bought_${transaction_id}`,
-    })
-
-    // Notify both parties
-    await supabase.rpc('send_notification', {
-      p_recipient_id: tx.buyer_id,
-      p_title: '🏆 Deal abgeschlossen!',
-      p_message: 'Bitte bewerte den Verkäufer.',
-      p_type: 'tx_completed',
-      p_listing_id: tx.listing_id,
-    })
-
-    await supabase.rpc('send_notification', {
-      p_recipient_id: tx.seller_id,
-      p_title: '🏆 Deal abgeschlossen!',
-      p_message: 'Danke für den Verkauf. XP verdient!',
-      p_type: 'tx_completed',
-      p_listing_id: tx.listing_id,
-    })
+    if (error || !result?.success) {
+      throw new Error(result?.error ?? 'Deal konnte nicht abgeschlossen werden')
+    }
 
     revalidatePath('/profile')
     revalidatePath('/')
 
-    return { success: true }
+    return { ...result, success: true }
   } catch (err) {
     console.error('[completeTransaction]', err)
     throw err
