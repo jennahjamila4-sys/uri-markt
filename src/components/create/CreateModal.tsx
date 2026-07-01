@@ -1,6 +1,7 @@
 'use client'
 import { useAppStore } from '@/store/appStore'
 import { AngebotForm } from './AngebotForm'
+import { GesuchForm } from './GesuchForm'
 import { X } from 'lucide-react'
 
 export function CreateModal() {
@@ -37,11 +38,12 @@ export function CreateModal() {
           </button>
           <button
             onClick={() => setCreateModalTab('Gesuch')}
-            className="flex items-center gap-2 font-display font-bold text-white/60 opacity-50 cursor-not-allowed"
+            className={`flex items-center gap-2 font-display font-bold ${
+              createModalTab === 'Gesuch' ? 'text-gold' : 'text-white/60'
+            }`}
           >
             <span>🔍</span>
             <span>Gesuch</span>
-            <span className="text-xs bg-gold text-obsidian px-2 py-0.5 rounded-full">Phase 2</span>
           </button>
           <button
             onClick={() => setCreateModalTab('Event')}
@@ -55,6 +57,9 @@ export function CreateModal() {
 
         {createModalTab === 'Angebot' && (
           <AngebotForm onSuccess={() => setIsOpen(false)} />
+        )}
+        {createModalTab === 'Gesuch' && (
+          <GesuchForm onSuccess={() => setIsOpen(false)} />
         )}
       </div>
     </div>

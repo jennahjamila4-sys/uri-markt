@@ -2,9 +2,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CategoryFilter } from './CategoryFilter'
+import { TypeTabs } from './TypeTabs'
 import { ListingCard } from './ListingCard'
+import { EventCard } from './EventCard'
+import { FomoZone } from './FomoZone'
+import { TikTokScroll } from './TikTokScroll'
 import { useAppStore } from '@/store/appStore'
-import type { ListingWithProfile } from '@/types'
+import type { ListingWithProfile, ListingType } from '@/types'
 
 interface FeedPageProps {
   initialListings: ListingWithProfile[]
@@ -12,12 +16,16 @@ interface FeedPageProps {
 
 export function FeedPage({ initialListings }: FeedPageProps) {
   const supabase = createClient()
-  const [listings, setListings] = useState<ListingWithProfile[]>(initialListings)
+  const [listings, setListings] = useState<ListingWithProfile[]>(
+    initialListings.filter((l) => l.type === 'Angebot')
+  )
+  const [selectedType, setSelectedType] = useState<ListingType>('Angebot')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [cursor, setCursor] = useState<string | null>(null)
   const observerTarget = useRef<HTMLDivElement>(null)
+  const [showTikTok, setShowTikTok] = useState(false)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
 
   // Infinite scroll
@@ -37,12 +45,14 @@ export function FeedPage({ initialListings }: FeedPageProps) {
               category, gemeinde, image_url, is_boosted,
               image_urls,
               boost_expires_at, fomo_expires_at, views, created_at, user_id,
+              event_date, event_location, max_capacity, current_bookings, ticket_price,
               profiles!listings_user_id_fkey (
                 id, username, avatar_url, avg_rating, level
               )
             `
               )
               .in('status', ['active', 'sold'])
+              .eq('type', selectedType)
               .order('is_boosted', { ascending: false })
               .order('created_at', { ascending: false })
               .limit(10)
@@ -80,7 +90,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
     }
 
     return () => observer.disconnect()
-  }, [isLoading, hasMore, selectedCategory, cursor, supabase])
+  }, [isLoading, hasMore, selectedType, selectedCategory, cursor, supabase])
 
   // Initial load and category change: fetch first page
   useEffect(() => {
@@ -96,12 +106,14 @@ export function FeedPage({ initialListings }: FeedPageProps) {
               category, gemeinde, image_url, is_boosted,
               image_urls,
               boost_expires_at, fomo_expires_at, views, created_at, user_id,
+              event_date, event_location, max_capacity, current_bookings, ticket_price,
               profiles!listings_user_id_fkey (
                 id, username, avatar_url, avg_rating, level
               )
             `
           )
           .in('status', ['active', 'sold'])
+          .eq('type', selectedType)
           .order('is_boosted', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(10)
@@ -123,7 +135,15 @@ export function FeedPage({ initialListings }: FeedPageProps) {
     return () => {
       mounted = false
     }
-  }, [selectedCategory, supabase])
+  }, [selectedType, selectedCategory, supabase])
+
+  const handleTypeChange = (type: ListingType) => {
+    if (type === selectedType) return
+    setSelectedType(type)
+    setListings([])
+    setCursor(null)
+    setHasMore(true)
+  }
 
   const handleCategoryChange = (category: string | null) => {
     setSelectedCategory(category)
@@ -134,18 +154,34 @@ export function FeedPage({ initialListings }: FeedPageProps) {
 
   return (
     <div className="space-y-4">
+      <TypeTabs value={selectedType} onChange={handleTypeChange} />
+
       <CategoryFilter
         selectedCategory={selectedCategory}
         onCategoryChange={handleCategoryChange}
       />
 
-      <div className="grid gap-4 px-4 sm:grid-cols-2 lg:grid-cols-3">
-        {listings.map((listing) => (
-          <ListingCard
+      {selectedType === 'Angebot' && !selectedCategory && <FomoZone />}
+
+      <div className="grid grid-cols-2 gap-3 px-3.5 lg:grid-cols-3">
+        {listings.map((listing, i) => (
+          <div
             key={listing.id}
-            listing={listing}
-            onClick={() => setSelectedListingId(listing.id)}
-          />
+            className="reveal"
+            style={{ animationDelay: `${0.3 + (i % 8) * 0.05}s` }}
+          >
+            {listing.type === 'Event' ? (
+              <EventCard
+                listing={listing}
+                onClick={() => setSelectedListingId(listing.id)}
+              />
+            ) : (
+              <ListingCard
+                listing={listing}
+                onClick={() => setSelectedListingId(listing.id)}
+              />
+            )}
+          </div>
         ))}
       </div>
 
@@ -158,11 +194,26 @@ export function FeedPage({ initialListings }: FeedPageProps) {
         </div>
       )}
 
+      {listings.length > 0 && (
+        <div className="px-4 pt-2">
+          <button
+            onClick={() => setShowTikTok(true)}
+            className="w-full rounded-xl border border-glass-border bg-obsidian-3 py-3 font-display font-bold text-white/80 transition hover:border-gold/40 hover:text-gold"
+          >
+            📱 Vollbild-Modus
+          </button>
+        </div>
+      )}
+
       <div ref={observerTarget} className="h-10" />
       {isLoading && (
         <div className="flex justify-center py-4">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
         </div>
+      )}
+
+      {showTikTok && (
+        <TikTokScroll listings={listings} onExit={() => setShowTikTok(false)} />
       )}
     </div>
   )

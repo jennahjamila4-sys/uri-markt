@@ -16,6 +16,12 @@ export function OnboardingFlow() {
 
   const [currentScreen, setCurrentScreen] = useState(1)
   const [pioneerCount, setPioneerCount] = useState(0)
+  const [mounted, setMounted] = useState(false)
+
+  // Persistierten Store erst nach Mount auswerten (kein SSR/Hydration-Mismatch)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     // Load pioneer count
@@ -28,6 +34,8 @@ export function OnboardingFlow() {
       })
   }, [supabase])
 
+  // Vor dem Mount nichts rendern (Server & Client identisch → kein Mismatch)
+  if (!mounted) return null
   // Don't show if onboarding already completed
   if (onboardingCompleted) return null
 

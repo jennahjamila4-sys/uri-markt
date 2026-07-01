@@ -121,6 +121,11 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
 
 **Legende:** ✅ Abgeschlossen · 🔄 In Arbeit · ⏳ Ausstehend · ❌ Blockiert
 
+### Design / Aufgaben-Log
+
+- **Aufgabe A** (30.06.2026, Commit `77976e2`): 7 Korrekturen, u.a. Taler in Rappen, zentrale KI-Modellkonstante. ✅
+- **Aufgabe B** (30.06.2026): Marktplatz-/Feed-Screen exakt nach `docs/design/design-referenz.html` gebaut – Hero mit echtem Bergpanorama + Ken-Burns-Zoom, Gold-Stier-Logo, Typ-Tabs, FOMO-Streifen, animierte Inserate-Karten (Badges, Herz, Hover-Lift, Live-Zähler, Gold-Sweep), Event-Karte (Countdown, Fortschrittsbalken, Scarcity), BottomNav. Effekte = reine Optik über der Logik. Details: `docs/feed.md`. ✅ (noch nicht gepusht)
+
 ---
 
 ## 🔄 Workflow für Claude Code

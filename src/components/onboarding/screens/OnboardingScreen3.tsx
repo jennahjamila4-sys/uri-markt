@@ -27,7 +27,12 @@ export function OnboardingScreen3({ onNext }: Props) {
   }
 
   const handleNext = async () => {
-    if (!user || selectedCategories.length === 0) {
+    // Ohne Login keine Persistenz der Präferenzen → weiter ohne Speichern.
+    if (!user) {
+      onNext()
+      return
+    }
+    if (selectedCategories.length === 0) {
       toast.error('Wähle mindestens eine Kategorie')
       return
     }
@@ -86,7 +91,7 @@ export function OnboardingScreen3({ onNext }: Props) {
 
       <button
         onClick={handleNext}
-        disabled={isLoading || selectedCategories.length === 0}
+        disabled={isLoading || (!!user && selectedCategories.length === 0)}
         className="w-full py-3 bg-gradient-to-r from-gold to-amber-600 text-obsidian font-bold rounded-lg hover:shadow-lg hover:shadow-gold/50 transition-all disabled:opacity-50"
       >
         {isLoading ? 'Speichern...' : 'Weiter'}

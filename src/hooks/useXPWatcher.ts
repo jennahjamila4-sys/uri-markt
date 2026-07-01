@@ -1,55 +1,40 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { useAppStore } from '@/store/appStore'
+import { useEffect, useRef, createElement } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store/appStore'
+import { XPToast } from '@/components/gamification/XPToast'
 
 /**
- * Hook to watch for XP changes and show toasts/modals
+ * Beobachtet XP-/Level-Änderungen des eingeloggten Users.
+ * - XP-Gewinn → custom XPToast
+ * - Level-Aufstieg → LevelUpModal (über Zustand-State `levelUp`)
  */
 export function useXPWatcher() {
   const user = useAppStore((s) => s.user)
+  const setLevelUp = useAppStore((s) => s.setLevelUp)
   const prevXP = useRef<number | null>(null)
   const prevLevel = useRef<string | null>(null)
 
   useEffect(() => {
     if (!user) return
 
-    const gained = (user.xp_points ?? 0) - (prevXP.current ?? 0)
+    const xp = user.xp_points ?? 0
+    const gained = xp - (prevXP.current ?? 0)
 
-    // Show XP gained toast
+    // XP-Toast (nur bei echtem Zuwachs, nicht beim ersten Laden)
     if (gained > 0 && prevXP.current !== null) {
-      toast.success(`+${gained} XP!`, {
-        description: `Total: ${user.xp_points} XP`,
+      toast.custom(() => createElement(XPToast, { gained, totalXP: xp }), {
         duration: 3000,
       })
     }
 
-    // Show level up modal
-    if (user.level !== prevLevel.current && prevLevel.current !== null) {
-      showLevelUpModal(user.level, user.xp_points ?? 0)
+    // Level-Up Modal (nicht beim ersten Laden)
+    if (user.level && user.level !== prevLevel.current && prevLevel.current !== null) {
+      setLevelUp({ level: user.level, xp })
     }
 
-    prevXP.current = user.xp_points ?? 0
+    prevXP.current = xp
     prevLevel.current = user.level ?? null
-  }, [user])
-}
-
-function showLevelUpModal(level: string | null, xp: number) {
-  if (!level) return
-
-  const levelEmojis: Record<string, string> = {
-    'Beobachter': '👁️',
-    'Dorf-Händler': '🥉',
-    'Lokal-Matador': '🥈',
-    'Kantons-Legende': '🥇',
-    'Gotthard-Titan': '💎',
-  }
-
-  const emoji = levelEmojis[level] || '⭐'
-
-  toast.success(`${emoji} Level ${level}!`, {
-    description: `Glückwunsch! Du bist jetzt ${level} mit ${xp} XP.`,
-    duration: 5000,
-  })
+  }, [user, setLevelUp])
 }

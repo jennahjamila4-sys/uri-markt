@@ -20,7 +20,11 @@ export function OnboardingScreen2({ onNext }: Props) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleNext = async () => {
-    if (!user) return
+    // Ohne Login gibt es kein Profil zu speichern (Felder sind optional) → einfach weiter.
+    if (!user) {
+      onNext()
+      return
+    }
 
     setIsLoading(true)
     try {

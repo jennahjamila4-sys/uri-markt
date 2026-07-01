@@ -13,6 +13,9 @@ const config: Config = {
       colors: {
         gold: {
           DEFAULT: '#FFD700',
+          lt: '#FFED4E',
+          deep: '#FF9800',
+          amber: '#F59E0B',
           dim: 'rgba(255,215,0,0.12)',
           glow: 'rgba(255,215,0,0.35)',
           muted: '#A89000',
@@ -34,7 +37,9 @@ const config: Config = {
           success: '#00D68F',
           danger: '#FF3B30',
           fomo: '#FF2D55',
+          fire: '#FF6B2C',
           info: '#4FC3F7',
+          purple: '#A78BFA',
         },
       },
       animation: {
@@ -72,6 +77,9 @@ const config: Config = {
       backdropBlur: {
         glass: '24px',
         heavy: '40px',
+      },
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
       boxShadow: {
         gold: '0 4px 24px rgba(255,215,0,0.25)',

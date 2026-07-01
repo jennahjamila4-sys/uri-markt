@@ -114,6 +114,11 @@ export type Database = {
           type: string
           user_id: string
           views: number | null
+          event_date: string | null
+          event_location: string | null
+          max_capacity: number | null
+          current_bookings: number | null
+          ticket_price: number | null
         }
         Insert: {
           boost_expires_at?: string | null
@@ -133,6 +138,11 @@ export type Database = {
           type: string
           user_id: string
           views?: number | null
+          event_date?: string | null
+          event_location?: string | null
+          max_capacity?: number | null
+          current_bookings?: number | null
+          ticket_price?: number | null
         }
         Update: {
           boost_expires_at?: string | null
@@ -152,6 +162,11 @@ export type Database = {
           type?: string
           user_id?: string
           views?: number | null
+          event_date?: string | null
+          event_location?: string | null
+          max_capacity?: number | null
+          current_bookings?: number | null
+          ticket_price?: number | null
         }
         Relationships: [
           {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useAppStore } from '@/store/appStore'
 
@@ -9,12 +10,12 @@ import { useAppStore } from '@/store/appStore'
  * Loads initial notifications and subscribes to new ones
  */
 export function useNotifications(userId: string | undefined) {
-  const supabase = createClient()
   const setNotifications = useAppStore((s) => s.setNotifications)
   const addNotification = useAppStore((s) => s.addNotification)
 
   useEffect(() => {
     if (!userId) return
+    const supabase = createClient()
 
     // Load initial unread notifications
     supabase
@@ -59,6 +60,15 @@ export function useNotifications(userId: string | undefined) {
             read: newNotif.read,
             created_at: newNotif.created_at,
           })
+
+          // Live-Toast mit Titel/Message aus dem payload
+          const p = (newNotif.payload ?? {}) as {
+            title?: string
+            message?: string
+          }
+          if (p.title) {
+            toast(p.title, { description: p.message })
+          }
         }
       )
       .subscribe()
@@ -66,5 +76,5 @@ export function useNotifications(userId: string | undefined) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [userId, supabase, setNotifications, addNotification])
+  }, [userId, setNotifications, addNotification])
 }

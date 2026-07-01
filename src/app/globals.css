@@ -4,10 +4,17 @@
 
 :root {
   --gold: #FFD700;
+  --gold-lt: #FFED4E;
+  --gold-deep: #FF9800;
+  --gold-amber: #F59E0B;
   --gold-dim: rgba(255,215,0,0.12);
   --gold-glow: rgba(255,215,0,0.35);
   --glass: rgba(255,255,255,0.055);
   --glass-border: rgba(255,255,255,0.10);
+  --fire: #FF6B2C;
+  --red: #FF3B30;
+  --shadow-card: 0 10px 40px rgba(0,0,0,0.55);
+  --shadow-gold: 0 8px 32px rgba(255,215,0,0.28);
 }
 
 body::before {
@@ -71,4 +78,164 @@ body {
 
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Horizontale Scroll-Reihen ohne sichtbaren Scrollbalken (Tabs, FOMO, Kategorien) */
+.scrollbar-hide {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge alt */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari */
+}
+
+/* Level-Up Konfetti (reine CSS-Animation, keine Library) */
+.confetti-piece {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 1px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* ============================================================
+   DESIGN-REFERENZ-EFFEKTE (Aufgabe B)
+   Reine Optik – legen sich ÜBER die Funktion, ersetzen nie Logik.
+   Vorlage: docs/design/design-referenz.html
+   ============================================================ */
+
+/* Gestaffeltes Einblenden – jedes Element bekommt eine animation-delay
+   per inline-style (z.B. style={{ animationDelay: '.32s' }}). */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero: langsamer Ken-Burns-Zoom auf dem echten Bergpanorama */
+.kenburns {
+  transform-origin: center;
+  animation: kenburns 24s ease-in-out infinite alternate;
+}
+@keyframes kenburns {
+  from { transform: scale(1.02); }
+  to   { transform: scale(1.12) translateY(-2%); }
+}
+
+/* Text-Sheen: laufender Glanz über die Hero-Headline */
+.text-shine {
+  background: linear-gradient(100deg, #fff 30%, var(--gold) 50%, #fff 70%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: sheen 4.5s linear infinite;
+}
+@keyframes sheen {
+  to { background-position: -200% center; }
+}
+
+/* Scarcity-Puls: weicher Glow z.B. am Pionier-Plätze-Badge */
+.animate-scarce {
+  animation: scarce 2.4s ease-in-out infinite;
+}
+@keyframes scarce {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 44, 0.35); }
+  50%      { box-shadow: 0 0 18px 1px rgba(255, 107, 44, 0.18); }
+}
+
+/* Beacon: pulsierender roter Punkt an der Glocke */
+.animate-beacon {
+  animation: beacon 1.6s infinite;
+}
+@keyframes beacon {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(7,7,8,0.6), 0 0 0 0 rgba(255,59,48,0.5); }
+  50%      { box-shadow: 0 0 0 2px rgba(7,7,8,0.6), 0 0 0 6px rgba(255,59,48,0); }
+}
+
+/* Flicker: Feuer-/Blitz-Emoji flackert (Live-Zähler, FOMO-Kopf) */
+.animate-flick {
+  animation: flick 1.8s infinite;
+}
+@keyframes flick {
+  0%, 100% { opacity: 1; }
+  45%      { opacity: 0.5; }
+}
+
+/* Stempel-Puls: „VERKAUFT IN X MIN" im FOMO-Streifen */
+.animate-stamp {
+  animation: stamppulse 2.2s infinite;
+}
+@keyframes stamppulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+/* Herz-Pop: beim Favorisieren */
+.heart-pop {
+  animation: heart-pop 0.4s cubic-bezier(0.16, 1.6, 0.3, 1);
+}
+@keyframes heart-pop {
+  0%   { transform: scale(0.4); }
+  60%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* Gold-Rand-Highlight: laufender Lichtstreifen am Karten-Rand.
+   Liegt als ::before über der Karte, nur Rahmen sichtbar (mask). */
+.gold-sweep::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, transparent 20%, rgba(255,215,0,0.9) 50%, transparent 80%);
+  background-size: 250% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: sweep 3.5s linear infinite;
+  z-index: 5;
+  pointer-events: none;
+}
+@keyframes sweep {
+  to { background-position: -250% 0; }
+}
+
+/* Fortschrittsbalken-Schimmer (Event-Karte) */
+.prog-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background-size: 200% 100%;
+  animation: sheen 2.2s linear infinite;
+}
+
+/* Respektiert System-Einstellung „Bewegung reduzieren" */
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .kenburns, .text-shine, .animate-scarce, .animate-beacon,
+  .animate-flick, .animate-stamp, .heart-pop, .gold-sweep::before,
+  .prog-shimmer::after {
+    animation: none !important;
+  }
+  .reveal { opacity: 1; transform: none; }
 }

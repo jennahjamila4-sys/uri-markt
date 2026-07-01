@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { AngebotSchema } from '@/lib/validations/listing'
 import { GesuchSchema } from '@/lib/validations/onboarding'
+import { calculateSmartMatches } from '@/lib/smartMatch'
 import type { Database } from '@/types/database'
 
 export async function createListingAction(rawData: unknown) {
@@ -82,9 +83,8 @@ export async function createGesuchAction(rawData: unknown) {
       p_idempotency_key: `gesuch_created_${listing.id}`,
     })
 
-    // Calculate smart matches
-    // TODO: Implement via RPC or use direct DB query
-    // await calculateSmartMatches(listing.id, supabase)
+    // Smart Matches berechnen (regelbasiert)
+    await calculateSmartMatches(listing.id)
 
     revalidatePath('/')
     revalidatePath('/profile')
@@ -94,4 +94,45 @@ export async function createGesuchAction(rawData: unknown) {
     console.error('[createGesuch]', err)
     throw err
   }
+}
+
+/**
+ * Inserat löschen – RLS stellt sicher, dass nur der Besitzer löschen kann
+ */
+export async function deleteListingAction(listingId: string) {
+  const supabase = createServerClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  const { error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', listingId)
+    .eq('user_id', user.id)
+
+  if (error) throw new Error('Löschen fehlgeschlagen')
+
+  revalidatePath('/')
+  revalidatePath('/profile')
+}
+
+/**
+ * Smart Match verwerfen (dismissed=true) – RLS schützt über user_id
+ */
+export async function dismissMatchAction(matchId: string) {
+  const supabase = createServerClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  const { error } = await supabase
+    .from('smart_matches')
+    .update({ dismissed: true, dismissed_at: new Date().toISOString() })
+    .eq('id', matchId)
+    .eq('user_id', user.id)
+
+  if (error) throw new Error('Aktion fehlgeschlagen')
+
+  revalidatePath('/profile')
 }

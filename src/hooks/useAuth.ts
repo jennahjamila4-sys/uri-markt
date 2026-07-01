@@ -5,11 +5,11 @@ import { useAppStore } from '@/store/appStore'
 import type { Profile } from '@/types'
 
 export function useAuth() {
-  const supabase = createClient()
   const user = useAppStore((s) => s.user)
   const setUser = useAppStore((s) => s.setUser)
 
   useEffect(() => {
+    const supabase = createClient()
     // Initial user load
     supabase.auth.getUser().then(({ data: { user: u } }) => {
       if (!u) {
@@ -43,9 +43,10 @@ export function useAuth() {
       }
     )
     return () => subscription.unsubscribe()
-  }, [setUser, supabase])
+  }, [setUser])
 
   const signOut = async () => {
+    const supabase = createClient()
     await supabase.auth.signOut()
     setUser(null)
   }

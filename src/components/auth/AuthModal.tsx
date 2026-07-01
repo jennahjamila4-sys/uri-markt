@@ -12,6 +12,8 @@ import { toast } from 'sonner'
 export function AuthModal() {
   const supabase = createClient()
   const setUser = useAppStore((s) => s.setUser)
+  const isOpen = useAppStore((s) => s.isAuthModalOpen)
+  const setIsOpen = useAppStore((s) => s.setAuthModalOpen)
   const [tab, setTab] = useState<'login' | 'register'>('login')
 
   const registerForm = useForm({
@@ -89,17 +91,21 @@ export function AuthModal() {
           .single()
         setUser(profile as Profile | null)
         toast.success('Willkommen! 🎉')
+        loginForm.reset()
+        setIsOpen(false)
       }
     } catch {
       loginForm.setError('root', { message: 'Ein Fehler ist aufgetreten' })
     }
   }
 
+  if (!isOpen) return null
+
   return (
     <div className="fixed inset-0 z-50 flex items-end">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => useAppStore.getState().setCreateModalOpen(false)}
+        onClick={() => setIsOpen(false)}
       />
       <div className="relative w-full animate-slide-up rounded-t-3xl border border-glass-border bg-obsidian-3 p-6 shadow-modal">
         <div className="mb-6 flex gap-4 border-b border-glass-border pb-4">

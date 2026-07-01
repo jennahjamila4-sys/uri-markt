@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Uri-Markt · Marktplatz (Vorschau)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#FFD700; --gold-lt:#FFED4E; --gold-deep:#FF9800; --gold-amber:#F59E0B;
+    --green:#00E676; --blue:#4FC3F7; --purple:#A78BFA; --red:#FF3B30; --fire:#FF6B2C;
+    --bg:#000; --bg2:#0b0b0c; --bg3:#141416;
+    --glass:rgba(255,255,255,0.055); --glass-hi:rgba(255,255,255,0.09); --line:rgba(255,255,255,0.10);
+    --txt:#fff; --txt-dim:rgba(255,255,255,0.55); --txt-faint:rgba(255,255,255,0.35);
+    --shadow-card:0 10px 40px rgba(0,0,0,0.55);
+    --shadow-gold:0 8px 32px rgba(255,215,0,0.28);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #16130a 0%, #0a0a0b 38%, #000 100%);
+    color:var(--txt); font-family:'DM Sans',sans-serif; -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center; overflow-x:hidden;
+  }
+  /* grain overlay */
+  body::after{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:200; opacity:.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .app{
+    width:100%; max-width:430px; min-height:100vh; position:relative;
+    background:var(--bg); box-shadow:0 0 80px rgba(0,0,0,.8);
+    padding-bottom:96px; overflow:hidden;
+  }
+  .reveal{opacity:0; transform:translateY(14px); animation:rise .7s cubic-bezier(.16,1,.3,1) forwards}
+  @keyframes rise{to{opacity:1;transform:translateY(0)}}
+
+  /* ===== BETA ribbon ===== */
+  .ribbon{position:absolute; top:0; right:0; width:120px; height:120px; overflow:hidden; z-index:60; pointer-events:none}
+  .ribbon span{
+    position:absolute; top:22px; right:-34px; transform:rotate(45deg);
+    background:linear-gradient(135deg,var(--gold-lt),var(--gold-deep));
+    color:#000; font-family:'Syne'; font-weight:800; font-size:11px; letter-spacing:2px;
+    padding:5px 40px; box-shadow:0 4px 14px rgba(0,0,0,.5);
+  }
+
+  /* ===== Header ===== */
+  header{
+    position:sticky; top:0; z-index:50; height:60px; padding:0 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(7,7,8,.72); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:10px}
+  .bull{width:38px; height:38px; filter:drop-shadow(0 2px 8px rgba(255,215,0,.35))}
+  .brand h1{font-family:'Syne'; font-weight:800; font-size:19px; letter-spacing:.5px; line-height:1}
+  .brand h1 b{color:var(--gold)}
+  .brand p{font-size:10.5px; color:var(--txt-dim); letter-spacing:1.5px; margin-top:2px; text-transform:uppercase}
+  .h-actions{display:flex; align-items:center; gap:12px}
+  .bell{position:relative; width:40px; height:40px; display:grid; place-items:center; border-radius:12px; background:var(--glass); border:1px solid var(--line); cursor:pointer; transition:.2s}
+  .bell:active{transform:scale(.92)}
+  .bell svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:1.8}
+  .bell .dot{position:absolute; top:8px; right:9px; width:8px; height:8px; background:var(--red); border-radius:50%; box-shadow:0 0 0 2px #07070899; animation:beacon 1.6s infinite}
+  @keyframes beacon{0%,100%{box-shadow:0 0 0 2px #07070899,0 0 0 0 rgba(255,59,48,.5)}50%{box-shadow:0 0 0 2px #07070899,0 0 0 6px rgba(255,59,48,0)}}
+  .btn-login{
+    font-family:'Syne'; font-weight:700; font-size:13.5px; color:var(--gold);
+    padding:9px 18px; border-radius:12px; cursor:pointer; transition:.2s;
+    background:linear-gradient(135deg,rgba(255,215,0,.14),rgba(255,152,0,.06));
+    border:1px solid rgba(255,215,0,.45);
+  }
+  .btn-login:hover{box-shadow:var(--shadow-gold); border-color:var(--gold)}
+  .btn-login:active{transform:scale(.95)}
+
+  /* ===== Hero ===== */
+  .hero{position:relative; margin:14px; height:268px; border-radius:24px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--shadow-card)}
+  .hero .alps{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center 38%; transform-origin:center; animation:kenburns 24s ease-in-out infinite alternate}
+  @keyframes kenburns{from{transform:scale(1.02)}to{transform:scale(1.12) translateY(-2%)}}
+  .hero .scrim{position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.82) 0%,rgba(0,0,0,.55) 45%,rgba(0,0,0,.05) 75%)}
+  .hero .content{position:absolute; inset:0; padding:18px; display:flex; flex-direction:column; justify-content:flex-start}
+  .hero-tag{
+    align-self:flex-start; display:inline-flex; align-items:center; gap:6px;
+    font-family:'Syne'; font-weight:700; font-size:11px; letter-spacing:.8px; color:var(--gold);
+    background:rgba(255,215,0,.1); border:1px solid rgba(255,215,0,.35); padding:6px 12px; border-radius:30px;
+    backdrop-filter:blur(6px);
+  }
+  .hero h2{font-family:'Syne'; font-weight:800; font-size:33px; line-height:1.02; margin-top:14px; letter-spacing:-.5px; max-width:78%}
+  .hero h2 .shine{background:linear-gradient(100deg,#fff 30%,var(--gold) 50%,#fff 70%); background-size:200% auto; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; animation:sheen 4.5s linear infinite}
+  @keyframes sheen{to{background-position:-200% center}}
+  .hero p{font-size:13.5px; color:rgba(255,255,255,.78); margin-top:10px; max-width:62%; line-height:1.4}
+  .pioneer{
+    margin-top:auto; align-self:flex-start; display:inline-flex; align-items:center; gap:7px;
+    font-size:12px; font-weight:600; color:#fff; padding:7px 13px; border-radius:30px;
+    background:linear-gradient(135deg,rgba(255,59,48,.22),rgba(255,107,44,.12));
+    border:1px solid rgba(255,107,44,.4); animation:scarce 2.4s ease-in-out infinite;
+  }
+  .pioneer b{color:var(--gold-lt)}
+  @keyframes scarce{0%,100%{box-shadow:0 0 0 0 rgba(255,107,44,.35)}50%{box-shadow:0 0 18px 1px rgba(255,107,44,.18)}}
+
+  /* ===== Tabs ===== */
+  .tabs{display:flex; gap:4px; margin:18px 14px 6px; padding:5px; background:var(--glass); border:1px solid var(--line); border-radius:16px; position:relative}
+  .tab{flex:1; text-align:center; padding:11px 4px; font-size:13px; font-weight:600; color:var(--txt-dim); border-radius:11px; cursor:pointer; transition:.25s; z-index:2; display:flex; align-items:center; justify-content:center; gap:6px}
+  .tab.active{color:#000; font-family:'Syne'; font-weight:700}
+  .tab-pill{position:absolute; top:5px; left:5px; height:calc(100% - 10px); border-radius:11px; background:linear-gradient(135deg,var(--gold-lt),var(--gold)); box-shadow:0 4px 14px rgba(255,215,0,.3); transition:transform .35s cubic-bezier(.16,1,.3,1),width .35s cubic-bezier(.16,1,.3,1); z-index:1}
+
+  /* ===== FOMO strip ===== */
+  .sec-head{display:flex; align-items:center; justify-content:space-between; margin:20px 16px 12px}
+  .sec-head h3{font-family:'Syne'; font-weight:700; font-size:15px; display:flex; align-items:center; gap:7px}
+  .sec-head .bolt{color:var(--fire); animation:flick 1.8s infinite}
+  @keyframes flick{0%,100%{opacity:1}45%{opacity:.5}}
+  .sec-head h3 span{color:var(--red)}
+  .sec-head .arrow{color:var(--txt-faint); font-size:20px}
+  .fomo-row{display:flex; gap:11px; overflow-x:auto; padding:0 16px 4px; scroll-snap-type:x mandatory; scrollbar-width:none}
+  .fomo-row::-webkit-scrollbar{display:none}
+  .fomo-card{flex:0 0 158px; scroll-snap-align:start; background:linear-gradient(135deg,#161616,#0d0d0d); border:1px solid var(--line); border-radius:16px; padding:14px; position:relative; filter:saturate(.55)}
+  .fomo-card .emj{font-size:30px; filter:grayscale(.3) brightness(.9)}
+  .fomo-card .ft{font-size:13px; font-weight:600; color:rgba(255,255,255,.78); margin-top:8px; line-height:1.25}
+  .fomo-card .fp{font-size:13px; font-weight:700; color:var(--txt-dim); margin-top:3px}
+  .stamp{margin-top:10px; display:inline-block; font-family:'Syne'; font-weight:700; font-size:9.5px; letter-spacing:.6px; color:var(--red); border:1.4px solid var(--red); border-radius:7px; padding:4px 8px; transform:rotate(-3deg); animation:stamppulse 2.2s infinite}
+  @keyframes stamppulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+  /* ===== Listings grid ===== */
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:14px 14px 0}
+  .card{position:relative; border-radius:20px; overflow:hidden; background:linear-gradient(165deg,#141416,#0c0c0d); border:1px solid var(--line); box-shadow:var(--shadow-card); cursor:pointer; transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s, border-color .3s}
+  .card:hover{transform:translateY(-5px); border-color:rgba(255,255,255,.2); box-shadow:0 18px 50px rgba(0,0,0,.6)}
+  .card .media{position:relative; height:122px; display:grid; place-items:center; overflow:hidden; background:radial-gradient(120% 100% at 50% 0,#1d1d20,#0c0c0d)}
+  .card .media .big{font-size:54px; transition:transform .4s cubic-bezier(.16,1,.3,1); filter:drop-shadow(0 6px 14px rgba(0,0,0,.5))}
+  .card:hover .media .big{transform:scale(1.12) translateY(-2px)}
+  .heart{position:absolute; top:10px; right:10px; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:rgba(0,0,0,.4); backdrop-filter:blur(6px); border:1px solid var(--line); cursor:pointer; z-index:4; transition:.2s}
+  .heart svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9}
+  .heart.on svg{fill:var(--red); stroke:var(--red); animation:pop .4s cubic-bezier(.16,1.6,.3,1)}
+  @keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+  .badge{position:absolute; display:inline-flex; align-items:center; gap:4px; font-family:'Syne'; font-weight:700; font-size:9.5px; letter-spacing:.5px; padding:5px 9px; border-radius:30px; z-index:3}
+  .b-angebot{bottom:10px; left:10px; color:var(--gold-deep); background:rgba(255,152,0,.12); border:1px solid rgba(255,152,0,.5)}
+  .b-gesuch{top:10px; left:10px; color:var(--blue); background:rgba(79,195,247,.12); border:1px solid rgba(79,195,247,.5)}
+  .b-vor{top:10px; left:10px; color:var(--purple); background:rgba(167,139,250,.14); border:1px solid rgba(167,139,250,.5)}
+  .b-high{top:10px; left:10px; color:#000; background:linear-gradient(135deg,var(--gold-lt),var(--gold)); box-shadow:0 3px 12px rgba(255,215,0,.35)}
+  .card .body{padding:12px 13px 14px}
+  .card .ttl{font-size:13.5px; font-weight:600; line-height:1.28; color:rgba(255,255,255,.94); min-height:34px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .price{font-family:'Syne'; font-weight:800; font-size:21px; color:var(--gold); margin-top:8px}
+  .price.free{color:var(--green)}
+  .loc{display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--txt-faint); margin-top:7px}
+  .loc svg{width:12px;height:12px;stroke:var(--txt-faint);fill:none;stroke-width:1.6}
+  .viewers{margin-top:10px; display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:var(--fire); background:rgba(255,107,44,.1); border:1px solid rgba(255,107,44,.3); border-radius:30px; padding:5px 10px}
+  .viewers .fire{animation:flick 1.5s infinite}
+  .eye{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--txt-dim); margin-top:10px; background:var(--glass); border:1px solid var(--line); border-radius:30px; padding:5px 10px}
+  .eye svg{width:13px;height:13px;stroke:var(--txt-dim);fill:none;stroke-width:1.6}
+
+  /* highlight card glow border sweep */
+  .card.highlight{border-color:rgba(255,215,0,.5)}
+  .card.highlight::before{content:''; position:absolute; inset:-1px; border-radius:20px; padding:1px; background:linear-gradient(120deg,transparent 20%,rgba(255,215,0,.9) 50%,transparent 80%); background-size:250% 100%; -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:sweep 3.5s linear infinite; z-index:5; pointer-events:none}
+  @keyframes sweep{to{background-position:-250% 0}}
+
+  /* coming-soon / event card */
+  .card.event{grid-column:auto}
+  .card.event .media{height:96px; background:radial-gradient(120% 120% at 70% 0,#1a1430,#0c0c12)}
+  .countbox{padding:12px 13px 0}
+  .count-lbl{font-size:9.5px; letter-spacing:1.5px; color:var(--txt-faint); font-weight:600; text-transform:uppercase}
+  .count{font-family:'Syne'; font-weight:800; font-size:24px; color:var(--gold); letter-spacing:1px; font-variant-numeric:tabular-nums; margin-top:2px}
+  .prog{height:8px; border-radius:30px; background:rgba(255,255,255,.08); margin:11px 0 6px; overflow:hidden; position:relative}
+  .prog i{position:absolute; inset:0; width:0; border-radius:30px; background:linear-gradient(90deg,var(--gold-deep),var(--gold)); box-shadow:0 0 12px rgba(255,215,0,.5); transition:width 1.4s cubic-bezier(.16,1,.3,1)}
+  .prog i::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent); background-size:200% 100%; animation:sheen 2.2s linear infinite}
+  .spots{font-size:11px; color:var(--txt-dim); font-weight:500}
+  .spots b{color:#fff}
+  .remind{margin:11px 13px 14px; display:flex; align-items:center; justify-content:center; gap:7px; font-family:'Syne'; font-weight:700; font-size:13px; color:var(--gold); padding:11px; border-radius:13px; background:linear-gradient(135deg,rgba(255,215,0,.14),rgba(255,152,0,.05)); border:1px solid rgba(255,215,0,.45); cursor:pointer; transition:.2s}
+  .remind:hover{box-shadow:var(--shadow-gold); border-color:var(--gold)}
+  .remind:active{transform:scale(.97)}
+
+  /* ===== Bottom nav ===== */
+  .bnav{position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px; height:84px; display:flex; align-items:flex-start; justify-content:space-around; padding-top:12px; z-index:55; background:rgba(7,7,8,.85); backdrop-filter:blur(24px); border-top:1px solid var(--line)}
+  .nav-i{display:flex; flex-direction:column; align-items:center; gap:5px; font-size:10.5px; font-weight:600; color:var(--txt-dim); cursor:pointer; width:64px; transition:.2s}
+  .nav-i svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}
+  .nav-i.active{color:var(--gold)}
+  .nav-i.active svg{fill:rgba(255,215,0,.18)}
+  .nav-create{margin-top:-26px}
+  .nav-create .plus{width:58px; height:58px; border-radius:50%; display:grid; place-items:center; background:linear-gradient(135deg,var(--gold-lt),var(--gold-deep)); box-shadow:0 8px 26px rgba(255,152,0,.5),0 0 0 6px rgba(0,0,0,.4); transition:.2s}
+  .nav-create:active .plus{transform:scale(.93)}
+  .nav-create .plus svg{width:28px;height:28px;stroke:#000;stroke-width:2.6}
+  .nav-create span{color:var(--txt-dim); margin-top:7px}
+
+  .note{font-size:11px;color:var(--txt-faint);text-align:center;padding:18px 24px 4px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="ribbon"><span>BETA</span></div>
+
+  <!-- Header -->
+  <header class="reveal" style="animation-delay:.02s">
+    <div class="brand">
+      <img class="bull" src="uri-markt-uristier-logo.png" alt="Uristier Logo">
+      <div>
+        <h1>URI<b>-</b>MARKT</h1>
+        <p>Kanton Uri</p>
+      </div>
+    </div>
+    <div class="h-actions">
+      <div class="bell" title="Benachrichtigungen">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+        <span class="dot"></span>
+      </div>
+      <div class="btn-login">Anmelden</div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero reveal" style="animation-delay:.1s">
+    <img class="alps" src="uri-markt-alps-banner.jpg" alt="Uri Bergpanorama">
+    <div class="scrim"></div>
+    <div class="content">
+      <span class="hero-tag">⭐ HYPERLOKALER MARKTPLATZ</span>
+      <h2>Kaufe &amp; Verkaufe <span class="shine">direkt in Uri.</span></h2>
+      <p>Dein lokaler Marktplatz für Produkte, Events und Gesuche.</p>
+      <span class="pioneer">🏆 Noch <b>&nbsp;7&nbsp;</b> Pionier-Plätze verfügbar</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs reveal" style="animation-delay:.16s">
+    <div class="tab-pill" id="pill"></div>
+    <div class="tab active" data-i="0">🏷️ Angebote</div>
+    <div class="tab" data-i="1">🔍 Gesuche</div>
+    <div class="tab" data-i="2">🚀 Vorankündigungen</div>
+  </div>
+
+  <!-- FOMO strip -->
+  <div class="sec-head reveal" style="animation-delay:.22s">
+    <h3><span class="bolt">⚡</span> <span>Kürzlich verpasst</span></h3>
+    <span class="arrow">›</span>
+  </div>
+  <div class="fomo-row reveal" style="animation-delay:.26s">
+    <div class="fomo-card"><div class="emj">🧹</div><div class="ft">Dyson Staubsauger</div><div class="fp">CHF 50</div><div class="stamp">VERKAUFT IN 12 MIN</div></div>
+    <div class="fomo-card"><div class="emj">🏂</div><div class="ft">Burton Snowboard</div><div class="fp">CHF 120</div><div class="stamp">VERKAUFT IN 2 STD</div></div>
+    <div class="fomo-card"><div class="emj">🎸</div><div class="ft">E-Gitarre Fender</div><div class="fp">CHF 280</div><div class="stamp">VERKAUFT IN 45 MIN</div></div>
+  </div>
+
+  <!-- Grid -->
+  <div class="grid">
+
+    <!-- Highlight -->
+    <div class="card highlight reveal" style="animation-delay:.32s">
+      <div class="media">
+        <span class="badge b-high">⭐ HIGHLIGHT</span>
+        <div class="heart" onclick="fav(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-10-10A5 5 0 0112 6a5 5 0 0110 5c-2 5-10 10-10 10z"/></svg></div>
+        <div class="big">🛷</div>
+        <span class="badge b-angebot">🏷️ ANGEBOT</span>
+      </div>
+      <div class="body">
+        <div class="ttl">Holzschlitten – Handarbeit aus Erstfeld</div>
+        <div class="price">CHF 85</div>
+        <div class="loc"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Erstfeld</div>
+        <div class="viewers"><span class="fire">🔥</span> <b class="vcount" data-v="12">12</b>&nbsp;schauen gerade</div>
+      </div>
+    </div>
+
+    <!-- Gesuch -->
+    <div class="card reveal" style="animation-delay:.38s">
+      <div class="media">
+        <span class="badge b-gesuch">🔍 GESUCH</span>
+        <div class="heart" onclick="fav(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-10-10A5 5 0 0112 6a5 5 0 0110 5c-2 5-10 10-10 10z"/></svg></div>
+        <div class="big">🏠</div>
+      </div>
+      <div class="body">
+        <div class="ttl">Suche: Wohnung 3.5 Zimmer in Altdorf</div>
+        <div class="price free">Gratis</div>
+        <div class="loc"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Altdorf</div>
+        <div class="eye"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg> 8</div>
+      </div>
+    </div>
+
+    <!-- iPhone -->
+    <div class="card reveal" style="animation-delay:.44s">
+      <div class="media">
+        <div class="heart" onclick="fav(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-10-10A5 5 0 0112 6a5 5 0 0110 5c-2 5-10 10-10 10z"/></svg></div>
+        <div class="big">📱</div>
+        <span class="badge b-angebot">🏷️ ANGEBOT</span>
+      </div>
+      <div class="body">
+        <div class="ttl">iPhone 14 Pro – wie neu</div>
+        <div class="price">CHF 750</div>
+        <div class="loc"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Schattdorf</div>
+        <div class="viewers"><span class="fire">🔥</span> <b class="vcount" data-v="23">23</b>&nbsp;schauen gerade</div>
+      </div>
+    </div>
+
+    <!-- Event / Vorankündigung -->
+    <div class="card event reveal" style="animation-delay:.5s">
+      <div class="media">
+        <span class="badge b-vor">🚀 VORANKÜNDIGUNG</span>
+        <div class="heart" onclick="fav(this)"><svg viewBox="0 0 24 24"><path d="M12 21s-8-5-10-10A5 5 0 0112 6a5 5 0 0110 5c-2 5-10 10-10 10z"/></svg></div>
+        <div class="big">🎿</div>
+      </div>
+      <div class="body" style="padding-bottom:4px">
+        <div class="ttl" style="min-height:auto">Uri Ski-Opening Night 2026</div>
+        <div class="loc"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg> Andermatt · <b style="color:var(--gold);margin-left:4px">CHF 35</b></div>
+      </div>
+      <div class="countbox">
+        <div class="count-lbl">Startet in</div>
+        <div class="count" id="cd">13:22:45</div>
+        <div class="prog"><i id="bar"></i></div>
+        <div class="spots"><b id="taken">156</b> von 200 Plätzen reserviert</div>
+      </div>
+      <div class="remind" onclick="this.innerHTML='🔔 Erinnerung aktiv ✓'; this.style.color='var(--green)'">🔔 Erinnere mich</div>
+    </div>
+
+  </div>
+
+  <p class="note">VERBINDLICHE DESIGN-REFERENZ · Marktplatz-Screen · echtes Uri-Panorama + Uristier · animiert &amp; FOMO-optimiert<br>Claude Code baut die UI exakt nach dieser Vorlage.</p>
+
+  <!-- Bottom nav -->
+  <nav class="bnav">
+    <div class="nav-i active">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      Marktplatz
+    </div>
+    <div class="nav-i nav-create">
+      <div class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+      <span>Erstellen</span>
+    </div>
+    <div class="nav-i">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      Profil
+    </div>
+  </nav>
+</div>
+
+<script>
+  // Heart toggle
+  function fav(el){el.classList.toggle('on'); event.stopPropagation();}
+
+  // Tab pill slide
+  const tabs=[...document.querySelectorAll('.tab')], pill=document.getElementById('pill');
+  function placePill(t){const r=t.getBoundingClientRect(),p=t.parentElement.getBoundingClientRect();pill.style.width=r.width+'px';pill.style.transform='translateX('+(r.left-p.left-5)+'px)';}
+  tabs.forEach(t=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('active'));t.classList.add('active');placePill(t);}));
+  setTimeout(()=>placePill(document.querySelector('.tab.active')),120);
+  window.addEventListener('resize',()=>placePill(document.querySelector('.tab.active')));
+
+  // Stars in hero (only if a painted sky exists; real photo needs none)
+  const sky=document.querySelector('.hero .sky');
+  if(sky){for(let i=0;i<26;i++){const s=document.createElement('div');s.className='star';s.style.left=Math.random()*100+'%';s.style.top=Math.random()*55+'%';s.style.animationDelay=(Math.random()*3.5)+'s';sky.appendChild(s);}}
+
+  // Live viewer counts (creates "alive" feeling)
+  setInterval(()=>{document.querySelectorAll('.vcount').forEach(el=>{if(Math.random()>.55){let v=+el.dataset.v+(Math.random()>.5?1:-1);v=Math.max(8,v);el.dataset.v=v;el.textContent=v;el.animate([{transform:'scale(1.35)',color:'#FFED4E'},{transform:'scale(1)'}],{duration:400,easing:'ease-out'});}});},2600);
+
+  // Countdown
+  let total=13*3600+22*60+45;
+  const cd=document.getElementById('cd');
+  setInterval(()=>{total=total>0?total-1:0;const h=String(Math.floor(total/3600)).padStart(2,'0'),m=String(Math.floor(total%3600/60)).padStart(2,'0'),s=String(total%60).padStart(2,'0');cd.textContent=h+':'+m+':'+s;},1000);
+
+  // Progress fill + slow scarcity creep
+  const bar=document.getElementById('bar'),taken=document.getElementById('taken');let tk=156;
+  setTimeout(()=>bar.style.width=(tk/200*100)+'%',400);
+  setInterval(()=>{if(tk<196&&Math.random()>.6){tk++;taken.textContent=tk;bar.style.width=(tk/200*100)+'%';taken.animate([{color:'#FFED4E'},{color:'#fff'}],{duration:900});}},5200);
+</script>
+</body>
+</html>

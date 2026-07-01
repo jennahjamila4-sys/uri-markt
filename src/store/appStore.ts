@@ -15,6 +15,15 @@ interface AppState {
   onboardingCompleted: boolean
   setOnboardingCompleted: (v: boolean) => void
 
+  levelUp: { level: string; xp: number } | null
+  setLevelUp: (v: { level: string; xp: number } | null) => void
+
+  isNotificationPanelOpen: boolean
+  setNotificationPanelOpen: (v: boolean) => void
+
+  isAuthModalOpen: boolean
+  setAuthModalOpen: (v: boolean) => void
+
   isCreateModalOpen: boolean
   setCreateModalOpen: (v: boolean) => void
   createModalTab: 'Angebot' | 'Gesuch' | 'Event'
@@ -42,6 +51,15 @@ export const useAppStore = create<AppState>()(
 
       onboardingCompleted: false,
       setOnboardingCompleted: (v) => set({ onboardingCompleted: v }),
+
+      levelUp: null,
+      setLevelUp: (v) => set({ levelUp: v }),
+
+      isNotificationPanelOpen: false,
+      setNotificationPanelOpen: (v) => set({ isNotificationPanelOpen: v }),
+
+      isAuthModalOpen: false,
+      setAuthModalOpen: (v) => set({ isAuthModalOpen: v }),
 
       isCreateModalOpen: false,
       setCreateModalOpen: (v) => set({ isCreateModalOpen: v }),
