@@ -29,23 +29,29 @@ export async function createBuyIntentAction(rawData: unknown) {
   try {
     // RPC create_buy_intent (SECURITY DEFINER): setzt buyer_id serverseitig via
     // auth.uid(), berechnet amount/commission selbst und reserviert das Inserat
-    // atomar. Der Client übergibt NIE user_id/Betrag/Provision.
-    // `as any`: die RPC ist (noch) nicht in den generierten DB-Typen.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.rpc as any)('create_buy_intent', {
+    // atomar. Der Client übergibt NIE user_id/Betrag/Provision – nur die 3
+    // Live-Argumente (listing_id, payment_method, buyer_contact).
+    const { data, error } = await supabase.rpc('create_buy_intent', {
       p_listing_id: listing_id,
       p_payment_method: payment_method,
       p_buyer_contact: buyer_contact,
     })
 
-    if (error || !data?.success) {
-      throw new Error(data?.error ?? 'Kaufanfrage fehlgeschlagen')
+    if (error) throw error
+
+    const result = data as {
+      success: boolean
+      transaction_id?: string
+      error?: string
+    }
+    if (result.success === false) {
+      throw new Error(result.error ?? 'Kaufanfrage fehlgeschlagen')
     }
 
     revalidatePath('/')
     revalidatePath('/profile')
 
-    return { success: true, transaction_id: data.transaction_id }
+    return { success: true, transaction_id: result.transaction_id }
   } catch (err) {
     console.error('[createBuyIntent]', err)
     throw err

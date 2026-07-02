@@ -536,7 +536,6 @@ export type Database = {
       create_buy_intent: {
         Args: {
           p_buyer_contact: string
-          p_buyer_id: string
           p_listing_id: string
           p_payment_method: string
         }
