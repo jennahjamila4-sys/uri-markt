@@ -1,6 +1,6 @@
 "use client"
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DealFlow } from './DealFlow'
 import { CommentSection } from './CommentSection'
@@ -48,26 +48,36 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
     return () => { mounted = false }
   }, [listingId, listing, supabase])
 
-  // Increment views (best-effort) when component mounts and listing is available
+  // Views GENAU EINMAL pro Detail-Öffnung erhöhen.
+  // Guard per Ref auf die Listing-ID – NICHT von `listing` abhängig machen,
+  // sonst triggert das eigene setListing() den Effekt erneut (Endlos-Hochzählen).
+  const incrementedFor = useRef<string | null>(null)
   useEffect(() => {
-    if (!listing) return
-    let mounted = true
+    const id = listing?.id
+    if (!id) return
+    if (incrementedFor.current === id) return
+    incrementedFor.current = id
+
+    const base = listing?.views ?? 0
     ;(async () => {
       try {
-        const current = listing.views ?? 0
         const { error } = await supabase
           .from('listings')
-          .update({ views: current + 1 })
-          .eq('id', listing.id)
-        if (error) console.warn('Failed to increment views', error.message)
-        // reflect locally
-        if (mounted) setListing((l) => (l ? { ...l, views: (l.views ?? 0) + 1 } : l))
+          .update({ views: base + 1 })
+          .eq('id', id)
+        if (error) {
+          console.warn('Failed to increment views', error.message)
+          return
+        }
+        // lokal spiegeln (nur wenn noch dasselbe Listing offen ist)
+        setListing((l) => (l && l.id === id ? { ...l, views: (l.views ?? 0) + 1 } : l))
       } catch (e) {
         console.error(e)
       }
     })()
-    return () => { mounted = false }
-  }, [listing, supabase])
+    // Absichtlich nur an der ID hängen: pro Öffnung genau eine Erhöhung.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing?.id, supabase])
 
   if (loading || !listing) {
     return (
