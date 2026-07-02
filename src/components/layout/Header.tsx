@@ -1,9 +1,10 @@
 'use client'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Bell, User } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { useAppStore } from '@/store/appStore'
 import { useAuth } from '@/hooks/useAuth'
+import { ProfileMenu } from './ProfileMenu'
 
 export function Header() {
   const { user } = useAuth()
@@ -48,15 +49,9 @@ export function Header() {
           )}
         </button>
 
-        {/* Rechte Aktion: angemeldet → Profil-Link, sonst „Anmelden" → Auth-Modal. */}
+        {/* Rechte Aktion: angemeldet → Profil-Menü (Dropdown), sonst „Anmelden". */}
         {user ? (
-          <Link
-            href="/profile"
-            aria-label="Profil"
-            className="grid h-10 w-10 place-items-center rounded-xl border border-glass-border bg-glass transition active:scale-90"
-          >
-            <User size={19} className="stroke-[1.8]" />
-          </Link>
+          <ProfileMenu />
         ) : (
           <button
             onClick={() => setAuthModalOpen(true)}
