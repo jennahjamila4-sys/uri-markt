@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createGesuchAction } from '@/app/actions/listings'
 import { GesuchSchema } from '@/lib/validations/onboarding'
@@ -13,6 +14,8 @@ interface GesuchFormProps {
 
 export function GesuchForm({ onSuccess }: GesuchFormProps) {
   const { user } = useAppStore()
+  const bumpFeedVersion = useAppStore((s) => s.bumpFeedVersion)
+  const router = useRouter()
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -53,6 +56,9 @@ export function GesuchForm({ onSuccess }: GesuchFormProps) {
     try {
       await createGesuchAction(validated.data)
       toast.success('Gesuch erstellt! Wir suchen passende Angebote. 🎯')
+      // Serverdaten neu laden: RSC-Refresh + Feed-Neuladen (Quelle bleibt der Server)
+      bumpFeedVersion()
+      router.refresh()
       onSuccess?.()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Fehler beim Erstellen')

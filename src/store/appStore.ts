@@ -31,6 +31,10 @@ interface AppState {
 
   selectedListingId: string | null
   setSelectedListingId: (id: string | null) => void
+
+  /** Wird nach erfolgreichem Erstellen erhöht → Feed lädt die Serverdaten neu. */
+  feedVersion: number
+  bumpFeedVersion: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -68,6 +72,9 @@ export const useAppStore = create<AppState>()(
 
       selectedListingId: null,
       setSelectedListingId: (id) => set({ selectedListingId: id }),
+
+      feedVersion: 0,
+      bumpFeedVersion: () => set((s) => ({ feedVersion: s.feedVersion + 1 })),
     }),
     {
       name: 'uri-markt-v1',

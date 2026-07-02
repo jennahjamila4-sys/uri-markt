@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createListingAction } from '@/app/actions/listings'
@@ -16,6 +17,8 @@ interface AngebotFormProps {
 
 export function AngebotForm({ onSuccess }: AngebotFormProps) {
   const { user } = useAppStore()
+  const bumpFeedVersion = useAppStore((s) => s.bumpFeedVersion)
+  const router = useRouter()
   const [step, setStep] = useState(1)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -65,6 +68,9 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
       form.reset()
       setUploadedImages([])
       setStep(1)
+      // Serverdaten neu laden: RSC-Refresh + Feed-Neuladen (Quelle bleibt der Server)
+      bumpFeedVersion()
+      router.refresh()
       onSuccess?.()
     } catch (err) {
       toast.error((err as Error).message)

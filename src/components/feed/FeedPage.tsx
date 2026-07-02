@@ -27,6 +27,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
   const observerTarget = useRef<HTMLDivElement>(null)
   const [showTikTok, setShowTikTok] = useState(false)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
+  const feedVersion = useAppStore((s) => s.feedVersion)
 
   // Infinite scroll
   useEffect(() => {
@@ -135,7 +136,9 @@ export function FeedPage({ initialListings }: FeedPageProps) {
     return () => {
       mounted = false
     }
-  }, [selectedType, selectedCategory, supabase])
+    // feedVersion in den Deps: nach einem neuen Inserat (bumpFeedVersion)
+    // wird die erste Seite frisch vom Server geladen – ohne Reload/Logout.
+  }, [selectedType, selectedCategory, supabase, feedVersion])
 
   const handleTypeChange = (type: ListingType) => {
     if (type === selectedType) return
