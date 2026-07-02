@@ -1,4 +1,16 @@
 -- 003_rpc_functions.sql
+-- ⚠️ VERALTET / NICHT die Live-Wahrheit. Nur historischer Erstentwurf.
+--    Die tatsächlich in der DB (project lhqsuelguwfdflapzdhk) laufenden Funktionen
+--    weichen ab. Bekannte Abweichungen dieses Files gegenüber der Live-DB:
+--      * send_notification schreibt hier user_id/payload/read – live sind es
+--        recipient_id/title/message/type/is_read/listing_id.
+--      * process_transaction_commission: die Live-Version zieht die Provision
+--        korrekt in Rappen ab (commission[Taler] * 100). Dieses File verrechnet
+--        die Einheit (zieht commission direkt von credits[Rappen] ab).
+--      * create_buy_intent existierte live gar nicht → neu als versionierte
+--        Migration: supabase/migrations/20260702121132_create_buy_intent.sql
+--    Für neue Änderungen: Migration unter supabase/migrations/ anlegen und via
+--    Supabase (MCP/Dashboard) einspielen. Dieses File NICHT als Referenz nutzen.
 -- Wichtige RPCs: award_xp, process_transaction_commission, send_notification, escalate_no_show
 
 -- Helper function: calculate level from XP

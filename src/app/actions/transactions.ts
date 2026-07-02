@@ -27,10 +27,12 @@ export async function createBuyIntentAction(rawData: unknown) {
   const { listing_id, payment_method, buyer_contact } = validated.data
 
   try {
-    // Call RPC to create buy intent
+    // RPC create_buy_intent (SECURITY DEFINER): setzt buyer_id serverseitig via
+    // auth.uid(), berechnet amount/commission selbst und reserviert das Inserat
+    // atomar. Der Client übergibt NIE user_id/Betrag/Provision.
+    // `as any`: die RPC ist (noch) nicht in den generierten DB-Typen.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.rpc as any)('create_buy_intent', {
-      p_buyer_id: user.id,
       p_listing_id: listing_id,
       p_payment_method: payment_method,
       p_buyer_contact: buyer_contact,

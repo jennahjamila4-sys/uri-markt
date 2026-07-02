@@ -63,8 +63,8 @@ export function DealFlow({ listing, currentUser }: Props) {
           <div className="text-3xl font-bold text-gold">
             CHF {(listing.price ?? 0).toFixed(2)}
           </div>
-          <p className="text-white/60 text-sm mt-2">
-            + 10% Provision in Talern bei Kauf
+          <p className="text-uri-success text-sm mt-2">
+            Für dich provisionsfrei – du zahlst nur den Preis
           </p>
         </div>
 
@@ -96,16 +96,15 @@ export function DealFlow({ listing, currentUser }: Props) {
               Kaufabsicht bestätigen
             </h3>
 
-            {/* Price display */}
+            {/* Price display – Käufer zahlt NUR den Preis, keine Provision */}
             <div className="bg-obsidian-2 rounded-lg p-4 mb-6">
-              <div className="flex justify-between text-white mb-2">
-                <span>Kaufpreis:</span>
+              <div className="flex justify-between text-white">
+                <span>Dein Preis:</span>
                 <span className="font-bold">CHF {(listing.price ?? 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-white/60 text-sm">
-                <span>Provision (10%):</span>
-                <span>CHF {((listing.price ?? 0) * 0.1).toFixed(2)} Taler</span>
-              </div>
+              <p className="mt-2 text-xs text-uri-success">
+                Provisionsfrei – die Provision trägt der Verkäufer.
+              </p>
             </div>
 
             {/* Payment method */}
@@ -153,7 +152,7 @@ export function DealFlow({ listing, currentUser }: Props) {
                 className="w-4 h-4 accent-gold mt-1"
               />
               <span className="text-white/70 text-sm">
-                Ich möchte dieses Inserat kaufen und akzeptiere, dass die Provision in Talern bezahlt wird.
+                Ich möchte dieses Inserat verbindlich kaufen und den Verkäufer kontaktieren.
               </span>
             </label>
 
