@@ -125,6 +125,7 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
 
 - **Aufgabe A** (30.06.2026, Commit `77976e2`): 7 Korrekturen, u.a. Taler in Rappen, zentrale KI-Modellkonstante. ✅
 - **Aufgabe B** (30.06.2026): Marktplatz-/Feed-Screen exakt nach `docs/design/design-referenz.html` gebaut – Hero mit echtem Bergpanorama + Ken-Burns-Zoom, Gold-Stier-Logo, Typ-Tabs, FOMO-Streifen, animierte Inserate-Karten (Badges, Herz, Hover-Lift, Live-Zähler, Gold-Sweep), Event-Karte (Countdown, Fortschrittsbalken, Scarcity), BottomNav. Effekte = reine Optik über der Logik. Details: `docs/feed.md`. ✅ (noch nicht gepusht)
+- **Bug-Session 01** (02.07.2026): 6 Bugs abgearbeitet (Auftrag `bugfix-anweisung-01.md`). BUG 1 Feed-Refresh nach Erstellen (Store `feedVersion` + `router.refresh()`). BUG 2 Gesuch-Feed – Typwerte/Filter/Render bereits konsistent, wird durch BUG-1-Fix sofort sichtbar (gegen Live-DB verifiziert). BUG 3 Header-Profil-Dropdown (`ProfileMenu`, inkl. wieder vorhandenem Abmelden). BUG 4 Bottom-Nav Profil war bereits korrekt verlinkt. BUG 5 View-Zähler-Endlosschleife behoben (Ref-Guard, real 9636 → +1/Öffnung). BUG 6 Käufer-Text „provisionsfrei" + `create_buy_intent` als **SECURITY-DEFINER-Migration** (`supabase/migrations/20260702121132_create_buy_intent.sql`) – Einheiten gegen Live-RPC verifiziert. ⚠️ Migration noch nicht eingespielt (kein Supabase-MCP in Session). Commits lokal, KEIN Push.
 
 ---
 
