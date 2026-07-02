@@ -12,13 +12,26 @@ export function OnboardingScreen4({ onNext }: Props) {
 
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
-      toast.error('Benachrichtigungen nicht unterstützt')
+      toast.error('Benachrichtigungen werden von diesem Browser nicht unterstützt')
+      return
+    }
+
+    // Nicht-sicherer Kontext (z. B. Zugriff über http://<LAN-IP> statt localhost/https):
+    // requestPermission() verweigert dort sofort OHNE Prompt – das sähe wie ein Bug aus.
+    if (!window.isSecureContext) {
+      toast.error('Bitte über https oder localhost öffnen, um Benachrichtigungen zu aktivieren')
+      return
+    }
+
+    // Bereits im Browser blockiert – ein erneuter Request zeigt keinen Prompt mehr.
+    if (Notification.permission === 'denied') {
+      toast.error('Im Browser blockiert – bitte in den Seiteneinstellungen erlauben')
       return
     }
 
     setIsRequestingPermission(true)
     try {
-      const permission = (await Notification.requestPermission()) as PermissionStatus['state']
+      const permission = await Notification.requestPermission()
 
       if (permission === 'granted') {
         toast.success('Benachrichtigungen aktiviert!')
@@ -26,6 +39,7 @@ export function OnboardingScreen4({ onNext }: Props) {
       } else if (permission === 'denied') {
         toast.error('Benachrichtigungen abgelehnt')
       }
+      // 'default' = Prompt weggeklickt: keine Fehlermeldung, Nutzer kann erneut oder „Später"
     } catch (err) {
       console.error(err)
       toast.error('Fehler beim Aktivieren')

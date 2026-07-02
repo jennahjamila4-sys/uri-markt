@@ -1,27 +1,44 @@
-import { createServerClient as _create, type CookieOptions } from '@supabase/ssr'
+import { createServerClient as _create } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies'
 import type { Database } from '@/types/database'
 
-export function createServerClient() {
-  const store = cookies() as unknown as ReadonlyRequestCookies
+/**
+ * Next.js 15: `cookies()` ist async und MUSS awaited werden.
+ * Deshalb ist diese Factory async – alle Aufrufer nutzen `await createServerClient()`.
+ * Ohne await werden Session-Cookies beim Code-Exchange nicht geschrieben → Login bricht weg.
+ */
+export async function createServerClient() {
+  const store = await cookies()
   return _create<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (n) => store.get(n)?.value,
-        set: (n, v, o: CookieOptions) => {
+        getAll: () => store.getAll(),
+        setAll: (cookiesToSet) => {
           try {
-            store.set({ name: n, value: v, ...o })
-          } catch {}
-        },
-        remove: (n, o: CookieOptions) => {
-          try {
-            store.set({ name: n, value: '', ...o })
-          } catch {}
+            cookiesToSet.forEach(({ name, value, options }) =>
+              store.set(name, value, options)
+            )
+          } catch (error) {
+            // Cookie-Writes sind in Server Components nicht erlaubt – Next.js wirft
+            // dort einen bekannten Fehler. Das ist unkritisch, weil die Middleware
+            // die Session bei jedem Request auffrischt. Jeder ANDERE Fehler wird geworfen.
+            if (!isReadonlyCookiesError(error)) throw error
+          }
         },
       },
     }
+  )
+}
+
+/**
+ * Trifft nur den Fall zu, dass Cookies aus einer Server Component heraus
+ * geschrieben werden sollen (dort read-only). Alles andere ist ein echter Fehler.
+ */
+function isReadonlyCookiesError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Server Action or Route Handler/i.test(error.message)
   )
 }

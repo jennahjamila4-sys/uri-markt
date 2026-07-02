@@ -19,7 +19,7 @@ interface Props {
  * NICHT: Telefon, E-Mail, Taler-Guthaben, Transaktionen.
  */
 export default async function PublicProfilePage({ params }: Props) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
   const { username } = await params
 
   const { data: profile } = await supabase

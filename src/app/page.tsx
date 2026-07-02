@@ -5,7 +5,7 @@ import { FeedPage } from '@/components/feed/FeedPage'
 import { Hero } from '@/components/feed/Hero'
 
 export default async function Home() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: listings } = await supabase
     .from('listings')

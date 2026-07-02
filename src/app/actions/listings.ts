@@ -7,7 +7,7 @@ import { calculateSmartMatches } from '@/lib/smartMatch'
 import type { Database } from '@/types/database'
 
 export async function createListingAction(rawData: unknown) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Nicht angemeldet')
@@ -47,7 +47,7 @@ export async function createListingAction(rawData: unknown) {
  * Triggers Smart Match calculation automatically
  */
 export async function createGesuchAction(rawData: unknown) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Nicht angemeldet')
@@ -100,7 +100,7 @@ export async function createGesuchAction(rawData: unknown) {
  * Inserat löschen – RLS stellt sicher, dass nur der Besitzer löschen kann
  */
 export async function deleteListingAction(listingId: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Nicht angemeldet')
@@ -121,7 +121,7 @@ export async function deleteListingAction(listingId: string) {
  * Smart Match verwerfen (dismissed=true) – RLS schützt über user_id
  */
 export async function dismissMatchAction(matchId: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Nicht angemeldet')

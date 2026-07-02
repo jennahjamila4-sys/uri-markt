@@ -11,7 +11,7 @@ import { createServerClient } from '@/lib/supabase/server'
  * Nur Treffer mit Score >= 60 werden gespeichert.
  */
 export async function calculateSmartMatches(gesuchId: string): Promise<void> {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   // Gesuch laden
   const { data: gesuch } = await supabase

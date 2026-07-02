@@ -10,7 +10,7 @@ import { censorText } from '@/lib/censor'
  * SECURITY: user_id kommt vom Server via getUser()
  */
 export async function createBuyIntentAction(rawData: unknown) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   // Auth check
   const { data: { user } } = await supabase.auth.getUser()
@@ -55,7 +55,7 @@ export async function createBuyIntentAction(rawData: unknown) {
  * SECURITY: user_id vom Server, RPC ist SECURITY DEFINER
  */
 export async function confirmSaleAction(transaction_id: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -111,7 +111,7 @@ export async function confirmSaleAction(transaction_id: string) {
  * Transaktion wird storniert, Inserat wieder aktiv geschaltet
  */
 export async function rejectTransactionAction(transaction_id: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -170,7 +170,7 @@ export async function rejectTransactionAction(transaction_id: string) {
  * Vergabe von XP und automatische Benachrichtigungen
  */
 export async function completeTransactionAction(transaction_id: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -222,7 +222,7 @@ export async function completeTransactionAction(transaction_id: string) {
  * Provision wird zurück, Käufer bekommt Strike
  */
 export async function reportNoShowAction(transaction_id: string) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -273,7 +273,7 @@ export async function reportNoShowAction(transaction_id: string) {
  * Submit review für abgeschlossene Transaktion
  */
 export async function submitReviewAction(rawData: unknown) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -355,7 +355,7 @@ export async function submitReviewAction(rawData: unknown) {
  * Text wird zensiert, bevor in DB gespeichert
  */
 export async function submitCommentAction(rawData: unknown) {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {

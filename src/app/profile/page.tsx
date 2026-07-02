@@ -9,7 +9,7 @@ import type { MyListingItem } from '@/components/profile/MyListings'
 import type { SellerTransaction } from '@/components/listing/SellerDashboard'
 
 export default async function ProfilePage() {
-  const supabase = createServerClient()
+  const supabase = await createServerClient()
 
   const {
     data: { user },
