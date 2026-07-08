@@ -193,6 +193,18 @@ export function SellerDashboard({ transactions, credits }: Props) {
                 </div>
               </div>
             )}
+
+            {/* COMPLETED: Verkauf abgeschlossen – nur Statusanzeige, kein Kontakt/Buttons */}
+            {tx.status === 'completed' && (
+              <div className="mt-4 rounded-xl border border-uri-success/40 bg-emerald-900/20 p-4 text-center">
+                <p className="font-display font-semibold text-uri-success">
+                  🏆 Abgeschlossen
+                </p>
+                <p className="mt-1 text-sm text-white/60">
+                  Übergabe erledigt. Provision wurde abgezogen.
+                </p>
+              </div>
+            )}
           </div>
         )
       })}

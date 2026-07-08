@@ -11,6 +11,7 @@ import {
   SellerDashboard,
   type SellerTransaction,
 } from '@/components/listing/SellerDashboard'
+import { BuyerDashboard, type BuyerTransaction } from './BuyerDashboard'
 import type { Profile, UserLevel } from '@/types'
 
 interface Props {
@@ -18,15 +19,17 @@ interface Props {
   myListings: MyListingItem[]
   matches: MatchItem[]
   sellerTransactions: SellerTransaction[]
+  buyerTransactions: BuyerTransaction[]
 }
 
-type View = 'overview' | 'matches' | 'listings' | 'sales'
+type View = 'overview' | 'matches' | 'listings' | 'sales' | 'purchases'
 
 export function ProfileDashboard({
   profile,
   myListings,
   matches,
   sellerTransactions,
+  buyerTransactions,
 }: Props) {
   const [view, setView] = useState<View>('overview')
 
@@ -36,6 +39,9 @@ export function ProfileDashboard({
   ).length
   const pendingSales = sellerTransactions.filter(
     (t) => t.status === 'pending'
+  ).length
+  const activePurchases = buyerTransactions.filter(
+    (t) => t.status === 'pending' || t.status === 'confirmed'
   ).length
 
   const copyReferral = async () => {
@@ -48,6 +54,7 @@ export function ProfileDashboard({
   const tiles: { key: View; emoji: string; label: string; badge?: number }[] = [
     { key: 'matches', emoji: '🎯', label: 'Smart Matches', badge: matches.length },
     { key: 'listings', emoji: '📦', label: 'Meine Inserate' },
+    { key: 'purchases', emoji: '🛒', label: 'Meine Käufe', badge: activePurchases },
     { key: 'sales', emoji: '💰', label: 'Meine Verkäufe', badge: pendingSales },
   ]
 
@@ -146,6 +153,7 @@ export function ProfileDashboard({
             <h2 className="font-display text-xl font-bold text-white">
               {view === 'matches' && '🎯 Smart Matches'}
               {view === 'listings' && '📦 Meine Inserate'}
+              {view === 'purchases' && '🛒 Meine Käufe'}
               {view === 'sales' && '💰 Meine Verkäufe'}
             </h2>
             <button
@@ -158,6 +166,9 @@ export function ProfileDashboard({
 
           {view === 'matches' && <SmartMatchList matches={matches} />}
           {view === 'listings' && <MyListings listings={myListings} />}
+          {view === 'purchases' && (
+            <BuyerDashboard transactions={buyerTransactions} />
+          )}
           {view === 'sales' && (
             <SellerDashboard
               transactions={sellerTransactions}

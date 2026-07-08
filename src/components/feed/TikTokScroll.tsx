@@ -1,20 +1,54 @@
 'use client'
 
 import Image from 'next/image'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
 
 interface Props {
   listings: ListingWithProfile[]
   onExit: () => void
+  /** Lädt die nächste Seite (cursor-basiert, identisch zum Grid) */
+  onLoadMore?: () => void
+  /** Ob es überhaupt noch weitere Inserate gibt */
+  hasMore?: boolean
+  /** Ob gerade eine Seite geladen wird */
+  isLoading?: boolean
 }
 
 /**
  * Vollbild „TikTok"-Scroll-Modus: vertikales Scroll-Snapping über Inserate.
  * Sortierung erfolgt bereits beim Laden (Boosts → Neueste → FOMO).
+ * Beim Swipen ans Ende wird über `onLoadMore` automatisch nachgeladen –
+ * dieselbe cursor-basierte Pagination wie im Grid.
  */
-export function TikTokScroll({ listings, onExit }: Props) {
+export function TikTokScroll({
+  listings,
+  onExit,
+  onLoadMore,
+  hasMore = false,
+  isLoading = false,
+}: Props) {
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Auto-Nachladen: sobald das Lade-Panel am Ende in Sichtnähe kommt, die
+  // nächste Seite anfordern. rootMargin lädt vor, damit beim Swipen nahtlos
+  // weitere Inserate bereitstehen. loadMore hat serverseitig eigene Guards
+  // (isLoading/hasMore/cursor), Mehrfach-Trigger sind daher unschädlich.
+  useEffect(() => {
+    if (!onLoadMore || !hasMore) return
+    const el = loadMoreRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) onLoadMore()
+      },
+      { threshold: 0.1, rootMargin: '0px 0px 600px 0px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [onLoadMore, hasMore, listings.length])
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
@@ -26,7 +60,7 @@ export function TikTokScroll({ listings, onExit }: Props) {
         ← Zurück
       </button>
 
-      <div className="h-[100dvh] snap-y snap-mandatory overflow-y-scroll">
+      <div className="h-[100dvh] snap-y snap-proximity overflow-y-scroll">
         {listings.map((listing) => {
           const img =
             listing.image_url ??
@@ -63,6 +97,13 @@ export function TikTokScroll({ listings, onExit }: Props) {
               {listing.status === 'sold' && (
                 <span className="absolute right-4 top-4 animate-fomo-pulse rounded-full bg-uri-fomo px-3 py-1 font-display text-sm font-bold text-white">
                   VERKAUFT
+                </span>
+              )}
+
+              {/* Status-Badge bei reserviert */}
+              {listing.status === 'reserved' && (
+                <span className="absolute right-4 top-4 rounded-full bg-amber-500 px-3 py-1 font-display text-sm font-bold text-black">
+                  ⏳ RESERVIERT
                 </span>
               )}
 
@@ -110,17 +151,29 @@ export function TikTokScroll({ listings, onExit }: Props) {
           )
         })}
 
-        {/* Ende-Marker */}
-        <div className="flex h-[100dvh] w-full snap-start flex-col items-center justify-center gap-4 bg-obsidian-2 text-center">
-          <div className="text-5xl">🏔️</div>
-          <p className="text-white/60">Das war&apos;s für jetzt!</p>
-          <button
-            onClick={onExit}
-            className="rounded-xl border border-glass-border px-6 py-3 font-display font-bold text-white"
+        {/* Ende: Lade-Panel (es kommt noch mehr) ODER Ende-Marker (fertig) */}
+        {hasMore ? (
+          <div
+            ref={loadMoreRef}
+            className="flex h-[100dvh] w-full snap-start flex-col items-center justify-center gap-4 bg-obsidian-2 text-center"
           >
-            Zurück zum Markt
-          </button>
-        </div>
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+            <p className="text-white/50">
+              {isLoading ? 'Weitere Inserate laden…' : 'Weiter swipen für mehr'}
+            </p>
+          </div>
+        ) : (
+          <div className="flex h-[100dvh] w-full snap-start flex-col items-center justify-center gap-4 bg-obsidian-2 text-center">
+            <div className="text-5xl">🏔️</div>
+            <p className="text-white/60">Das war&apos;s für jetzt!</p>
+            <button
+              onClick={onExit}
+              className="rounded-xl border border-glass-border px-6 py-3 font-display font-bold text-white"
+            >
+              Zurück zum Markt
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

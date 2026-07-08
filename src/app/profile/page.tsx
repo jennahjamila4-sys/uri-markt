@@ -7,6 +7,7 @@ import type { Profile } from '@/types'
 import type { MatchItem } from '@/components/profile/SmartMatchList'
 import type { MyListingItem } from '@/components/profile/MyListings'
 import type { SellerTransaction } from '@/components/listing/SellerDashboard'
+import type { BuyerTransaction } from '@/components/profile/BuyerDashboard'
 
 export default async function ProfilePage() {
   const supabase = await createServerClient()
@@ -49,7 +50,20 @@ export default async function ProfilePage() {
       'id,status,amount,commission,payment_method,created_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
     )
     .eq('seller_id', user.id)
-    .in('status', ['pending', 'confirmed'])
+    .in('status', ['pending', 'confirmed', 'completed'])
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  // Käufer-Sicht: eigene Käufe mit Status (pending → confirmed → completed).
+  // Kontaktdaten werden NICHT hier geladen, sondern erst im Client via
+  // get_transaction_contact-RPC (nur bei confirmed, nur an Beteiligte).
+  const { data: buyerTransactions } = await supabase
+    .from('transactions')
+    .select(
+      'id,status,amount,payment_method,created_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
+    )
+    .eq('buyer_id', user.id)
+    .in('status', ['pending', 'confirmed', 'completed'])
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -63,6 +77,9 @@ export default async function ProfilePage() {
           matches={(matches ?? []) as unknown as MatchItem[]}
           sellerTransactions={
             (sellerTransactions ?? []) as unknown as SellerTransaction[]
+          }
+          buyerTransactions={
+            (buyerTransactions ?? []) as unknown as BuyerTransaction[]
           }
         />
       </main>

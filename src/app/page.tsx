@@ -20,7 +20,7 @@ export default async function Home() {
       )
     `
     )
-    .in('status', ['active', 'sold'])
+    .in('status', ['active', 'reserved', 'sold'])
     .order('is_boosted', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(20)

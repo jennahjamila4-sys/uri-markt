@@ -23,11 +23,13 @@ export function useAuth() {
         )
         .eq('id', u.id)
         .single()
-        .then(({ data }) => setUser(data as Profile | null))
+        .then(({ data }) => {
+          setUser(data as Profile | null)
+        })
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         if (!session?.user) {
           setUser(null)
           return

@@ -64,6 +64,7 @@ function LiveViewers({ id }: { id: string }) {
 export function ListingCard({ listing, onClick }: ListingCardProps) {
   const [fav, setFav] = useState(false)
   const isSold = listing.status === 'sold'
+  const isReserved = listing.status === 'reserved'
   const isFree = listing.price_type === 'free'
   const price = isFree
     ? 'Gratis'
@@ -147,6 +148,15 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
             </span>
           </div>
         )}
+
+        {/* Reserviert-Overlay (echter Status) – Inserat bleibt sichtbar, Kaufen ist im Detail gesperrt */}
+        {isReserved && (
+          <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
+            <span className="-rotate-3 rounded-[7px] border-[1.4px] border-amber-400 px-2.5 py-1 font-display text-xs font-bold tracking-wide text-amber-400">
+              ⏳ RESERVIERT
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -168,7 +178,7 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
           <span>{listing.gemeinde}</span>
         </div>
 
-        {listing.type === 'Angebot' && !isSold ? (
+        {listing.type === 'Angebot' && !isSold && !isReserved ? (
           <LiveViewers id={listing.id} />
         ) : (
           <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-glass px-2.5 py-[5px] text-[11.5px] text-white/55">

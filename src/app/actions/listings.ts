@@ -17,6 +17,9 @@ export async function createListingAction(rawData: unknown) {
 
   const insertData: Database['public']['Tables']['listings']['Insert'] = {
     ...validated.data,
+    // Anzeige (ListingCard/Feed/Profil) liest die Singular-Spalte image_url;
+    // das Formular lädt Bilder als image_urls[]. Erstes Bild spiegeln.
+    image_url: validated.data.image_urls?.[0] ?? null,
     user_id: user.id,
     type: 'Angebot',
     status: 'active',

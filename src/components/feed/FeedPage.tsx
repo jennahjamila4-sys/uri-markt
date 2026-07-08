@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CategoryFilter } from './CategoryFilter'
 import { TypeTabs } from './TypeTabs'
@@ -9,6 +9,19 @@ import { FomoZone } from './FomoZone'
 import { TikTokScroll } from './TikTokScroll'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile, ListingType } from '@/types'
+
+// Zentrale Spaltenliste für alle Feed-Queries (Initial-Load + loadMore) –
+// eine Quelle, damit Grid und Vollbild-Modus garantiert dieselben Felder laden.
+const LISTING_SELECT = `
+  id, title, description, type, status, price, price_type,
+  category, gemeinde, image_url, is_boosted,
+  image_urls,
+  boost_expires_at, fomo_expires_at, views, created_at, user_id,
+  event_date, event_location, max_capacity, current_bookings, ticket_price,
+  profiles!listings_user_id_fkey (
+    id, username, avatar_url, avg_rating, level
+  )
+`
 
 interface FeedPageProps {
   initialListings: ListingWithProfile[]
@@ -29,69 +42,56 @@ export function FeedPage({ initialListings }: FeedPageProps) {
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
   const feedVersion = useAppStore((s) => s.feedVersion)
 
-  // Infinite scroll
+  // Nächste Seite laden (cursor-basiert). EINE Funktion für Grid-Observer UND
+  // Vollbild-Modus (TikTokScroll) – identische Pagination, kein Zweitpfad.
+  const loadMore = useCallback(async () => {
+    // cursor-Guard: lädt NUR weitere Seiten. Seite 1 lädt ausschließlich der
+    // Initial-Load-Effekt. Ohne den Guard würde beim Mount (cursor=null) Seite 1
+    // ein zweites Mal angehängt → Inserate doppelt.
+    if (isLoading || !hasMore || !cursor) return
+
+    setIsLoading(true)
+    try {
+      let query = supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .in('status', ['active', 'reserved', 'sold'])
+        .eq('type', selectedType)
+        .order('is_boosted', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(10)
+        .lt('created_at', cursor)
+
+      if (selectedCategory) query = query.eq('category', selectedCategory)
+
+      const { data, error } = await query
+      if (!error && data) {
+        setListings((prev) => [...prev, ...data])
+        if (data.length < 10) {
+          setHasMore(false)
+        } else if (data.length > 0) {
+          setCursor(data[data.length - 1].created_at ?? null)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load more listings:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isLoading, hasMore, cursor, supabase, selectedType, selectedCategory])
+
+  // Infinite scroll (Grid): Observer am Feed-Ende triggert loadMore
   useEffect(() => {
     if (!supabase) return
-
     const observer = new IntersectionObserver(
-      async (entries) => {
-        if (entries[0].isIntersecting && !isLoading && hasMore) {
-          setIsLoading(true)
-          try {
-            let query = supabase
-              .from('listings')
-              .select(
-                `
-              id, title, description, type, status, price, price_type,
-              category, gemeinde, image_url, is_boosted,
-              image_urls,
-              boost_expires_at, fomo_expires_at, views, created_at, user_id,
-              event_date, event_location, max_capacity, current_bookings, ticket_price,
-              profiles!listings_user_id_fkey (
-                id, username, avatar_url, avg_rating, level
-              )
-            `
-              )
-              .in('status', ['active', 'sold'])
-              .eq('type', selectedType)
-              .order('is_boosted', { ascending: false })
-              .order('created_at', { ascending: false })
-              .limit(10)
-
-            if (selectedCategory) {
-              query = query.eq('category', selectedCategory)
-            }
-
-            if (cursor) {
-              query = query.lt('created_at', cursor)
-            }
-
-            const { data, error } = await query
-
-            if (!error && data) {
-              setListings((prev) => [...prev, ...data])
-              if (data.length < 10) {
-                setHasMore(false)
-              } else if (data.length > 0) {
-                setCursor(data[data.length - 1].created_at ?? null)
-              }
-            }
-          } catch (err) {
-            console.error('Failed to load more listings:', err)
-          } finally {
-            setIsLoading(false)
-          }
-        }
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore()
       },
       { threshold: 0.1 }
     )
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current)
-    }
-
+    if (observerTarget.current) observer.observe(observerTarget.current)
     return () => observer.disconnect()
-  }, [isLoading, hasMore, selectedType, selectedCategory, cursor, supabase])
+  }, [loadMore, supabase])
 
   // Initial load and category change: fetch first page
   useEffect(() => {
@@ -101,19 +101,8 @@ export function FeedPage({ initialListings }: FeedPageProps) {
       try {
         let query = supabase
           .from('listings')
-          .select(
-            `
-              id, title, description, type, status, price, price_type,
-              category, gemeinde, image_url, is_boosted,
-              image_urls,
-              boost_expires_at, fomo_expires_at, views, created_at, user_id,
-              event_date, event_location, max_capacity, current_bookings, ticket_price,
-              profiles!listings_user_id_fkey (
-                id, username, avatar_url, avg_rating, level
-              )
-            `
-          )
-          .in('status', ['active', 'sold'])
+          .select(LISTING_SELECT)
+          .in('status', ['active', 'reserved', 'sold'])
           .eq('type', selectedType)
           .order('is_boosted', { ascending: false })
           .order('created_at', { ascending: false })
@@ -216,7 +205,13 @@ export function FeedPage({ initialListings }: FeedPageProps) {
       )}
 
       {showTikTok && (
-        <TikTokScroll listings={listings} onExit={() => setShowTikTok(false)} />
+        <TikTokScroll
+          listings={listings}
+          onExit={() => setShowTikTok(false)}
+          onLoadMore={loadMore}
+          hasMore={hasMore}
+          isLoading={isLoading}
+        />
       )}
     </div>
   )
