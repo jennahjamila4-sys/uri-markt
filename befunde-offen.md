@@ -17,3 +17,24 @@
   VERKAUFT-Badge für `status === 'sold'`. Da sold nun schon in der Query aus dem
   Feed ausgeschlossen wird, ist dieser Zweig nicht mehr erreichbar (harmlos,
   defensiv). Kann bei Gelegenheit entfernt werden.
+
+## Aus Block 3 Nachbesserung (09.07.2026)
+
+- **PNG-Upload — Frontend-Bug, exakter Fehler noch zu messen.** Planungs-Chat hat
+  live bestätigt: Bucket `listings` hat KEINE MIME-Whitelist und KEIN Grössenlimit
+  → PNG wird DB-seitig nicht blockiert. Die Ursache liegt im Frontend/Upload-Code.
+  Der Code-Pfad (`src/lib/supabase/storage.ts`) sieht für PNG korrekt aus
+  (`image/png` erlaubt, `contentType` gesetzt, Extension via `file.name`) — durch
+  reine Code-Inspektion war kein PNG-spezifischer Bug eindeutig zu isolieren.
+  **Nächster Schritt (D1):** JJ lädt eine PNG hoch und liest die exakte Meldung aus
+  Toast + Browser-Konsole (`[uploadListingImage]` → message/type/sizeKB) +
+  Netzwerk-Tab (Statuscode). Diagnose ist eingebaut. Kein Blind-Fix vor der
+  gemessenen Meldung.
+
+- **Übergabe-Wunsch / optionale Nachricht im Kauf-Flow.** Fachlich geprüft: ein
+  freier „Wunsch zur Übergabe/Nachricht" bräuchte eine neue Spalte auf
+  `transactions`. Bewusst NICHT gebaut (keine unaufgeforderte DB-Änderung,
+  Dauerregel 4). Für MVP ausreichend: beide Seiten tauschen nach der Bestätigung
+  ohnehin vollständige Kontaktdaten aus und klären die Übergabe direkt. Bei Bedarf
+  später: Spalte `transactions.buyer_message text` via Planungs-Chat + Feld im
+  DealFlow.

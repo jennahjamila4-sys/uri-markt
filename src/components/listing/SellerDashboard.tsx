@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/transactions'
 import { ContactSection } from './ContactSection'
 import { ReviewModal } from './ReviewModal'
+import { paymentMethodShort } from '@/lib/paymentMethod'
 
 export interface SellerTransaction {
   id: string
@@ -93,7 +94,7 @@ export function SellerDashboard({ transactions, credits }: Props) {
                   CHF {tx.amount.toFixed(2)}
                 </p>
                 <p className="text-xs text-white/50">
-                  {tx.payment_method === 'twint' ? '📱 TWINT' : '💵 Bar'}
+                  {paymentMethodShort(tx.payment_method)}
                 </p>
               </div>
             </div>
@@ -101,6 +102,9 @@ export function SellerDashboard({ transactions, credits }: Props) {
             {/* PENDING: Bestätigen / Ablehnen */}
             {tx.status === 'pending' && (
               <div className="mt-4 space-y-3">
+                <p className="rounded-lg border border-amber-600/30 bg-amber-900/15 px-3 py-2 text-xs text-amber-300">
+                  ⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.
+                </p>
                 <div className="rounded-lg border border-glass-border bg-obsidian-4 p-3 text-sm">
                   <div className="flex justify-between text-white/70">
                     <span>Provision (10%, in Talern)</span>

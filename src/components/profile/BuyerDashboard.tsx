@@ -1,6 +1,7 @@
 'use client'
 
 import { ContactSection } from '@/components/listing/ContactSection'
+import { paymentMethodShort } from '@/lib/paymentMethod'
 
 export interface BuyerTransaction {
   id: string
@@ -54,7 +55,7 @@ export function BuyerDashboard({ transactions }: Props) {
                 {tx.listing?.title ?? 'Inserat'}
               </p>
               <p className="text-sm text-white/60">
-                {tx.payment_method === 'twint' ? '📱 TWINT' : '💵 Bar'}
+                {paymentMethodShort(tx.payment_method)}
               </p>
             </div>
             <div className="text-right">
@@ -73,6 +74,9 @@ export function BuyerDashboard({ transactions }: Props) {
               <p className="mt-1 text-sm text-white/60">
                 Sobald der Verkäufer bestätigt, werden die Kontaktdaten
                 freigeschaltet.
+              </p>
+              <p className="mt-2 text-xs text-amber-300/80">
+                ⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.
               </p>
             </div>
           )}

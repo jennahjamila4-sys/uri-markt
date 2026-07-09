@@ -21,7 +21,18 @@ export async function uploadListingImage(
     .from('listings')
     .upload(path, file, { upsert: false, contentType: file.type })
 
-  if (error) throw new Error('Upload fehlgeschlagen: ' + error.message)
+  if (error) {
+    // Diagnose (D1): exakten Storage-Fehler samt Dateikontext protokollieren –
+    // so lässt sich unterscheiden, ob es an der MIME-Whitelist des Buckets,
+    // an RLS oder an der Grösse liegt. Der Toast zeigt die reale Meldung.
+    console.error('[uploadListingImage]', {
+      message: error.message,
+      type: file.type,
+      sizeKB: Math.round(file.size / 1024),
+      name: file.name,
+    })
+    throw new Error('Upload fehlgeschlagen: ' + error.message)
+  }
 
   return supabase.storage.from('listings').getPublicUrl(path).data.publicUrl
 }

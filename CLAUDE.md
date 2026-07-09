@@ -115,6 +115,26 @@ oder Migration auf profiles/Policies angewendet wurde.)
 
 ---
 
+## Lektionen (Selflearning — bei Session-Start lesen, laufend ergänzen)
+
+> Regel: Sobald ein Fehler, eine Lücke oder ein übersehener Zusammenhang auftaucht,
+> SOFORT hier eine kurze Lektion anhängen (2 Zeilen: Was war die Lücke → Regel zur
+> Früherkennung) — BEVOR weitergearbeitet wird. Zu Session-Beginn diesen Abschnitt
+> lesen und jeden neuen Block aktiv dagegen prüfen.
+
+1. **Querverbindungen mitziehen.** Lücke: Neue Daten (z.B. IBAN im Zahlungen-Tab)
+   ohne die Konsumenten (Zahlungsweg im Kauf-Flow) angebunden. → Vor Block-Abschluss
+   fragen „Wer nutzt diese Daten noch?" und alle Konsumenten im selben Block ziehen.
+2. **Validierung fachlich begründen.** Lücke: willkürliche Mindestlänge (buyer_contact
+   min 5 blockierte „JJ"). → Regeln aus der Fachlichkeit ableiten (Schweizer IBAN
+   Mod-97, Schweizer Telefonformat), nie geratene Zahlen/Längen.
+3. **Dev nach Build frisch starten.** Lücke: build + dev teilten `.next` → „Cannot find
+   module './548.js'". → Nach `npm run build` Dev stoppen, `.next` löschen, dev neu starten.
+4. **DB-Hypothesen nie raten.** Lücke: Bucket-MIME-/CHECK-Constraint vermutet statt
+   gemessen. → DB/Storage-Annahmen immer vom Planungs-Chat an der Live-DB prüfen lassen.
+
+---
+
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
 
 ```

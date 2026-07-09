@@ -2,11 +2,16 @@ import { z } from 'zod'
 
 export const BuyIntentSchema = z.object({
   listing_id: z.string().uuid('Ungültige Inserat-ID'),
-  payment_method: z.enum(['cash', 'twint'], {
-    errorMap: () => ({ message: 'Zahlungsart erforderlich (Bar oder TWINT)' }),
+  payment_method: z.enum(['cash', 'twint', 'bank'], {
+    errorMap: () => ({ message: 'Zahlungsart erforderlich (Bar, TWINT oder Bank)' }),
   }),
+  // Kurze Kontaktangabe genügt: der Verkäufer muss nur wissen, wie er den
+  // Käufer erreicht (Name/Telefon). Die vollständigen Kontaktdaten tauschen
+  // beide Seiten ohnehin erst NACH der Bestätigung aus (get_transaction_contact).
+  // Darum min. 2 (erlaubt z.B. „JJ"), nicht 5.
   buyer_contact: z.string()
-    .min(5, 'Kontakt muss mindestens 5 Zeichen lang sein')
+    .trim()
+    .min(2, 'Bitte eine kurze Kontaktangabe (z.B. Name oder Telefon)')
     .max(100, 'Kontakt darf max. 100 Zeichen lang sein'),
 })
 

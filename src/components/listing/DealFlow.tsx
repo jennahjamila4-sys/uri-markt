@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { createBuyIntentAction } from '@/app/actions/transactions'
+import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/paymentMethod'
 import type { Listing, Profile } from '@/types'
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 
 export function DealFlow({ listing, currentUser }: Props) {
   const [showBuyModal, setShowBuyModal] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'twint'>('cash')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [buyerContact, setBuyerContact] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [agreedToIntent, setAgreedToIntent] = useState(false)
@@ -109,36 +110,45 @@ export function DealFlow({ listing, currentUser }: Props) {
 
             {/* Payment method */}
             <div className="mb-6">
-              <label className="block text-white/70 text-sm mb-3">Zahlungsart</label>
+              <label className="block text-white/70 text-sm mb-3">
+                Wie möchtest du bezahlen?
+              </label>
               <div className="space-y-2">
-                {(['cash', 'twint'] as const).map((method) => (
-                  <label key={method} className="flex items-center gap-3 cursor-pointer">
+                {PAYMENT_METHODS.map((pm) => (
+                  <label
+                    key={pm.value}
+                    className="flex items-center gap-3 cursor-pointer"
+                  >
                     <input
                       type="radio"
                       name="payment"
-                      value={method}
-                      checked={paymentMethod === method}
-                      onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'twint')}
+                      value={pm.value}
+                      checked={paymentMethod === pm.value}
+                      onChange={(e) =>
+                        setPaymentMethod(e.target.value as PaymentMethod)
+                      }
                       className="w-4 h-4 accent-gold"
                     />
-                    <span className="text-white">
-                      {method === 'cash' ? '💵 Bar bezahlen' : '📱 TWINT'}
-                    </span>
+                    <span className="text-white">{pm.label}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Contact info */}
+            {/* Contact info – kurze Angabe genügt (Details tauscht ihr nach der
+                Bestätigung aus). */}
             <div className="mb-6">
               <label className="block text-white/70 text-sm mb-2">
-                Deine Kontaktinfo {paymentMethod === 'twint' ? '(TWINT-Name)' : '(Telefon)'}
+                Wie erreicht dich der Verkäufer?{' '}
+                {paymentMethod === 'twint' ? '(TWINT-Name oder -Nummer)' : '(Name oder Telefon)'}
               </label>
               <input
                 type="text"
                 value={buyerContact}
                 onChange={(e) => setBuyerContact(e.target.value)}
-                placeholder={paymentMethod === 'twint' ? 'z.B. max.mueller' : '+41 79 123 45 67'}
+                placeholder={
+                  paymentMethod === 'twint' ? 'z.B. max.mueller' : 'z.B. Max, 079 123 45 67'
+                }
                 className="w-full px-4 py-3 bg-obsidian-2 border border-glass-border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-gold"
               />
             </div>
@@ -160,8 +170,8 @@ export function DealFlow({ listing, currentUser }: Props) {
             <div className="space-y-3">
               <button
                 onClick={async () => {
-                  if (!buyerContact) {
-                    toast.error('Kontaktinfo erforderlich')
+                  if (buyerContact.trim().length < 2) {
+                    toast.error('Kurz sagen, wie der Verkäufer dich erreicht 🙂')
                     return
                   }
                   if (!agreedToIntent) {
