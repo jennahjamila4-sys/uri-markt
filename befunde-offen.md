@@ -18,6 +18,28 @@
   Feed ausgeschlossen wird, ist dieser Zweig nicht mehr erreichbar (harmlos,
   defensiv). Kann bei Gelegenheit entfernt werden.
 
+## Aus Block 3 Nachbesserung II (09.07.2026)
+
+- **„Markt nicht klickbar" (ein Profil) — Ursache noch zu bestätigen.** Aus dem Code
+  liess sich KEIN harter Klick-Blocker isolieren: Karten öffnen das Detail
+  (`setSelectedListingId` → `ListingDetail`), und der Kauf-Button erscheint nur bei
+  fremden, aktiven Inseraten. Wahrscheinlichste Ursache (auch JJs Verdacht): das
+  Test-Profil sieht überwiegend EIGENE Inserate → Eigenkauf ist korrekt gesperrt.
+  Fix (Lektion 6): eigene Karten tragen jetzt sichtbar „📍 Dein Inserat", das Detail
+  zeigt weiterhin „Das ist dein Inserat", und Kauf-Validierungsfehler kommen als
+  lesbarer Text statt Zod-JSON. **Falls eine FREMDE, aktive Karte sich trotzdem nicht
+  öffnen lässt:** JJ bitte Konsole (F12) beim Klick fotografieren — dann gezielt fixen.
+
+- **„Meine Käufe" Endlos-Ladehänger — evtl. kaputter Testdatensatz.** Code-Bug gefunden
+  und gefixt: `ListingDetail` zeigte bei nicht (mehr) existierendem Inserat einen
+  stummen Endlos-Spinner (`if (loading || !listing)`), jetzt getrennt in Ladezustand
+  und schliessbaren „Inserat gibt's nicht mehr"-Hinweis. Die `ContactSection` hat seit
+  Block 3 try/catch/finally und kann nicht hängen. **Falls in „Meine Käufe" weiterhin
+  ein bestimmter alter Deal hängt:** wahrscheinlich ein kaputter Testdatensatz
+  (Transaktion in unerwartetem Status / gelöschtes Inserat) → Claude Code fasst die DB
+  NICHT an, Planungs-Chat bereinigt den Datensatz (Dauerregel 4). JJ bitte melden,
+  welche Transaktion (Titel/Status) es ist.
+
 ## Aus Block 3 Nachbesserung (09.07.2026)
 
 - **PNG-Upload — Frontend-Bug, exakter Fehler noch zu messen.** Planungs-Chat hat

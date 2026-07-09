@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Eye, Heart, MapPin } from 'lucide-react'
 import { CATEGORIES } from '@/types'
+import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
 
 interface ListingCardProps {
@@ -63,6 +64,8 @@ function LiveViewers({ id }: { id: string }) {
 
 export function ListingCard({ listing, onClick }: ListingCardProps) {
   const [fav, setFav] = useState(false)
+  const currentUserId = useAppStore((s) => s.user?.id)
+  const isOwn = !!currentUserId && listing.user_id === currentUserId
   const isSold = listing.status === 'sold'
   const isReserved = listing.status === 'reserved'
   const isFree = listing.price_type === 'free'
@@ -161,6 +164,11 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
 
       {/* Body */}
       <div className="px-[13px] pb-3.5 pt-3">
+        {isOwn && (
+          <div className="mb-1.5 inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-[3px] text-[10px] font-bold text-gold">
+            📍 Dein Inserat
+          </div>
+        )}
         <h3 className="line-clamp-2 min-h-[34px] text-[13.5px] font-semibold leading-snug text-white/[0.94]">
           {listing.title}
         </h3>

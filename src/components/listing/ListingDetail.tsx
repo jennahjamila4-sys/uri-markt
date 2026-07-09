@@ -79,10 +79,40 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing?.id, supabase])
 
-  if (loading || !listing) {
+  // Ladezustand – im Modal-Overlay, damit man jederzeit schliessen kann.
+  if (loading) {
     return (
-      <div className="p-6 text-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent mx-auto" />
+      <div className="fixed inset-0 z-50 flex items-end">
+        <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+        <div className="relative z-50 w-full rounded-t-3xl bg-obsidian-2 p-10 text-center animate-slide-up">
+          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+          <p className="mt-3 text-sm text-white/50">Inserat wird geladen…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Nicht (mehr) vorhanden – z.B. altes/gelöschtes Inserat. KEIN Endlos-Spinner:
+  // klar sagen, was los ist, und schliessbar machen.
+  if (!listing) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end">
+        <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+        <div className="relative z-50 w-full rounded-t-3xl bg-obsidian-2 p-8 text-center animate-slide-up">
+          <div className="text-4xl">😕</div>
+          <p className="mt-3 font-display font-bold text-white">
+            Dieses Inserat gibt&apos;s nicht mehr
+          </p>
+          <p className="mt-1 text-sm text-white/60">
+            Vielleicht schon weg oder zurückgezogen — schau dich weiter um im Markt!
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-5 rounded-xl border border-glass-border px-6 py-3 font-display font-bold text-white"
+          >
+            Zurück zum Markt
+          </button>
+        </div>
       </div>
     )
   }

@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createListingAction } from '@/app/actions/listings'
 import { AngebotSchema } from '@/lib/validations/listing'
@@ -10,6 +10,18 @@ import { useAppStore } from '@/store/appStore'
 import { CATEGORIES, GEMEINDEN } from '@/types'
 import { toast } from 'sonner'
 import Image from 'next/image'
+
+// Welches Formular-Step enthält welches Pflichtfeld – für „zum Fehler springen".
+const STEP_OF_FIELD: Record<string, number> = {
+  category: 1,
+  condition: 1,
+  title: 2,
+  description: 2,
+  price_type: 3,
+  price: 3,
+  gemeinde: 3,
+  image_urls: 3,
+}
 
 interface AngebotFormProps {
   onSuccess?: () => void
@@ -22,6 +34,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
   const [step, setStep] = useState(1)
   const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [legalConfirmed, setLegalConfirmed] = useState(false)
 
   const form = useForm<typeof AngebotSchema._type>({
     resolver: zodResolver(AngebotSchema),
@@ -59,6 +72,10 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
   }
 
   const onSubmit = async (data: typeof AngebotSchema._type) => {
+    if (!legalConfirmed) {
+      toast.error('Bitte bestätige kurz, dass dein Inserat rechtlich ok ist ✅')
+      return
+    }
     try {
       await createListingAction({
         ...data,
@@ -77,6 +94,19 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
     }
   }
 
+  // Pflichtfeld-Fehler NIE stumm verpuffen: zum Step des ersten Fehlers springen,
+  // Feld rot markieren (via Fehleranzeige) + hinscrollen, freundlicher Hinweis.
+  const onInvalid = (errs: FieldErrors<typeof AngebotSchema._type>) => {
+    const firstField = Object.keys(errs)[0] ?? ''
+    setStep(STEP_OF_FIELD[firstField] ?? 1)
+    toast.error('Da fehlt noch was! 👀 Bitte die rot markierten Felder ausfüllen.')
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`field-${firstField}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
+
   if (!user) {
     return (
       <div className="space-y-4 text-center py-8">
@@ -86,7 +116,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
       {/* Step Indicator */}
       <div className="flex gap-2">
         {[1, 2, 3, 4].map((s) => (
@@ -102,7 +132,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
       {/* Step 1: Category & Condition */}
       {step === 1 && (
         <div className="space-y-4">
-          <div>
+          <div id="field-category">
             <label className="text-sm font-display font-bold text-white">
               Kategorie
             </label>
@@ -123,6 +153,11 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
                 </button>
               ))}
             </div>
+            {form.formState.errors.category?.message && (
+              <p className="text-xs text-uri-danger mt-1">
+                {form.formState.errors.category.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -163,7 +198,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
       {/* Step 2: Title & Description */}
       {step === 2 && (
         <div className="space-y-4">
-          <div>
+          <div id="field-title">
             <label className="text-sm font-display font-bold text-white">
               Titel {form.watch('title').length}/100
             </label>
@@ -243,7 +278,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
           </div>
 
           {form.watch('price_type') !== 'free' && (
-            <div>
+            <div id="field-price">
               <label className="text-sm font-display font-bold text-white">
                 Preis (CHF)
               </label>
@@ -254,6 +289,11 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
                 step="0.01"
                 className="mt-1 w-full rounded-lg border border-glass-border bg-obsidian-4 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-gold"
               />
+              {form.formState.errors.price?.message && (
+                <p className="text-xs text-uri-danger mt-1">
+                  {form.formState.errors.price.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -292,7 +332,7 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
             )}
           </div>
 
-          <div>
+          <div id="field-gemeinde">
             <label className="text-sm font-display font-bold text-white">
               Gemeinde
             </label>
@@ -307,6 +347,11 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
                 </option>
               ))}
             </select>
+            {form.formState.errors.gemeinde?.message && (
+              <p className="text-xs text-uri-danger mt-1">
+                {form.formState.errors.gemeinde.message}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -355,9 +400,9 @@ export function AngebotForm({ onSuccess }: AngebotFormProps) {
           <label className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
-              {...form.register('condition')}
+              checked={legalConfirmed}
+              onChange={(e) => setLegalConfirmed(e.target.checked)}
               className="mt-1"
-              required
             />
             <span className="text-xs text-white/80">
               Ich bestätige, dass das Inserat rechtlich korrekt ist.

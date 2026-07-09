@@ -18,10 +18,11 @@ export async function createBuyIntentAction(rawData: unknown) {
     throw new Error('Nicht angemeldet')
   }
 
-  // Validate input
+  // Validate input – erste Fehlermeldung lesbar an den Nutzer geben (kein Zod-JSON)
   const validated = BuyIntentSchema.safeParse(rawData)
   if (!validated.success) {
-    throw new Error(`Ungültige Eingabe: ${validated.error.message}`)
+    const firstMsg = validated.error.issues[0]?.message ?? 'Bitte Eingaben prüfen'
+    throw new Error(firstMsg)
   }
 
   const { listing_id, payment_method, buyer_contact } = validated.data

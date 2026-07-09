@@ -138,6 +138,11 @@ oder Migration auf profiles/Policies angewendet wurde.)
    automatisierte Tests mit bekannt gültigen Referenzwerten, z.B. IBAN
    CH9300762011623852957) und „selbst getestet, funktioniert" melden. Fehlermeldungen
    müssen sagen, WAS genau falsch ist (z.B. Länge vs. Prüfziffer).
+6. **Blockierte Aktion nie stumm.** Lücke: Inserat-Veröffentlichen scheiterte an leerer
+   Gemeinde, ohne dem Nutzer zu sagen warum. → Jede blockierte Aktion muss SOFORT sichtbar
+   sagen, WAS fehlt und WO: Pflichtfelder beim Absenden rot markieren, zum ersten
+   Fehlerfeld scrollen, Button-Klick nie stumm verpuffen lassen (Uri-Markt-Ton). Gilt für
+   ALLE Formulare — bei neuen/geänderten Formularen aktiv dagegen prüfen (siehe Lektion 1).
 
 ---
 
