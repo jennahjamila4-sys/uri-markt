@@ -174,11 +174,29 @@ export async function rejectTransactionAction(transaction_id: string) {
   }
 }
 
+export interface CompleteTransactionResult {
+  success: boolean
+  /** 'confirmed' = erst eine Seite bestätigt · 'completed' = beide bestätigt */
+  status?: string
+  buyer_completed?: boolean
+  seller_completed?: boolean
+  buyer_id?: string
+  listing_id?: string
+  error?: string
+}
+
 /**
- * Käufer/Verkäufer markiert Transaktion als abgeschlossen
- * Vergabe von XP und automatische Benachrichtigungen
+ * Beidseitiger Deal-Abschluss. Käufer UND Verkäufer bestätigen die Übergabe je
+ * einmal; erst wenn BEIDE bestätigt haben, wird der Deal `completed`.
+ *
+ * Die RPC `complete_transaction` (SECURITY DEFINER, idempotent) bestimmt die
+ * Rolle des Aufrufers SELBST via auth.uid() – deshalb wird NUR `p_transaction_id`
+ * übergeben (kein p_seller_id mehr). XP und Benachrichtigungen vergibt die RPC
+ * selbst; hier bewusst KEIN award_xp/send_notification für den Abschluss.
  */
-export async function completeTransactionAction(transaction_id: string) {
+export async function completeTransactionAction(
+  transaction_id: string
+): Promise<CompleteTransactionResult> {
   const supabase = await createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -186,44 +204,26 @@ export async function completeTransactionAction(transaction_id: string) {
     throw new Error('Nicht angemeldet')
   }
 
-  try {
-    // Transaktion laden, um den Aufrufer zu autorisieren und der RPC die
-    // korrekte seller_id zu übergeben (der Abschluss darf von Käufer ODER
-    // Verkäufer ausgelöst werden).
-    const { data: tx, error: txError } = await supabase
-      .from('transactions')
-      .select('seller_id, buyer_id')
-      .eq('id', transaction_id)
-      .single()
+  const { data, error } = await supabase.rpc('complete_transaction', {
+    p_transaction_id: transaction_id,
+  })
 
-    if (txError || !tx) {
-      throw new Error('Transaktion nicht gefunden')
-    }
-
-    if (tx.seller_id !== user.id && tx.buyer_id !== user.id) {
-      throw new Error('Nicht berechtigt')
-    }
-
-    // Deal atomar abschliessen: Status, FOMO, XP und Benachrichtigungen laufen
-    // in der DB-Funktion in EINER Transaktion. Ersetzt die frühere manuelle
-    // 4-Schritt-Version, die halb-fertig hängen bleiben konnte.
-    const { data: result, error } = await supabase.rpc('complete_transaction', {
-      p_transaction_id: transaction_id,
-      p_seller_id: tx.seller_id,
-    })
-
-    if (error || !result?.success) {
-      throw new Error(result?.error ?? 'Deal konnte nicht abgeschlossen werden')
-    }
-
-    revalidatePath('/profile')
-    revalidatePath('/')
-
-    return { ...result, success: true }
-  } catch (err) {
-    console.error('[completeTransaction]', err)
-    throw err
+  // Lektion 6: jeder Fehlerfall sichtbar – RPC-Fehler und fachliches
+  // success:false getrennt, mit lesbarer Meldung, nie stumm.
+  if (error) {
+    console.error('[completeTransaction]', error)
+    throw new Error(error.message || 'Deal konnte nicht abgeschlossen werden')
   }
+
+  const result = (data ?? {}) as CompleteTransactionResult
+  if (result.success === false) {
+    throw new Error(result.error ?? 'Deal konnte nicht abgeschlossen werden')
+  }
+
+  revalidatePath('/profile')
+  revalidatePath('/')
+
+  return { ...result, success: true }
 }
 
 /**
@@ -308,6 +308,24 @@ export async function submitReviewAction(rawData: unknown) {
       throw new Error('Transaktion nicht abgeschlossen')
     }
 
+    // Nur Beteiligte dürfen bewerten
+    if (tx.seller_id !== user.id && tx.buyer_id !== user.id) {
+      throw new Error('Nicht berechtigt')
+    }
+
+    // Pro Nutzer und Transaktion nur EINE Bewertung – vorher prüfen (der Button
+    // wird nach dem Bewerten ausgeblendet, das ist die zweite Sicherung).
+    const { data: existing } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('transaction_id', transaction_id)
+      .eq('reviewer_id', user.id)
+      .maybeSingle()
+
+    if (existing) {
+      throw new Error('Du hast diesen Deal bereits bewertet.')
+    }
+
     // Determine reviewee (opposite party)
     const reviewee_id = tx.seller_id === user.id ? tx.buyer_id : tx.seller_id
 
@@ -318,18 +336,19 @@ export async function submitReviewAction(rawData: unknown) {
         reviewer_id: user.id,
         reviewee_id,
         listing_id: tx.listing_id,
+        transaction_id,
         rating,
         comment: comment || null,
       })
 
     if (reviewError) throw reviewError
 
-    // Award XP for reviewing
+    // Award XP for reviewing – idempotent pro (Transaktion, Bewerter)
     await supabase.rpc('award_xp', {
       p_user_id: user.id,
       p_amount: 5,
       p_reason: 'Bewertung abgegeben',
-      p_idempotency_key: `review_given_${transaction_id}`,
+      p_idempotency_key: `review_${transaction_id}_${user.id}`,
     })
 
     // Update avg_rating for reviewee (done via trigger ideally, but can be RPC)

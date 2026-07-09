@@ -326,6 +326,7 @@ export type Database = {
           rating: number | null
           reviewee_id: string | null
           reviewer_id: string | null
+          transaction_id: string | null
         }
         Insert: {
           comment?: string | null
@@ -335,6 +336,7 @@ export type Database = {
           rating?: number | null
           reviewee_id?: string | null
           reviewer_id?: string | null
+          transaction_id?: string | null
         }
         Update: {
           comment?: string | null
@@ -344,6 +346,7 @@ export type Database = {
           rating?: number | null
           reviewee_id?: string | null
           reviewer_id?: string | null
+          transaction_id?: string | null
         }
         Relationships: [
           {
@@ -439,6 +442,8 @@ export type Database = {
           payment_method: string | null
           seller_contact: string | null
           seller_id: string
+          seller_completed_at: string | null
+          buyer_completed_at: string | null
           status: string
         }
         Insert: {
@@ -455,6 +460,8 @@ export type Database = {
           payment_method?: string | null
           seller_contact?: string | null
           seller_id: string
+          seller_completed_at?: string | null
+          buyer_completed_at?: string | null
           status?: string
         }
         Update: {
@@ -471,6 +478,8 @@ export type Database = {
           payment_method?: string | null
           seller_contact?: string | null
           seller_id?: string
+          seller_completed_at?: string | null
+          buyer_completed_at?: string | null
           status?: string
         }
         Relationships: [
@@ -586,8 +595,16 @@ export type Database = {
         Returns: Json
       }
       complete_transaction: {
-        Args: { p_seller_id: string; p_transaction_id: string }
-        Returns: { success: boolean; error?: string; message?: string }
+        Args: { p_transaction_id: string }
+        Returns: {
+          success: boolean
+          status?: string
+          buyer_completed?: boolean
+          seller_completed?: boolean
+          buyer_id?: string
+          listing_id?: string
+          error?: string
+        }
       }
       escalate_no_show: {
         Args: { p_seller_id: string; p_transaction_id: string }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   confirmSaleAction,
@@ -19,6 +20,8 @@ export interface SellerTransaction {
   commission: number
   payment_method: string | null
   created_at: string | null
+  buyer_completed_at: string | null
+  seller_completed_at: string | null
   listing: {
     id: string
     title: string
@@ -30,9 +33,12 @@ interface Props {
   transactions: SellerTransaction[]
   /** Aktuelles Taler-Guthaben des Verkäufers */
   credits: number
+  /** Transaktions-IDs, die der Nutzer bereits bewertet hat */
+  reviewedTxIds: string[]
 }
 
-export function SellerDashboard({ transactions, credits }: Props) {
+export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props) {
+  const router = useRouter()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [reviewTxId, setReviewTxId] = useState<string | null>(null)
 
@@ -66,6 +72,25 @@ export function SellerDashboard({ transactions, credits }: Props) {
     }
   }
 
+  // Übergabe bestätigen: die RPC schliesst erst ab, wenn BEIDE bestätigt haben.
+  // Rückmeldung je nach Ergebnis unterschiedlich (Lektion 6: nie stumm).
+  const handleComplete = async (id: string) => {
+    setPendingId(id)
+    try {
+      const res = await completeTransactionAction(id)
+      if (res.status === 'completed') {
+        toast.success('Übergabe abgeschlossen – XP verdient! 🏆')
+        if (!reviewedTxIds.includes(id)) setReviewTxId(id)
+      } else {
+        toast.success('Deine Bestätigung ist da – warten auf die Gegenseite ⏳')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Aktion fehlgeschlagen')
+    } finally {
+      setPendingId(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {transactions.map((tx) => {
@@ -73,6 +98,9 @@ export function SellerDashboard({ transactions, credits }: Props) {
         // Vergleich in derselben Einheit: creditsInTaler (Taler) gegen die
         // in Talern geführte Provision tx.commission.
         const enoughCredits = creditsInTaler >= tx.commission
+        // Hat der Verkäufer selbst die Übergabe schon bestätigt?
+        const selfCompleted = !!tx.seller_completed_at
+        const reviewed = reviewedTxIds.includes(tx.id)
 
         return (
           <div
@@ -162,43 +190,50 @@ export function SellerDashboard({ transactions, credits }: Props) {
               </div>
             )}
 
-            {/* CONFIRMED: Kontakt + Übergabe / No-Show */}
+            {/* CONFIRMED: Kontakt bleibt sichtbar. Solange der Verkäufer NICHT
+                selbst bestätigt hat → Übergabe-/No-Show-Buttons. Danach →
+                Warten auf die Gegenseite (Kontakt bleibt sichtbar). */}
             {tx.status === 'confirmed' && (
               <div className="mt-4 space-y-3">
                 <ContactSection transactionId={tx.id} role="seller" />
-                <div className="flex gap-2">
-                  <button
-                    disabled={busy}
-                    onClick={async () => {
-                      const ok = await run(
-                        tx.id,
-                        () => completeTransactionAction(tx.id),
-                        'Übergabe abgeschlossen – XP verdient! 🏆'
-                      )
-                      if (ok) setReviewTxId(tx.id)
-                    }}
-                    className="flex-1 rounded-lg bg-gold py-3 font-display font-bold text-obsidian transition hover:opacity-90 disabled:opacity-40"
-                  >
-                    {busy ? '…' : '🤝 Übergabe abgeschlossen'}
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        tx.id,
-                        () => reportNoShowAction(tx.id),
-                        'No-Show gemeldet – Provision zurückerstattet'
-                      )
-                    }
-                    className="rounded-lg border border-glass-border px-4 py-3 font-display font-bold text-white/70 transition hover:border-uri-danger/60 hover:text-uri-danger disabled:opacity-40"
-                  >
-                    ⚠️ No-Show
-                  </button>
-                </div>
+                {selfCompleted ? (
+                  <div className="rounded-xl border border-amber-600/40 bg-amber-900/20 p-4 text-center">
+                    <p className="font-display font-semibold text-amber-400">
+                      ⏳ Wartet auf Bestätigung der Gegenseite
+                    </p>
+                    <p className="mt-1 text-sm text-white/60">
+                      Du hast die Übergabe bestätigt. Sobald der Käufer auch
+                      bestätigt, ist der Deal abgeschlossen.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      disabled={busy}
+                      onClick={() => handleComplete(tx.id)}
+                      className="flex-1 rounded-lg bg-gold py-3 font-display font-bold text-obsidian transition hover:opacity-90 disabled:opacity-40"
+                    >
+                      {busy ? '…' : '✅ Übergabe bestätigen'}
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        run(
+                          tx.id,
+                          () => reportNoShowAction(tx.id),
+                          'No-Show gemeldet – Provision zurückerstattet'
+                        )
+                      }
+                      className="rounded-lg border border-glass-border px-4 py-3 font-display font-bold text-white/70 transition hover:border-uri-danger/60 hover:text-uri-danger disabled:opacity-40"
+                    >
+                      ⚠️ No-Show
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* COMPLETED: Verkauf abgeschlossen – nur Statusanzeige, kein Kontakt/Buttons */}
+            {/* COMPLETED: kein Kontakt mehr – Badge + Bewertungs-Aufforderung */}
             {tx.status === 'completed' && (
               <div className="mt-4 rounded-xl border border-uri-success/40 bg-emerald-900/20 p-4 text-center">
                 <p className="font-display font-semibold text-uri-success">
@@ -207,6 +242,18 @@ export function SellerDashboard({ transactions, credits }: Props) {
                 <p className="mt-1 text-sm text-white/60">
                   Übergabe erledigt. Provision wurde abgezogen.
                 </p>
+                {reviewed ? (
+                  <p className="mt-3 text-sm font-semibold text-gold">
+                    ⭐ Bewertet – merci!
+                  </p>
+                ) : (
+                  <button
+                    onClick={() => setReviewTxId(tx.id)}
+                    className="btn-gold mt-3 rounded-lg px-4 py-2 font-display font-bold"
+                  >
+                    ⭐ Jetzt bewerten
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -217,6 +264,7 @@ export function SellerDashboard({ transactions, credits }: Props) {
         <ReviewModal
           transactionId={reviewTxId}
           onClose={() => setReviewTxId(null)}
+          onSubmitted={() => router.refresh()}
         />
       )}
     </div>

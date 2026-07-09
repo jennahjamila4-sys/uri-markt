@@ -48,7 +48,7 @@ export default async function ProfilePage() {
   const { data: sellerTransactions } = await supabase
     .from('transactions')
     .select(
-      'id,status,amount,commission,payment_method,created_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
+      'id,status,amount,commission,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
     )
     .eq('seller_id', user.id)
     .in('status', ['pending', 'confirmed', 'completed'])
@@ -61,12 +61,23 @@ export default async function ProfilePage() {
   const { data: buyerTransactions } = await supabase
     .from('transactions')
     .select(
-      'id,status,amount,payment_method,created_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
+      'id,status,amount,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url)'
     )
     .eq('buyer_id', user.id)
     .in('status', ['pending', 'confirmed', 'completed'])
     .order('created_at', { ascending: false })
     .limit(30)
+
+  // Welche dieser Transaktionen hat der Nutzer bereits bewertet? → steuert das
+  // Ausblenden des Bewerten-Buttons (zweite Sicherung neben dem Server-Check).
+  const { data: myReviews } = await supabase
+    .from('reviews')
+    .select('transaction_id')
+    .eq('reviewer_id', user.id)
+
+  const reviewedTxIds = (myReviews ?? [])
+    .map((r) => r.transaction_id)
+    .filter((id): id is string => !!id)
 
   // Eigene Zahlungs-/Kontaktdaten (RLS: nur Eigentümer). Zeile kann fehlen,
   // wenn noch nichts hinterlegt wurde → maybeSingle() liefert dann null.
@@ -93,6 +104,7 @@ export default async function ProfilePage() {
             (buyerTransactions ?? []) as unknown as BuyerTransaction[]
           }
           paymentInfo={(paymentInfo ?? null) as PaymentInfo | null}
+          reviewedTxIds={reviewedTxIds}
         />
       </main>
       <BottomNav />

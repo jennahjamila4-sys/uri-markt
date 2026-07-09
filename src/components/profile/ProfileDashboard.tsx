@@ -22,6 +22,8 @@ interface Props {
   sellerTransactions: SellerTransaction[]
   buyerTransactions: BuyerTransaction[]
   paymentInfo: PaymentInfo | null
+  /** Transaktions-IDs, die der Nutzer bereits bewertet hat */
+  reviewedTxIds: string[]
 }
 
 type View =
@@ -39,6 +41,7 @@ export function ProfileDashboard({
   sellerTransactions,
   buyerTransactions,
   paymentInfo,
+  reviewedTxIds,
 }: Props) {
   const [view, setView] = useState<View>('overview')
 
@@ -178,12 +181,16 @@ export function ProfileDashboard({
           {view === 'matches' && <SmartMatchList matches={matches} />}
           {view === 'listings' && <MyListings listings={myListings} />}
           {view === 'purchases' && (
-            <BuyerDashboard transactions={buyerTransactions} />
+            <BuyerDashboard
+              transactions={buyerTransactions}
+              reviewedTxIds={reviewedTxIds}
+            />
           )}
           {view === 'sales' && (
             <SellerDashboard
               transactions={sellerTransactions}
               credits={profile.credits ?? 0}
+              reviewedTxIds={reviewedTxIds}
             />
           )}
           {view === 'payment' && <PaymentInfoForm initial={paymentInfo} />}
