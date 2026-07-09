@@ -38,7 +38,7 @@ export function FomoZone() {
         .select('id, title, price, image_url, category, fomo_expires_at')
         .eq('status', 'sold')
         .gt('fomo_expires_at', new Date().toISOString())
-        .order('fomo_expires_at', { ascending: true })
+        .order('fomo_expires_at', { ascending: false })
         .limit(10)
       if (mounted && data) setItems(data)
     })()

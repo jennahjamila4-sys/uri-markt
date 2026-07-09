@@ -35,6 +35,14 @@ const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-white/10 text-white/60',
 }
 
+// Deutsche Status-Labels (Soll-Verhalten Block 2): kein roher Enum-Wert im UI
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Aktiv',
+  reserved: 'Reserviert',
+  sold: 'Abgeschlossen',
+  draft: 'Entwurf',
+}
+
 export function MyListings({ listings }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('active')
   const [items, setItems] = useState(listings)
@@ -109,7 +117,7 @@ export function MyListings({ listings }: Props) {
                       STATUS_BADGE[listing.status] ?? 'bg-white/10 text-white/60'
                     }`}
                   >
-                    {listing.status}
+                    {STATUS_LABEL[listing.status] ?? listing.status}
                   </span>
                   <span className="text-white/40">👁 {listing.views ?? 0}</span>
                 </div>

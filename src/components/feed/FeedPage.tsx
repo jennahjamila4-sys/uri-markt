@@ -55,7 +55,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
       let query = supabase
         .from('listings')
         .select(LISTING_SELECT)
-        .in('status', ['active', 'reserved', 'sold'])
+        .in('status', ['active', 'reserved'])
         .eq('type', selectedType)
         .order('is_boosted', { ascending: false })
         .order('created_at', { ascending: false })
@@ -102,7 +102,7 @@ export function FeedPage({ initialListings }: FeedPageProps) {
         let query = supabase
           .from('listings')
           .select(LISTING_SELECT)
-          .in('status', ['active', 'reserved', 'sold'])
+          .in('status', ['active', 'reserved'])
           .eq('type', selectedType)
           .order('is_boosted', { ascending: false })
           .order('created_at', { ascending: false })
