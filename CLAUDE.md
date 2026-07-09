@@ -143,6 +143,14 @@ oder Migration auf profiles/Policies angewendet wurde.)
    sagen, WAS fehlt und WO: Pflichtfelder beim Absenden rot markieren, zum ersten
    Fehlerfeld scrollen, Button-Klick nie stumm verpuffen lassen (Uri-Markt-Ton). Gilt für
    ALLE Formulare — bei neuen/geänderten Formularen aktiv dagegen prüfen (siehe Lektion 1).
+7. **Fehler ≠ leeres Ergebnis ≠ nicht eingeloggt.** Lücke: `useAuth`/`AuthModal` machen bei
+   JEDEM ausbleibenden Profil `setUser(null)` — egal ob echter Query-Fehler (z.B. 42501/RLS),
+   0 Zeilen (`.single()` → PGRST116) oder wirklich keine Session. Dadurch wirkt eine
+   eingeloggte Session client-seitig wie „ausgeloggt" und der Login „tut nichts". → Diese
+   drei Zustände IMMER getrennt behandeln und getrennt loggen: (a) keine Session → Login
+   anbieten; (b) Session vorhanden, aber Query-Fehler → Fehler zeigen, NICHT ausloggen;
+   (c) Session vorhanden, 0 Zeilen → gezielt behandeln (fehlendes Profil/Onboarding).
+   `{ data, error, status }` immer zusammen auswerten, nie nur `data`.
 
 ---
 

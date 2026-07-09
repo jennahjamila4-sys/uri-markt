@@ -74,6 +74,14 @@ export function AuthModal() {
         password: data.password,
       })
 
+      // [AUTH-DIAG] TEMP (D1) – nach Beweis wieder entfernen.
+      console.log('[AUTH-DIAG] signInWithPassword →', {
+        signInError: error ? { name: error.name, message: error.message, status: (error as { status?: number }).status } : null,
+        hasSession: !!session?.session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id ?? null,
+      })
+
       if (error) {
         const message =
           error.message === 'Invalid login credentials'
@@ -84,11 +92,17 @@ export function AuthModal() {
       }
 
       if (session?.user) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileErr, status } = await supabase
           .from('profiles')
           .select('id,username,full_name,avatar_url,gemeinde')
           .eq('id', session.user.id)
           .single()
+        console.log('[AUTH-DIAG] login profiles.single() →', {
+          httpStatus: status,
+          error: profileErr ? { code: profileErr.code, message: profileErr.message, details: profileErr.details, hint: profileErr.hint } : null,
+          dataIsNull: profile == null,
+          data: profile,
+        })
         setUser(profile as Profile | null)
         toast.success('Willkommen! 🎉')
         loginForm.reset()
