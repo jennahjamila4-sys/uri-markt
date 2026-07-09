@@ -1,5 +1,15 @@
 import { z } from 'zod'
-import { isValidSwissIban, isValidSwissPhone } from '@/lib/validators/swiss'
+import { checkSwissIban, isValidSwissPhone } from '@/lib/validators/swiss'
+
+/** Präzise IBAN-Fehlermeldungen: Länge/Land vs. Prüfziffer unterscheiden. */
+export const IBAN_MSG = {
+  format: 'Bitte eine Schweizer IBAN: beginnt mit CH und hat 21 Zeichen (CH + 19).',
+  checksum:
+    'Die Prüfziffer stimmt nicht 🤔 — bitte IBAN nochmals von Karte/E-Banking abtippen.',
+} as const
+
+export const PHONE_MSG =
+  'Diese Nummer sieht nicht schweizerisch aus 🇨🇭 (z.B. 079 123 45 67)'
 
 /**
  * Zahlungs-/Kontaktdaten des Verkäufers (Tabelle `profiles_private`).
@@ -21,25 +31,28 @@ export const PaymentInfoSchema = z
     show_address: z.boolean().default(false),
   })
   .superRefine((val, ctx) => {
-    if (val.iban && !isValidSwissIban(val.iban)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['iban'],
-        message: 'Hoppla, die IBAN stimmt so nicht 🤔 (Schweizer IBAN: CH + 19 Zeichen)',
-      })
+    if (val.iban) {
+      const res = checkSwissIban(val.iban)
+      if (res !== 'ok') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['iban'],
+          message: res === 'checksum' ? IBAN_MSG.checksum : IBAN_MSG.format,
+        })
+      }
     }
     if (val.twint_phone && !isValidSwissPhone(val.twint_phone)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['twint_phone'],
-        message: 'Diese TWINT-Nummer sieht nicht schweizerisch aus 🇨🇭 (z.B. 079 123 45 67)',
+        message: PHONE_MSG,
       })
     }
     if (val.phone && !isValidSwissPhone(val.phone)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['phone'],
-        message: 'Diese Telefonnummer sieht nicht schweizerisch aus 🇨🇭 (z.B. 079 123 45 67)',
+        message: PHONE_MSG,
       })
     }
   })

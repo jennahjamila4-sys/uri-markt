@@ -132,6 +132,12 @@ oder Migration auf profiles/Policies angewendet wurde.)
    module './548.js'". → Nach `npm run build` Dev stoppen, `.next` löschen, dev neu starten.
 4. **DB-Hypothesen nie raten.** Lücke: Bucket-MIME-/CHECK-Constraint vermutet statt
    gemessen. → DB/Storage-Annahmen immer vom Planungs-Chat an der Live-DB prüfen lassen.
+5. **SELBSTTEST-PFLICHT vor jeder Testliste.** Lücke: Validierung an JJ gemeldet, ohne
+   sie je mit echten Gültig-/Ungültig-Werten selbst zu prüfen. → Jede Funktion vor der
+   Testliste selbst mit echten Gültig- UND Ungültig-Fällen testen (Validierungen:
+   automatisierte Tests mit bekannt gültigen Referenzwerten, z.B. IBAN
+   CH9300762011623852957) und „selbst getestet, funktioniert" melden. Fehlermeldungen
+   müssen sagen, WAS genau falsch ist (z.B. Länge vs. Prüfziffer).
 
 ---
 

@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { savePaymentInfoAction } from '@/app/actions/profile'
-import { PaymentInfoSchema } from '@/lib/validations/profile'
-import { isValidSwissIban, isValidSwissPhone } from '@/lib/validators/swiss'
+import { PaymentInfoSchema, IBAN_MSG, PHONE_MSG } from '@/lib/validations/profile'
+import { checkSwissIban, isValidSwissPhone } from '@/lib/validators/swiss'
 
 export interface PaymentInfo {
   iban: string | null
@@ -42,10 +42,13 @@ const FIELDS: {
 function validateField(key: FieldKey, value: string): string | null {
   const v = value.trim()
   if (!v) return null
-  if (key === 'iban' && !isValidSwissIban(v))
-    return 'Hoppla, die IBAN stimmt so nicht 🤔 (Schweizer IBAN: CH + 19 Zeichen)'
+  if (key === 'iban') {
+    const res = checkSwissIban(v)
+    if (res === 'checksum') return IBAN_MSG.checksum
+    if (res === 'format') return IBAN_MSG.format
+  }
   if ((key === 'twint_phone' || key === 'phone') && !isValidSwissPhone(v))
-    return 'Diese Nummer sieht nicht schweizerisch aus 🇨🇭 (z.B. 079 123 45 67)'
+    return PHONE_MSG
   return null
 }
 

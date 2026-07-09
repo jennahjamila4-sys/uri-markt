@@ -26,13 +26,24 @@ function ibanMod97(iban: string): number {
 }
 
 /**
+ * Ergebnis der IBAN-Prüfung – erlaubt eine präzise Fehlermeldung:
+ *  - 'format'   → falsche Länge/Land (nicht CH + 19 Zeichen = 21 gesamt)
+ *  - 'checksum' → Format ok, aber Mod-97-Prüfziffer stimmt nicht
+ */
+export type IbanCheck = 'ok' | 'format' | 'checksum'
+
+export function checkSwissIban(raw: string): IbanCheck {
+  const iban = normalizeIban(raw)
+  if (!/^CH\d{2}[A-Z0-9]{17}$/.test(iban)) return 'format'
+  return ibanMod97(iban) === 1 ? 'ok' : 'checksum'
+}
+
+/**
  * Gültige Schweizer IBAN: „CH" + 2 Prüfziffern + 17 Zeichen = 21 gesamt
  * (also CH + 19 Zeichen) UND korrekte Mod-97-Prüfsumme.
  */
 export function isValidSwissIban(raw: string): boolean {
-  const iban = normalizeIban(raw)
-  if (!/^CH\d{2}[A-Z0-9]{17}$/.test(iban)) return false
-  return ibanMod97(iban) === 1
+  return checkSwissIban(raw) === 'ok'
 }
 
 /** Trenn-/Formatzeichen entfernen, +41/0041 → 0 (nationale Form 0XXXXXXXXX) */
