@@ -8,6 +8,7 @@ import type { MatchItem } from '@/components/profile/SmartMatchList'
 import type { MyListingItem } from '@/components/profile/MyListings'
 import type { SellerTransaction } from '@/components/listing/SellerDashboard'
 import type { BuyerTransaction } from '@/components/profile/BuyerDashboard'
+import type { PaymentInfo } from '@/components/profile/PaymentInfoForm'
 
 export default async function ProfilePage() {
   const supabase = await createServerClient()
@@ -67,6 +68,16 @@ export default async function ProfilePage() {
     .order('created_at', { ascending: false })
     .limit(30)
 
+  // Eigene Zahlungs-/Kontaktdaten (RLS: nur Eigentümer). Zeile kann fehlen,
+  // wenn noch nichts hinterlegt wurde → maybeSingle() liefert dann null.
+  const { data: paymentInfo } = await supabase
+    .from('profiles_private')
+    .select(
+      'iban,twint_phone,phone,address,show_iban,show_twint,show_phone,show_address'
+    )
+    .eq('id', user.id)
+    .maybeSingle()
+
   return (
     <>
       <Header />
@@ -81,6 +92,7 @@ export default async function ProfilePage() {
           buyerTransactions={
             (buyerTransactions ?? []) as unknown as BuyerTransaction[]
           }
+          paymentInfo={(paymentInfo ?? null) as PaymentInfo | null}
         />
       </main>
       <BottomNav />

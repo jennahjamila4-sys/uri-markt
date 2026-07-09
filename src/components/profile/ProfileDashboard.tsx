@@ -12,6 +12,7 @@ import {
   type SellerTransaction,
 } from '@/components/listing/SellerDashboard'
 import { BuyerDashboard, type BuyerTransaction } from './BuyerDashboard'
+import { PaymentInfoForm, type PaymentInfo } from './PaymentInfoForm'
 import type { Profile, UserLevel } from '@/types'
 
 interface Props {
@@ -20,9 +21,16 @@ interface Props {
   matches: MatchItem[]
   sellerTransactions: SellerTransaction[]
   buyerTransactions: BuyerTransaction[]
+  paymentInfo: PaymentInfo | null
 }
 
-type View = 'overview' | 'matches' | 'listings' | 'sales' | 'purchases'
+type View =
+  | 'overview'
+  | 'matches'
+  | 'listings'
+  | 'sales'
+  | 'purchases'
+  | 'payment'
 
 export function ProfileDashboard({
   profile,
@@ -30,6 +38,7 @@ export function ProfileDashboard({
   matches,
   sellerTransactions,
   buyerTransactions,
+  paymentInfo,
 }: Props) {
   const [view, setView] = useState<View>('overview')
 
@@ -56,6 +65,7 @@ export function ProfileDashboard({
     { key: 'listings', emoji: '📦', label: 'Meine Inserate' },
     { key: 'purchases', emoji: '🛒', label: 'Meine Käufe', badge: activePurchases },
     { key: 'sales', emoji: '💰', label: 'Meine Verkäufe', badge: pendingSales },
+    { key: 'payment', emoji: '💳', label: 'Zahlungen' },
   ]
 
   return (
@@ -155,6 +165,7 @@ export function ProfileDashboard({
               {view === 'listings' && '📦 Meine Inserate'}
               {view === 'purchases' && '🛒 Meine Käufe'}
               {view === 'sales' && '💰 Meine Verkäufe'}
+              {view === 'payment' && '💳 Zahlungen'}
             </h2>
             <button
               onClick={() => setView('overview')}
@@ -175,6 +186,7 @@ export function ProfileDashboard({
               credits={profile.credits ?? 0}
             />
           )}
+          {view === 'payment' && <PaymentInfoForm initial={paymentInfo} />}
         </div>
       )}
     </div>

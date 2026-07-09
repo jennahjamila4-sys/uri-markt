@@ -273,6 +273,50 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles_private: {
+        Row: {
+          id: string
+          iban: string | null
+          twint_phone: string | null
+          phone: string | null
+          address: string | null
+          show_iban: boolean
+          show_twint: boolean
+          show_phone: boolean
+          show_address: boolean
+        }
+        Insert: {
+          id: string
+          iban?: string | null
+          twint_phone?: string | null
+          phone?: string | null
+          address?: string | null
+          show_iban?: boolean
+          show_twint?: boolean
+          show_phone?: boolean
+          show_address?: boolean
+        }
+        Update: {
+          id?: string
+          iban?: string | null
+          twint_phone?: string | null
+          phone?: string | null
+          address?: string | null
+          show_iban?: boolean
+          show_twint?: boolean
+          show_phone?: boolean
+          show_address?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_private_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           comment: string | null
@@ -548,6 +592,10 @@ export type Database = {
       escalate_no_show: {
         Args: { p_seller_id: string; p_transaction_id: string }
         Returns: { success: boolean; error?: string; message?: string }
+      }
+      get_transaction_contact: {
+        Args: { p_transaction_id: string }
+        Returns: Json
       }
       process_transaction_commission: {
         Args: { p_seller_id: string; p_transaction_id: string }
