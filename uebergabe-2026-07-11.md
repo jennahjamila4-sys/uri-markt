@@ -80,6 +80,15 @@ Lock → **Deadlock**.
   .env.local noch LEER → für Block 6 relevant), 7 (5-Taler-Texte + Rechtsseiten),
   8 (Vercel-Deploy-Vorbereitung).
 
+## 🔄 ANGEFANGEN / Nachzuhalten
+- **`src/types/database.ts`**: Die früheren Hand-Edits (u.a. 3-Argument-RPC
+  `create_buy_intent`) wurden in Block 0 durch einen frischen `npx supabase gen types`
+  (SUPABASE_ACCESS_TOKEN aus `.env.local`, Exit 0) **komplett ersetzt** — die Datei ist
+  aktuell reines Generat, kein Hand-Edit mehr, Drift beseitigt. Regel ab jetzt
+  (Lektion 11): NIE von Hand editieren; nur via `gen types` regenerieren. Falls
+  `gen types` mal nicht läuft (fehlender Access-Token) → STOPP-Punkt, JJ melden,
+  Planungs-Chat verifiziert Live-Signatur per MCP.
+
 ## ⚠️ Offene Punkte / Schulden
 - E2E deckt Foto-Upload, Feed-Status-Sticker und echte 10%-Provision (bezahltes
   Listing) NICHT ab — bei Bedarf später ergänzen.

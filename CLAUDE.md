@@ -175,6 +175,14 @@ oder Migration auf profiles/Policies angewendet wurde.)
    GoTrue-Instanzen rotieren parallel denselben Refresh-Token (Race). Merksatz:
    „Session weg nach Navigation" ist fast nie die Middleware — erst Server-Sicht
    (`/profile`-Redirect?) vs. Client-Sicht trennen, dann messen.
+11. **`src/types/database.ts` ist AUSSCHLIESSLICH Generat — niemals von Hand
+   editieren**, auch nicht als „schnelle Korrektur" einer Signatur/Spalte. Hand-Edits
+   = Drift = verboten (führt genau zu den nullable-/Signatur-Fehlern aus Block 0).
+   Aktualisieren NUR via `npx supabase gen types typescript --project-id <ref> --schema
+   public > src/types/database.ts` (SUPABASE_ACCESS_TOKEN steht in `.env.local`).
+   Läuft `gen types` mangels Access-Token/CLI NICHT, ist das ein **STOPP-Punkt**: in
+   der Übergabe dokumentieren und JJ melden — der Planungs-Chat verifiziert die
+   Live-Signatur per MCP. Nie raten, nie von Hand nachziehen.
 
 ---
 
