@@ -98,3 +98,55 @@ Lock → **Deadlock**.
 
 ## Arbeitsteilung (unverändert)
 - DB-Migrationen NUR Planungs-Chat. Kein git push ohne JJ-OK. D1–D5, Lektionen 1–10.
+
+
+---
+
+## ✅ Block 2 — Öffentliche Bewertungen (Commit `5e36835`, Doku-Commit folgt)
+**Arbeitsmodus ab hier (JJ-Vorgabe, bindend):** Claude schreibt Code + fährt `tsc`
+selbst. Build + E2E laufen NICHT hier (Umgebungslimit, s.u.) — JJ führt pro Block EINEN
+PowerShell-Befehl aus und meldet nur `BUILD_EXIT/PW_EXIT` (+ letzte 30 Zeilen bei Rot).
+Abhaken im Masterplan NUR nach von JJ gemeldetem Grün. Kein Push ohne JJ-OK.
+
+- Neu `src/components/profile/ReviewList.tsx`: präsentationale, serverfähige Liste
+  (Sterne, Datum dd.MM.yyyy, Kommentar, sauberer Leerzustand `data-testid=reviews-empty`,
+  „Gelöschter Nutzer" wenn Reviewer null). testids: reviews-list, review-item.
+- `src/app/profile/[username]/page.tsx`: lädt Einzelbewertungen (reviews, öffentlich
+  lesbar) mit Reviewer-Join `reviewer:profiles!reviews_reviewer_id_fkey`; robustes
+  Array/Objekt-Flatten; `profile-avg-rating` testid. Durchschnitt + Anzahl (bestehend) +
+  Liste (neu).
+- `src/components/listing/ListingDetail.tsx`: Verkäufer-Rating (⭐ + avg_rating) in der
+  Verkäufer-Zeile, `data-testid=seller-rating`. avg_rating null → „0.0" (keine erfundene Zahl).
+- E2E `e2e/block2-reviews.spec.ts` (3 Tests, self-contained: seedet Reviews für A via
+  Service-Role, B bewusst leer, seedet 1 Listing für Verkäufer-Rating; räumt per
+  `E2E-REVIEWS%`/`E2E-TEST-REVIEWS%` wieder ab). **Von JJ GRÜN gemeldet: BUILD_EXIT=0
+  PW_EXIT=0, 3 passed.**
+- DB verifiziert (D1): reviews RLS „public select" ok; UNIQUE(reviewer_id, transaction_id)
+  → Seeds mit transaction_id null kollidieren nie; keine Check-Constraint auf rating.
+
+### ⚠️ WICHTIGE UMGEBUNGS-ERKENNTNISSE (für jede Folge-Session lesen)
+1. **Shell-Limit 45s pro Befehl, keine Hintergrundprozesse** (Sandbox `--die-with-parent`).
+   `next build` (Webpack-Compile allein >45s) und Playwright-E2E laufen daher NICHT hier —
+   nur `tsc --noEmit --incremental` (~21s) ist lokal machbar. Deshalb der JJ-Verify-Flow.
+2. **Windows-Mount erlaubt kein `unlink`, nur `rename`.** Folgen: `git checkout -- .`
+   scheitert; git hinterlässt Stale-`*.lock` (index.lock/HEAD.lock), die den nächsten
+   git-Befehl blockieren. Workaround: Locks per `mv .git/index.lock .git/stale.$$`
+   wegräumen (rename geht). git commit/add funktionieren (rename-basiert).
+3. **Die Datei-Tools (Write/Edit) schneiden auf dem Mount an bestimmten Emoji-Bytes
+   (z.B. ⭐ U+2B50) ab bzw. syncen nicht immer** (mein `.gitignore`-Edit landete nicht).
+   → Quellen mit Sonderzeichen per bash-Heredoc schreiben und Bytes verifizieren
+   (`python3 -c` lines/bytes/ends-with-brace). Emojis wo möglich als `\u{...}`-Escape.
+4. **git-Identität** war leer → lokal auf `jennahjamila4-sys / jennahjamila4@gmail.com`
+   gesetzt (aus bestehenden Commits übernommen).
+5. **gen types CLI** geht nicht (npm-Registry 403 auf `supabase`). Ersatz: Supabase-MCP
+   `generate_typescript_types` → gegen `database.ts` verifiziert, **kein Drift** (Vorab-
+   Schritt erledigt, nichts zu ändern).
+
+### Verify-Infrastruktur (neu, committet)
+- `e2e/verify.ps1 [spec]` → `npm run build` dann `npx playwright test [spec]`, Ausgabe
+  `BUILD_EXIT=n PW_EXIT=n` (+ letzte 30 Zeilen bei Rot). Per-Block-Tool.
+- `e2e/run-verify.ps1` → wie oben, aber grosses farbiges GRUEN/ROT, Fenster bleibt offen.
+- `e2e/install-shortcut.ps1` → legt Desktop-Verknüpfung „Uri-Markt Verify" an (einmalig).
+
+## NÄCHSTER BLOCK: 3 (Listing bearbeiten/löschen/deaktivieren)
+Reihenfolge unverändert (Startnachricht). Session neu starten.

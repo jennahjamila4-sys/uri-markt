@@ -21,9 +21,9 @@
 - [ ] 48h-Reservierungs-Auto-Expiry → Listing wieder aktiv, Deal storniert (DB-seitig, Planungs-Chat) — nicht in diesem E2E
 
 ### 2. Bewertungen öffentlich
-- [ ] Profil zeigt Durchschnitt + Anzahl + Einzelbewertungen
-- [ ] Listing-Detail zeigt Verkäufer-Bewertung
-- [ ] Keine Bewertung → sauberer Leerzustand (kein Fehler, keine erfundenen Zahlen)
+- [x] Profil zeigt Durchschnitt + Anzahl + Einzelbewertungen — `5e36835`
+- [x] Listing-Detail zeigt Verkäufer-Bewertung — `5e36835`
+- [x] Keine Bewertung → sauberer Leerzustand (kein Fehler, keine erfundenen Zahlen) — `5e36835`
 
 ### 3. Listings verwalten
 - [ ] Eigenes Listing bearbeiten (alle Felder inkl. Foto tauschen)
