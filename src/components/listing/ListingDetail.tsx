@@ -156,7 +156,16 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
             )}
             <div>
               <div className="font-body font-semibold text-white">{listing.profiles?.username}</div>
-              {listing.profiles?.level && <div className="text-xs text-gold font-display">{listing.profiles.level}</div>}
+              <div className="flex items-center gap-2 text-xs">
+                {listing.profiles?.level && (
+                  <span className="text-gold font-display">{listing.profiles.level}</span>
+                )}
+                {/* Verkäufer-Bewertung: Durchschnitt (1 Dezimale). avg_rating ist
+                    null/0 solange keine Bewertung existiert → kein erfundener Wert. */}
+                <span className="text-white/60" data-testid="seller-rating">
+                  ⭐ {(listing.profiles?.avg_rating ?? 0).toFixed(1)}
+                </span>
+              </div>
             </div>
             <div className="ml-auto text-xs text-white/60">{listing.views ?? 0} views</div>
           </div>
@@ -179,9 +188,9 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
 
           <div className="flex gap-2">
             <button className="flex-1 rounded-xl border border-glass-border px-4 py-3" onClick={() => {}}>
-              💛 Favorit
+              {'\u{1F49B}'} Favorit
             </button>
-            <button className="rounded-xl border border-glass-border px-4 py-3" onClick={handleShare}>📤</button>
+            <button className="rounded-xl border border-glass-border px-4 py-3" onClick={handleShare}>{'\u{1F4E4}'}</button>
           </div>
 
           {/* Kommentare */}

@@ -8,6 +8,7 @@ import {
   PublicListingGrid,
   type PublicListing,
 } from '@/components/profile/PublicListingGrid'
+import { ReviewList, type ReviewListItem } from '@/components/profile/ReviewList'
 import type { UserLevel } from '@/types'
 
 interface Props {
@@ -15,7 +16,7 @@ interface Props {
 }
 
 /**
- * Öffentliches Profil – zeigt NUR öffentliche Daten.
+ * Oeffentliches Profil - zeigt NUR oeffentliche Daten.
  * NICHT: Telefon, E-Mail, Taler-Guthaben, Transaktionen.
  */
 export default async function PublicProfilePage({ params }: Props) {
@@ -38,6 +39,31 @@ export default async function PublicProfilePage({ params }: Props) {
     .order('created_at', { ascending: false })
     .limit(30)
 
+  // Oeffentliche Einzelbewertungen dieses Nutzers (als Bewerteter).
+  // reviews ist oeffentlich lesbar (RLS "Reviews: public select"). Reviewer-Join
+  // kann null sein, wenn der Bewertende sein Konto geloescht hat -> "Geloeschter Nutzer".
+  const { data: reviewRows } = await supabase
+    .from('reviews')
+    .select(
+      'id,rating,comment,created_at,reviewer:profiles!reviews_reviewer_id_fkey(username,avatar_url)'
+    )
+    .eq('reviewee_id', profile.id)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const reviews: ReviewListItem[] = (reviewRows ?? []).map((r) => {
+    const rev = Array.isArray(r.reviewer) ? r.reviewer[0] : r.reviewer
+    return {
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.created_at,
+      reviewer: rev ? { username: rev.username, avatar_url: rev.avatar_url } : null,
+    }
+  })
+
+  const ratingText = (profile.avg_rating ?? 0).toFixed(1)
+
   return (
     <>
       <Header />
@@ -53,7 +79,7 @@ export default async function PublicProfilePage({ params }: Props) {
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-3xl">
-                👤
+                {'\u{1F464}'}
               </div>
             )}
           </div>
@@ -63,13 +89,15 @@ export default async function PublicProfilePage({ params }: Props) {
             </h1>
             <p className="text-sm text-white/60">@{profile.username}</p>
             <div className="mt-1 flex items-center gap-2 text-sm text-white/60">
-              <span>⭐ {(profile.avg_rating ?? 0).toFixed(1)}</span>
-              <span>·</span>
+              <span data-testid="profile-avg-rating">
+                {'⭐'} {ratingText}
+              </span>
+              <span>&middot;</span>
               <span>{profile.review_count ?? 0} Bewertungen</span>
               {profile.gemeinde && (
                 <>
-                  <span>·</span>
-                  <span>📍 {profile.gemeinde}</span>
+                  <span>&middot;</span>
+                  <span>{'\u{1F4CD}'} {profile.gemeinde}</span>
                 </>
               )}
             </div>
@@ -83,7 +111,7 @@ export default async function PublicProfilePage({ params }: Props) {
           />
           {profile.pioneer_badge && (
             <span className="rounded-full border border-gold/60 bg-gold/10 px-3 py-2 text-sm font-bold text-gold">
-              🏆 Pionier
+              {'\u{1F3C6}'} Pionier
             </span>
           )}
         </div>
@@ -94,6 +122,8 @@ export default async function PublicProfilePage({ params }: Props) {
           </h2>
           <PublicListingGrid listings={(listings ?? []) as PublicListing[]} />
         </div>
+
+        <ReviewList reviews={reviews} title="Bewertungen" />
       </main>
       <BottomNav />
     </>

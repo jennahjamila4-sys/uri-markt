@@ -16,3 +16,5 @@ supabase/.temp/
 test-results/
 playwright-report/
 .playwright/
+e2e/_build.log
+e2e/_pw.log
