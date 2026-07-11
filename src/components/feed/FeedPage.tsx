@@ -13,11 +13,7 @@ import type { ListingWithProfile, ListingType } from '@/types'
 // Zentrale Spaltenliste für alle Feed-Queries (Initial-Load + loadMore) –
 // eine Quelle, damit Grid und Vollbild-Modus garantiert dieselben Felder laden.
 const LISTING_SELECT = `
-  id, title, description, type, status, price, price_type,
-  category, gemeinde, image_url, is_boosted,
-  image_urls,
-  boost_expires_at, fomo_expires_at, views, created_at, user_id,
-  event_date, event_location, max_capacity, current_bookings, ticket_price,
+  *,
   profiles!listings_user_id_fkey (
     id, username, avatar_url, avg_rating, level
   )

@@ -1,0 +1,55 @@
+# MVP-MASTERPLAN Uri-Markt — verbindlich bis Launch
+
+**Zweck:** Diese Datei definiert FERTIG. Jede Claude-Code-Session liest sie zusammen mit CLAUDE.md und der aktuellen Übergabe. Ein Block gilt erst als abgeschlossen, wenn seine Abnahmekriterien erfüllt UND per Playwright-E2E bewiesen sind (Lektion 8). JJ testet nur noch als Endkontrolle — nicht als Fehlersucher.
+
+## Arbeitsprinzip (nicht verhandelbar)
+1. **Lücken selbst finden:** Vor jedem Block prüft Claude Code aktiv: Welche Konsumenten hat dieses Feature? (Lektion 1). Welche Zustände kann es geben und rendert das UI JEDEN davon? Was passiert bei Fehler/Doppelklick/F5/abgelaufener Session? Gefundene Lücken werden IM Block geschlossen, nie notiert-und-umgangen.
+2. **Beweis statt Behauptung:** Jeder Flow-Block endet mit grünem headless E2E-Lauf. Erst dann „selbst getestet, funktioniert" + Testliste an JJ.
+3. **DB-Fragen an den Planungs-Chat**, nie vermuten. Migrationen NUR dort.
+4. **Session-Hygiene:** Nach jedem Block: Übergabe aktualisieren, committen (kein Push ohne JJ), Session beenden.
+
+## MVP = FERTIG, wenn ALLE Kriterien unten grün sind
+
+### 1. Verkaufsflow (Kern) — E2E: deal-completion.spec.ts
+- [ ] Inserieren mit Foto (PNG+JPG, Fehler sichtbar wenn Upload scheitert)
+- [ ] Entdecken: Feed zeigt Angebote/Gesuche korrekt, keine Duplikate, Status-Sticker (RESERVIERT/VERKAUFT) überall wo Listings erscheinen
+- [ ] Kaufabsicht mit Zahlungsweg-Auswahl (Bar/TWINT/IBAN je nach Verkäufer-Angaben)
+- [ ] Verkäufer bestätigt → Provision (10%, Taler) atomar via RPC, Reservierung aktiv
+- [ ] Kontaktdaten beidseitig sichtbar NUR bei status=confirmed, gemäss Sichtbarkeits-Flags
+- [ ] Beidseitiger Abschluss → Kontakt weg, XP (50/10), Status überall korrekt
+- [ ] Bewertung: genau 1× pro Nutzer+Transaktion, +5 XP
+- [ ] 48h-Reservierungs-Auto-Expiry: abgelaufene Reservierung → Listing wieder aktiv, Deal storniert (DB-seitig, Planungs-Chat)
+
+### 2. Bewertungen öffentlich
+- [ ] Profil zeigt Durchschnitt + Anzahl + Einzelbewertungen
+- [ ] Listing-Detail zeigt Verkäufer-Bewertung
+- [ ] Keine Bewertung → sauberer Leerzustand (kein Fehler, keine erfundenen Zahlen)
+
+### 3. Listings verwalten
+- [ ] Eigenes Listing bearbeiten (alle Felder inkl. Foto tauschen)
+- [ ] Löschen/Deaktivieren mit Bestätigungsdialog
+- [ ] Bearbeiten gesperrt sobald reserviert/verkauft (Meldung WARUM — Lektion 6)
+
+### 4. Profil & Konto
+- [ ] Profil bearbeiten, Zahlungsangaben (IBAN/TWINT) mit fachlich korrekter Validierung + Sichtbarkeits-Flags
+- [ ] Taler-Transaktionshistorie sichtbar
+- [ ] Konto-Löschung funktioniert (Schweizer Rechtspflicht)
+
+### 5. Taler-Kauf (Stripe) — E2E mit Stripe-Testmodus
+- [ ] Checkout Session (rk_-Key, kein payment_method_types), Webhook mit constructEvent()
+- [ ] Gutschrift atomar+idempotent via credit_taler-RPC (Planungs-Chat legt an), kein Doppelklick-Doppelkauf
+- [ ] Guthaben-Prüfung VOR Verpflichtung, DB-Constraint nicht-negativ (Planungs-Chat)
+- [ ] Anzeige immer credits/100, Rundung konsistent
+- [ ] Voraussetzung JJ: Stripe-Konto (Einzelfirma) aktiviert
+
+### 6. Recht & Start
+- [ ] Impressum, Datenschutz (DSG 2023), AGB inkl. Taler-Klausel (Anwalts-Review vor Echtgeld — JJ)
+- [ ] 5-Taler-Startguthaben: ALLE Anker (DB-Default, Onboarding-RPC, Frontend-/Marketing-Texte inkl. Pioneer) im selben Block
+- [ ] comments-Tabelle (Migration Planungs-Chat) + Kommentar-UI ohne PGRST205
+
+### 7. Deploy
+- [ ] Vercel: Site-URL, Redirect-Allow-List, Env-Vars — Login/Signup auf echter Domain E2E-getestet
+- [ ] Smoke-Test 5/5 auf Production
+
+## Abnahme-Regel
+Ein Kriterium gilt als erfüllt, wenn: (a) E2E oder automatisierter Test grün, (b) tsc+build 0 Errors, (c) kein bestehendes Kriterium dabei gebrochen wurde (Regression = Block nicht fertig). Claude Code hakt Kriterien in DIESER Datei ab (Checkbox → [x]) mit Commit-Hash daneben.

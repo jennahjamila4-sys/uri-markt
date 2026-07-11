@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -16,28 +16,25 @@ export type Database = {
     Tables: {
       comments: {
         Row: {
-          censored_text: string | null
-          created_at: string | null
+          content: string
+          created_at: string
           id: string
           listing_id: string
-          text: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
-          censored_text?: string | null
-          created_at?: string | null
+          content: string
+          created_at?: string
           id?: string
           listing_id: string
-          text: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
-          censored_text?: string | null
-          created_at?: string | null
+          content?: string
+          created_at?: string
           id?: string
           listing_id?: string
-          text?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -58,24 +55,39 @@ export type Database = {
       }
       event_bookings: {
         Row: {
+          commitment_type: string | null
           created_at: string | null
           id: string
           listing_id: string | null
-          seats: number | null
+          party_size: number | null
+          qr_code: string | null
+          qr_validated_at: string | null
+          quantity: number | null
+          status: string | null
           user_id: string | null
         }
         Insert: {
+          commitment_type?: string | null
           created_at?: string | null
           id?: string
           listing_id?: string | null
-          seats?: number | null
+          party_size?: number | null
+          qr_code?: string | null
+          qr_validated_at?: string | null
+          quantity?: number | null
+          status?: string | null
           user_id?: string | null
         }
         Update: {
+          commitment_type?: string | null
           created_at?: string | null
           id?: string
           listing_id?: string | null
-          seats?: number | null
+          party_size?: number | null
+          qr_code?: string | null
+          qr_validated_at?: string | null
+          quantity?: number | null
+          status?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -97,76 +109,112 @@ export type Database = {
       }
       listings: {
         Row: {
+          boost_cost: number | null
           boost_expires_at: string | null
+          boost_type: string | null
           category: string
+          commitment_type: string | null
+          condition: string | null
           created_at: string | null
+          current_bookings: number | null
+          deposit_amount: number | null
           description: string | null
+          event_date: string | null
+          event_location: string | null
           fomo_expires_at: string | null
           gemeinde: string
           id: string
           image_url: string | null
           image_urls: string[] | null
+          is_blurred: boolean | null
           is_boosted: boolean | null
+          is_flagged: boolean | null
+          max_budget: number | null
+          max_capacity: number | null
+          pickup_available: boolean | null
           price: number | null
           price_type: string
+          shipping_available: boolean | null
+          shipping_cost: number | null
           status: string
+          ticket_price: number | null
           title: string
           type: string
+          updated_at: string | null
           user_id: string
           views: number | null
-          event_date: string | null
-          event_location: string | null
-          max_capacity: number | null
-          current_bookings: number | null
-          ticket_price: number | null
         }
         Insert: {
+          boost_cost?: number | null
           boost_expires_at?: string | null
+          boost_type?: string | null
           category: string
+          commitment_type?: string | null
+          condition?: string | null
           created_at?: string | null
+          current_bookings?: number | null
+          deposit_amount?: number | null
           description?: string | null
+          event_date?: string | null
+          event_location?: string | null
           fomo_expires_at?: string | null
           gemeinde: string
           id?: string
           image_url?: string | null
           image_urls?: string[] | null
+          is_blurred?: boolean | null
           is_boosted?: boolean | null
+          is_flagged?: boolean | null
+          max_budget?: number | null
+          max_capacity?: number | null
+          pickup_available?: boolean | null
           price?: number | null
           price_type: string
+          shipping_available?: boolean | null
+          shipping_cost?: number | null
           status?: string
+          ticket_price?: number | null
           title: string
           type: string
+          updated_at?: string | null
           user_id: string
           views?: number | null
-          event_date?: string | null
-          event_location?: string | null
-          max_capacity?: number | null
-          current_bookings?: number | null
-          ticket_price?: number | null
         }
         Update: {
+          boost_cost?: number | null
           boost_expires_at?: string | null
+          boost_type?: string | null
           category?: string
+          commitment_type?: string | null
+          condition?: string | null
           created_at?: string | null
+          current_bookings?: number | null
+          deposit_amount?: number | null
           description?: string | null
+          event_date?: string | null
+          event_location?: string | null
           fomo_expires_at?: string | null
           gemeinde?: string
           id?: string
           image_url?: string | null
           image_urls?: string[] | null
+          is_blurred?: boolean | null
           is_boosted?: boolean | null
+          is_flagged?: boolean | null
+          max_budget?: number | null
+          max_capacity?: number | null
+          pickup_available?: boolean | null
           price?: number | null
           price_type?: string
+          shipping_available?: boolean | null
+          shipping_cost?: number | null
           status?: string
+          ticket_price?: number | null
           title?: string
           type?: string
+          updated_at?: string | null
           user_id?: string
           views?: number | null
-          event_date?: string | null
-          event_location?: string | null
-          max_capacity?: number | null
-          current_bookings?: number | null
-          ticket_price?: number | null
         }
         Relationships: [
           {
@@ -182,31 +230,44 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          payload: Json | null
-          read: boolean | null
+          is_read: boolean | null
+          listing_id: string | null
+          message: string | null
+          recipient_id: string | null
+          title: string | null
           type: string | null
-          user_id: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
-          payload?: Json | null
-          read?: boolean | null
+          is_read?: boolean | null
+          listing_id?: string | null
+          message?: string | null
+          recipient_id?: string | null
+          title?: string | null
           type?: string | null
-          user_id?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
-          payload?: Json | null
-          read?: boolean | null
+          is_read?: boolean | null
+          listing_id?: string | null
+          message?: string | null
+          recipient_id?: string | null
+          title?: string | null
           type?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "notifications_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "notifications_user_id_fkey"
-            columns: ["user_id"]
+            columns: ["recipient_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -220,16 +281,24 @@ export type Database = {
           can_buy: boolean | null
           created_at: string | null
           credits: number | null
+          email_notifications: boolean | null
           full_name: string | null
           gemeinde: string | null
           id: string
+          is_admin: boolean | null
           is_banned: boolean | null
           level: string | null
           pioneer_badge: boolean | null
           preferred_categories: string[] | null
+          profile_public: boolean | null
+          push_notifications: boolean | null
+          push_subscription: Json | null
           referral_code: string | null
+          referred_by: string | null
           review_count: number | null
           strikes: number | null
+          stripe_customer_id: string | null
+          updated_at: string | null
           username: string
           xp_points: number | null
         }
@@ -239,16 +308,24 @@ export type Database = {
           can_buy?: boolean | null
           created_at?: string | null
           credits?: number | null
+          email_notifications?: boolean | null
           full_name?: string | null
           gemeinde?: string | null
-          id?: string
+          id: string
+          is_admin?: boolean | null
           is_banned?: boolean | null
           level?: string | null
           pioneer_badge?: boolean | null
           preferred_categories?: string[] | null
+          profile_public?: boolean | null
+          push_notifications?: boolean | null
+          push_subscription?: Json | null
           referral_code?: string | null
+          referred_by?: string | null
           review_count?: number | null
           strikes?: number | null
+          stripe_customer_id?: string | null
+          updated_at?: string | null
           username: string
           xp_points?: number | null
         }
@@ -258,64 +335,75 @@ export type Database = {
           can_buy?: boolean | null
           created_at?: string | null
           credits?: number | null
+          email_notifications?: boolean | null
           full_name?: string | null
           gemeinde?: string | null
           id?: string
+          is_admin?: boolean | null
           is_banned?: boolean | null
           level?: string | null
           pioneer_badge?: boolean | null
           preferred_categories?: string[] | null
+          profile_public?: boolean | null
+          push_notifications?: boolean | null
+          push_subscription?: Json | null
           referral_code?: string | null
+          referred_by?: string | null
           review_count?: number | null
           strikes?: number | null
+          stripe_customer_id?: string | null
+          updated_at?: string | null
           username?: string
           xp_points?: number | null
         }
-        Relationships: []
-      }
-      profiles_private: {
-        Row: {
-          id: string
-          iban: string | null
-          twint_phone: string | null
-          phone: string | null
-          address: string | null
-          show_iban: boolean
-          show_twint: boolean
-          show_phone: boolean
-          show_address: boolean
-        }
-        Insert: {
-          id: string
-          iban?: string | null
-          twint_phone?: string | null
-          phone?: string | null
-          address?: string | null
-          show_iban?: boolean
-          show_twint?: boolean
-          show_phone?: boolean
-          show_address?: boolean
-        }
-        Update: {
-          id?: string
-          iban?: string | null
-          twint_phone?: string | null
-          phone?: string | null
-          address?: string | null
-          show_iban?: boolean
-          show_twint?: boolean
-          show_phone?: boolean
-          show_address?: boolean
-        }
         Relationships: [
           {
-            foreignKeyName: "profiles_private_id_fkey"
-            columns: ["id"]
-            isOneToOne: true
+            foreignKeyName: "profiles_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles_private: {
+        Row: {
+          address: string | null
+          iban: string | null
+          id: string
+          phone: string | null
+          show_address: boolean
+          show_iban: boolean
+          show_phone: boolean
+          show_twint: boolean
+          twint_phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          iban?: string | null
+          id: string
+          phone?: string | null
+          show_address?: boolean
+          show_iban?: boolean
+          show_phone?: boolean
+          show_twint?: boolean
+          twint_phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          iban?: string | null
+          id?: string
+          phone?: string | null
+          show_address?: boolean
+          show_iban?: boolean
+          show_phone?: boolean
+          show_twint?: boolean
+          twint_phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       reviews: {
         Row: {
@@ -370,13 +458,19 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "reviews_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
         ]
       }
       smart_matches: {
         Row: {
           created_at: string | null
-          dismissed: boolean | null
-          dismissed_at: string | null
+          dismissed: boolean
           gesuch_id: string
           id: string
           matched_listing_id: string
@@ -385,8 +479,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          dismissed?: boolean | null
-          dismissed_at?: string | null
+          dismissed?: boolean
           gesuch_id: string
           id?: string
           matched_listing_id: string
@@ -395,8 +488,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          dismissed?: boolean | null
-          dismissed_at?: string | null
+          dismissed?: boolean
           gesuch_id?: string
           id?: string
           matched_listing_id?: string
@@ -429,58 +521,55 @@ export type Database = {
       }
       transactions: {
         Row: {
-          amount: number
+          amount: number | null
+          buyer_completed_at: string | null
           buyer_contact: string | null
-          buyer_id: string
-          commission: number
+          buyer_id: string | null
+          commission: number | null
           completed_at: string | null
           confirmed_at: string | null
           created_at: string | null
           id: string
-          listing_id: string
-          no_show_reported_at: string | null
+          listing_id: string | null
           payment_method: string | null
-          seller_contact: string | null
-          seller_id: string
           seller_completed_at: string | null
-          buyer_completed_at: string | null
-          status: string
+          seller_contact: string | null
+          seller_id: string | null
+          status: string | null
         }
         Insert: {
-          amount: number
+          amount?: number | null
+          buyer_completed_at?: string | null
           buyer_contact?: string | null
-          buyer_id: string
-          commission?: number
+          buyer_id?: string | null
+          commission?: number | null
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string | null
           id?: string
-          listing_id: string
-          no_show_reported_at?: string | null
+          listing_id?: string | null
           payment_method?: string | null
-          seller_contact?: string | null
-          seller_id: string
           seller_completed_at?: string | null
-          buyer_completed_at?: string | null
-          status?: string
+          seller_contact?: string | null
+          seller_id?: string | null
+          status?: string | null
         }
         Update: {
-          amount?: number
+          amount?: number | null
+          buyer_completed_at?: string | null
           buyer_contact?: string | null
-          buyer_id?: string
-          commission?: number
+          buyer_id?: string | null
+          commission?: number | null
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string | null
           id?: string
-          listing_id?: string
-          no_show_reported_at?: string | null
+          listing_id?: string | null
           payment_method?: string | null
-          seller_contact?: string | null
-          seller_id?: string
           seller_completed_at?: string | null
-          buyer_completed_at?: string | null
-          status?: string
+          seller_contact?: string | null
+          seller_id?: string | null
+          status?: string | null
         }
         Relationships: [
           {
@@ -510,28 +599,41 @@ export type Database = {
         Row: {
           amount: number | null
           created_at: string | null
+          description: string | null
           id: string
-          metadata: Json | null
+          listing_id: string | null
+          stripe_payment_intent_id: string | null
           type: string | null
           user_id: string | null
         }
         Insert: {
           amount?: number | null
           created_at?: string | null
+          description?: string | null
           id?: string
-          metadata?: Json | null
+          listing_id?: string | null
+          stripe_payment_intent_id?: string | null
           type?: string | null
           user_id?: string | null
         }
         Update: {
           amount?: number | null
           created_at?: string | null
+          description?: string | null
           id?: string
-          metadata?: Json | null
+          listing_id?: string | null
+          stripe_payment_intent_id?: string | null
           type?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "wallet_transactions_user_id_fkey"
             columns: ["user_id"]
@@ -580,11 +682,11 @@ export type Database = {
           p_reason: string
           p_user_id: string
         }
-        Returns: Json
+        Returns: undefined
       }
-      calculate_level: {
-        Args: { p_xp_points: number }
-        Returns: string
+      complete_transaction: {
+        Args: { p_transaction_id: string }
+        Returns: Json
       }
       create_buy_intent: {
         Args: {
@@ -594,21 +696,55 @@ export type Database = {
         }
         Returns: Json
       }
-      complete_transaction: {
-        Args: { p_transaction_id: string }
-        Returns: {
-          success: boolean
-          status?: string
-          buyer_completed?: boolean
-          seller_completed?: boolean
-          buyer_id?: string
-          listing_id?: string
-          error?: string
+      credit_taler: {
+        Args: {
+          p_amount_rappen: number
+          p_description?: string
+          p_stripe_payment_intent_id: string
+          p_user_id: string
         }
+        Returns: Json
       }
       escalate_no_show: {
         Args: { p_seller_id: string; p_transaction_id: string }
-        Returns: { success: boolean; error?: string; message?: string }
+        Returns: Json
+      }
+      expire_stale_reservations: { Args: never; Returns: Json }
+      get_my_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          avg_rating: number | null
+          can_buy: boolean | null
+          created_at: string | null
+          credits: number | null
+          email_notifications: boolean | null
+          full_name: string | null
+          gemeinde: string | null
+          id: string
+          is_admin: boolean | null
+          is_banned: boolean | null
+          level: string | null
+          pioneer_badge: boolean | null
+          preferred_categories: string[] | null
+          profile_public: boolean | null
+          push_notifications: boolean | null
+          push_subscription: Json | null
+          referral_code: string | null
+          referred_by: string | null
+          review_count: number | null
+          strikes: number | null
+          stripe_customer_id: string | null
+          updated_at: string | null
+          username: string
+          xp_points: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_transaction_contact: {
         Args: { p_transaction_id: string }
@@ -616,25 +752,17 @@ export type Database = {
       }
       process_transaction_commission: {
         Args: { p_seller_id: string; p_transaction_id: string }
-        Returns: {
-          success: boolean
-          error?: string
-          message?: string
-          amount?: number
-          commission?: number
-          balance?: number
-          needed?: number
-        }
+        Returns: Json
       }
       send_notification: {
         Args: {
-          p_listing_id?: string
+          p_listing_id: string
           p_message: string
           p_recipient_id: string
           p_title: string
           p_type: string
         }
-        Returns: Json
+        Returns: undefined
       }
     }
     Enums: {

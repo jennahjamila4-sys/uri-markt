@@ -17,26 +17,17 @@ export function useNotifications(userId: string | undefined) {
     if (!userId) return
     const supabase = createClient()
 
-    // Load initial unread notifications
+    // Load initial unread notifications (Spalten gemäss echtem Schema:
+    // recipient_id / is_read / title / message / listing_id – kein payload)
     supabase
       .from('notifications')
-      .select('id,type,payload,read,created_at,user_id')
-      .eq('user_id', userId)
-      .eq('read', false)
+      .select('id,type,title,message,listing_id,is_read,created_at,recipient_id')
+      .eq('recipient_id', userId)
+      .eq('is_read', false)
       .order('created_at', { ascending: false })
       .limit(20)
       .then(({ data }) => {
-        if (data) {
-          const notifications = data.map((n) => ({
-            id: n.id,
-            user_id: n.user_id,
-            type: n.type,
-            payload: n.payload,
-            read: n.read,
-            created_at: n.created_at,
-          }))
-          setNotifications(notifications)
-        }
+        if (data) setNotifications(data)
       })
 
     // Subscribe to new notifications
@@ -48,26 +39,24 @@ export function useNotifications(userId: string | undefined) {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${userId}`,
+          filter: `recipient_id=eq.${userId}`,
         },
         (payload) => {
-          const newNotif = payload.new
-          addNotification({
-            id: newNotif.id,
-            user_id: newNotif.user_id,
-            type: newNotif.type,
-            payload: newNotif.payload,
-            read: newNotif.read,
-            created_at: newNotif.created_at,
-          })
-
-          // Live-Toast mit Titel/Message aus dem payload
-          const p = (newNotif.payload ?? {}) as {
-            title?: string
-            message?: string
+          const newNotif = payload.new as {
+            id: string
+            recipient_id: string | null
+            type: string | null
+            title: string | null
+            message: string | null
+            listing_id: string | null
+            is_read: boolean | null
+            created_at: string | null
           }
-          if (p.title) {
-            toast(p.title, { description: p.message })
+          addNotification(newNotif)
+
+          // Live-Toast mit Titel/Message direkt aus den Spalten
+          if (newNotif.title) {
+            toast(newNotif.title, { description: newNotif.message ?? undefined })
           }
         }
       )

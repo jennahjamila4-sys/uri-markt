@@ -11,10 +11,7 @@ export default async function Home() {
     .from('listings')
     .select(
       `
-      id, title, description, type, status, price, price_type,
-      category, gemeinde, image_url, image_urls, is_boosted,
-      boost_expires_at, fomo_expires_at, views, created_at, user_id,
-      event_date, event_location, max_capacity, current_bookings, ticket_price,
+      *,
       profiles!listings_user_id_fkey (
         id, username, avatar_url, avg_rating, level
       )

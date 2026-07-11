@@ -83,8 +83,8 @@ export async function confirmSaleAction(transaction_id: string) {
       throw new Error('Nicht berechtigt')
     }
 
-    // Call RPC: process commission
-    const { data: result, error } = await supabase.rpc(
+    // Call RPC: process commission (Rückgabe ist Json → typisieren)
+    const { data: rawResult, error } = await supabase.rpc(
       'process_transaction_commission',
       {
         p_transaction_id: transaction_id,
@@ -92,18 +92,21 @@ export async function confirmSaleAction(transaction_id: string) {
       }
     )
 
-    if (error || !result?.success) {
-      throw new Error(result?.error ?? 'Bestätigung fehlgeschlagen')
+    const result = (rawResult ?? {}) as { success?: boolean; error?: string }
+    if (error || !result.success) {
+      throw new Error(result.error ?? 'Bestätigung fehlgeschlagen')
     }
 
-    // Notify buyer
-    await supabase.rpc('send_notification', {
-      p_recipient_id: tx.buyer_id,
-      p_title: '✅ Verkäufer hat bestätigt!',
-      p_message: 'Kontaktdaten wurden freigeschaltet. Macht einen Termin aus.',
-      p_type: 'tx_confirmed',
-      p_listing_id: tx.listing_id,
-    })
+    // Notify buyer (nur wenn Käufer/Inserat noch existieren – FKs sind nullable)
+    if (tx.buyer_id && tx.listing_id) {
+      await supabase.rpc('send_notification', {
+        p_recipient_id: tx.buyer_id,
+        p_title: '✅ Verkäufer hat bestätigt!',
+        p_message: 'Kontaktdaten wurden freigeschaltet. Macht einen Termin aus.',
+        p_type: 'tx_confirmed',
+        p_listing_id: tx.listing_id,
+      })
+    }
 
     revalidatePath('/profile')
     revalidatePath('/')
@@ -149,20 +152,24 @@ export async function rejectTransactionAction(transaction_id: string) {
 
     if (updateError) throw updateError
 
-    // Inserat wieder aktiv schalten
-    await supabase
-      .from('listings')
-      .update({ status: 'active' })
-      .eq('id', tx.listing_id)
+    // Inserat wieder aktiv schalten (nur wenn es noch existiert)
+    if (tx.listing_id) {
+      await supabase
+        .from('listings')
+        .update({ status: 'active' })
+        .eq('id', tx.listing_id)
+    }
 
     // Käufer benachrichtigen
-    await supabase.rpc('send_notification', {
-      p_recipient_id: tx.buyer_id,
-      p_title: 'Kaufanfrage abgelehnt',
-      p_message: 'Der Verkäufer hat deine Kaufanfrage leider abgelehnt.',
-      p_type: 'tx_rejected',
-      p_listing_id: tx.listing_id,
-    })
+    if (tx.buyer_id && tx.listing_id) {
+      await supabase.rpc('send_notification', {
+        p_recipient_id: tx.buyer_id,
+        p_title: 'Kaufanfrage abgelehnt',
+        p_message: 'Der Verkäufer hat deine Kaufanfrage leider abgelehnt.',
+        p_type: 'tx_rejected',
+        p_listing_id: tx.listing_id,
+      })
+    }
 
     revalidatePath('/profile')
     revalidatePath('/')
@@ -215,7 +222,7 @@ export async function completeTransactionAction(
     throw new Error(error.message || 'Deal konnte nicht abgeschlossen werden')
   }
 
-  const result = (data ?? {}) as CompleteTransactionResult
+  const result = (data ?? {}) as unknown as CompleteTransactionResult
   if (result.success === false) {
     throw new Error(result.error ?? 'Deal konnte nicht abgeschlossen werden')
   }
@@ -250,24 +257,27 @@ export async function reportNoShowAction(transaction_id: string) {
       throw new Error('Nicht berechtigt')
     }
 
-    // Call RPC: escalate no-show
-    const { data: result, error } = await supabase.rpc('escalate_no_show', {
+    // Call RPC: escalate no-show (Rückgabe ist Json → typisieren)
+    const { data: rawResult, error } = await supabase.rpc('escalate_no_show', {
       p_transaction_id: transaction_id,
       p_seller_id: user.id,
     })
 
-    if (error || !result?.success) {
-      throw new Error(result?.error ?? 'Eskalation fehlgeschlagen')
+    const result = (rawResult ?? {}) as { success?: boolean; error?: string }
+    if (error || !result.success) {
+      throw new Error(result.error ?? 'Eskalation fehlgeschlagen')
     }
 
     // Notify buyer
-    await supabase.rpc('send_notification', {
-      p_recipient_id: tx.buyer_id,
-      p_title: '⚠️ No-Show gemeldet',
-      p_message: 'Der Verkäufer hat einen No-Show gemeldet. Dir wurde ein Strike hinzugefügt.',
-      p_type: 'no_show',
-      p_listing_id: tx.listing_id,
-    })
+    if (tx.buyer_id && tx.listing_id) {
+      await supabase.rpc('send_notification', {
+        p_recipient_id: tx.buyer_id,
+        p_title: '⚠️ No-Show gemeldet',
+        p_message: 'Der Verkäufer hat einen No-Show gemeldet. Dir wurde ein Strike hinzugefügt.',
+        p_type: 'no_show',
+        p_listing_id: tx.listing_id,
+      })
+    }
 
     revalidatePath('/profile')
 
@@ -326,8 +336,12 @@ export async function submitReviewAction(rawData: unknown) {
       throw new Error('Du hast diesen Deal bereits bewertet.')
     }
 
-    // Determine reviewee (opposite party)
+    // Determine reviewee (opposite party) – kann null sein, wenn die Gegenpartei
+    // ihr Konto gelöscht hat (FK ist nullable → SET NULL).
     const reviewee_id = tx.seller_id === user.id ? tx.buyer_id : tx.seller_id
+    if (!reviewee_id) {
+      throw new Error('Die Gegenpartei ist nicht mehr vorhanden und kann nicht bewertet werden.')
+    }
 
     // Insert review
     const { error: reviewError } = await supabase
@@ -341,7 +355,14 @@ export async function submitReviewAction(rawData: unknown) {
         comment: comment || null,
       })
 
-    if (reviewError) throw reviewError
+    // Zweiter Bewertungsversuch trifft jetzt den DB-Unique-Constraint (23505) –
+    // als klare Meldung abfangen, nicht als Crash (DB-DELTA).
+    if (reviewError) {
+      if (reviewError.code === '23505') {
+        throw new Error('Du hast diesen Deal bereits bewertet.')
+      }
+      throw reviewError
+    }
 
     // Award XP for reviewing – idempotent pro (Transaktion, Bewerter)
     await supabase.rpc('award_xp', {
@@ -409,15 +430,14 @@ export async function submitCommentAction(rawData: unknown) {
       throw new Error('Inserat nicht gefunden')
     }
 
-    // Censor text
-    const censored_text = censorText(text)
+    // Censor text – die comments-Tabelle hat genau eine Textspalte `content`
+    const content = censorText(text)
 
     // Insert comment
     const { error } = await supabase.from('comments').insert({
       listing_id,
       user_id: user.id,
-      text,
-      censored_text,
+      content,
     })
 
     if (error) throw error

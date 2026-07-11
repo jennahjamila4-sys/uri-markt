@@ -15,12 +15,6 @@ const TYPE_ICON: Record<string, string> = {
   default: '🔔',
 }
 
-interface NotificationPayload {
-  title?: string
-  message?: string
-  listing_id?: string
-}
-
 function timeAgo(iso: string | null): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
@@ -46,9 +40,9 @@ export function NotificationPanel() {
       const supabase = createClient()
       await supabase
         .from('notifications')
-        .update({ read: true })
-        .eq('user_id', user.id)
-        .eq('read', false)
+        .update({ is_read: true })
+        .eq('recipient_id', user.id)
+        .eq('is_read', false)
     }
   }
 
@@ -100,22 +94,21 @@ export function NotificationPanel() {
             </div>
           ) : (
             notifications.map((n) => {
-              const payload = (n.payload ?? {}) as NotificationPayload
               const icon = TYPE_ICON[n.type ?? 'default'] ?? TYPE_ICON.default
               return (
                 <button
                   key={n.id}
-                  onClick={() => handleClick(payload.listing_id)}
+                  onClick={() => handleClick(n.listing_id ?? undefined)}
                   className="flex w-full items-start gap-3 border-b border-glass-border/50 p-4 text-left transition hover:bg-white/5"
                 >
                   <span className="text-xl">{icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-white">
-                      {payload.title ?? 'Benachrichtigung'}
+                      {n.title ?? 'Benachrichtigung'}
                     </p>
-                    {payload.message && (
+                    {n.message && (
                       <p className="mt-0.5 text-sm text-white/60">
-                        {payload.message}
+                        {n.message}
                       </p>
                     )}
                     <p className="mt-1 text-xs text-white/40">

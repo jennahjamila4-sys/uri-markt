@@ -131,7 +131,7 @@ export async function dismissMatchAction(matchId: string) {
 
   const { error } = await supabase
     .from('smart_matches')
-    .update({ dismissed: true, dismissed_at: new Date().toISOString() })
+    .update({ dismissed: true })
     .eq('id', matchId)
     .eq('user_id', user.id)
 
