@@ -55,6 +55,16 @@ export function DealFlow({ listing, currentUser }: Props) {
     )
   }
 
+  // Case 3b: Nicht (mehr) aktiv (z.B. deaktiviert/zurückgezogen) – kein Kauf möglich.
+  // create_buy_intent verlangt serverseitig status='active'; hier ehrlich anzeigen.
+  if (listing.status !== 'active') {
+    return (
+      <div className="bg-obsidian-2 border border-glass-border rounded-lg p-4 text-center">
+        <p className="text-white/70">Dieses Inserat ist zurzeit nicht verfügbar.</p>
+      </div>
+    )
+  }
+
   // Case 4: Active listing – show buy button
   return (
     <>
