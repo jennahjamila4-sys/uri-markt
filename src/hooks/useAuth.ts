@@ -10,39 +10,44 @@ export function useAuth() {
 
   useEffect(() => {
     const supabase = createClient()
-    // Initial user load
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
-      // Lektion 7: keine Session → ausloggen; Session vorhanden → Profil laden.
-      if (!u) {
-        setUser(null)
-        return
-      }
-      supabase
-        .from('profiles')
-        .select(
-          'id,username,full_name,avatar_url,gemeinde,xp_points,level,credits,avg_rating,review_count,pioneer_badge,strikes,is_banned,can_buy,referral_code,preferred_categories'
-        )
-        .eq('id', u.id)
-        .single()
-        .then(({ data }) => {
-          setUser(data as Profile | null)
-        })
-    })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!session?.user) {
-          setUser(null)
-          return
-        }
-        const { data } = await supabase
+    // Auth-Zustand ueber onAuthStateChange fuehren: der Callback feuert direkt
+    // nach dem Abo `INITIAL_SESSION` mit der gespeicherten Session (kein separater,
+    // netzabhaengiger getUser()-Aufruf, der beim Seitenaufbau transient fehlschlagen
+    // und eine gueltige Session faelschlich auf null kippen wuerde – Lektion 7).
+    //
+    // WICHTIG (Root-Cause Session-Verlust nach Navigation): KEINE awaited
+    // supabase-Aufrufe DIREKT im Callback. supabase-js haelt waehrend des Callbacks
+    // den Auth-Lock (navigator.locks); ein PostgREST-Aufruf braucht intern
+    // getSession() → denselben Lock → DEADLOCK, die Profil-Query loest nie auf und
+    // der Nutzer wirkt nach der Navigation ausgeloggt. Deshalb wird das Laden der
+    // Profildaten mit setTimeout(0) aus dem Callback herausgeschoben (offizielle
+    // Supabase-Empfehlung).
+    const loadProfile = (userId: string) => {
+      setTimeout(async () => {
+        const { data, error } = await supabase
           .from('profiles')
           .select(
             'id,username,full_name,avatar_url,gemeinde,xp_points,level,credits,avg_rating,review_count,pioneer_badge,strikes,is_banned,can_buy,referral_code,preferred_categories'
           )
-          .eq('id', session.user.id)
+          .eq('id', userId)
           .single()
-        setUser(data as Profile | null)
+        // Lektion 7: Query-Fehler (RLS/Netz) NICHT als „ausgeloggt" behandeln.
+        if (error) {
+          console.warn('[useAuth] Profil-Query fehlgeschlagen:', error.code, error.message)
+          return
+        }
+        setUser((data as Profile | null) ?? null)
+      }, 0)
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!session?.user) {
+          setUser(null)
+          return
+        }
+        loadProfile(session.user.id)
       }
     )
     return () => subscription.unsubscribe()

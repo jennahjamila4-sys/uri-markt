@@ -151,6 +151,30 @@ oder Migration auf profiles/Policies angewendet wurde.)
    anbieten; (b) Session vorhanden, aber Query-Fehler → Fehler zeigen, NICHT ausloggen;
    (c) Session vorhanden, 0 Zeilen → gezielt behandeln (fehlendes Profil/Onboarding).
    `{ data, error, status }` immer zusammen auswerten, nie nur `data`.
+8. **Beweis statt Behauptung.** Ein Flow-Feature gilt erst als fertig, wenn ein
+   headless-E2E (Playwright) es grün durchläuft — nicht wenn es „sollte
+   funktionieren". Erst grüner Lauf, dann „selbst getestet" + Testliste an JJ.
+9. **Workaround-Sperre bei Tests.** Wenn ein Test einen echten Bug aufdeckt (z.B.
+   Session-Verlust nach Navigation), darf der Test NIEMALS so umgebaut werden, dass
+   er den Bug umgeht (Session-Seeding, Mocks, künstliche Zustände). Der Test bleibt
+   wie der echte Nutzer ihn erlebt; erst wird der Bug root-cause-gefixt, dann läuft
+   der UNVERÄNDERTE Test. Jeder Umbau des Tests statt des Codes = Workaround =
+   verboten. → Bei rotem Test IMMER fragen „ist das ein echter Produktbug?" bevor
+   der Test angefasst wird; nur Selektoren/Timing-Robustheit am Test anpassen, nie
+   die gemessene Realität verfälschen.
+10. **Kein `await supabase.*` im `onAuthStateChange`-Callback + genau EIN
+   Browser-Client.** Lücke (11.07.2026, bewiesen per E2E+Messung): Der Nutzer wirkte
+   nach jeder Voll-Navigation ausgeloggt (Header „Anmelden"), obwohl Cookie + Server-
+   Session gültig waren (`/profile` lieferte 200). Ursache: `useAuth` rief im
+   `onAuthStateChange`-Callback direkt `await supabase.from('profiles')…` auf.
+   supabase-js hält während des Callbacks den Auth-Lock (`navigator.locks`); der
+   PostgREST-Call braucht intern `getSession()` → denselben Lock → **Deadlock**, die
+   Query löste nie auf. → Regel: onAuthStateChange-Callback synchron halten; jede
+   awaited supabase-Arbeit mit `setTimeout(…,0)` aus dem Callback herausschieben.
+   Zusätzlich `createClient()` (Browser) als **Singleton** cachen — mehrere
+   GoTrue-Instanzen rotieren parallel denselben Refresh-Token (Race). Merksatz:
+   „Session weg nach Navigation" ist fast nie die Middleware — erst Server-Sicht
+   (`/profile`-Redirect?) vs. Client-Sicht trennen, dann messen.
 
 ---
 
@@ -223,6 +247,13 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
 - **Aufgabe B** (30.06.2026): Marktplatz-/Feed-Screen exakt nach `docs/design/design-referenz.html` gebaut – Hero mit echtem Bergpanorama + Ken-Burns-Zoom, Gold-Stier-Logo, Typ-Tabs, FOMO-Streifen, animierte Inserate-Karten (Badges, Herz, Hover-Lift, Live-Zähler, Gold-Sweep), Event-Karte (Countdown, Fortschrittsbalken, Scarcity), BottomNav. Effekte = reine Optik über der Logik. Details: `docs/feed.md`. ✅ (noch nicht gepusht)
 - **Bug-Session 01** (02.07.2026): 6 Bugs abgearbeitet (Auftrag `bugfix-anweisung-01.md`). BUG 1 Feed-Refresh nach Erstellen (Store `feedVersion` + `router.refresh()`). BUG 2 Gesuch-Feed – Typwerte/Filter/Render bereits konsistent, wird durch BUG-1-Fix sofort sichtbar (gegen Live-DB verifiziert). BUG 3 Header-Profil-Dropdown (`ProfileMenu`, inkl. wieder vorhandenem Abmelden). BUG 4 Bottom-Nav Profil war bereits korrekt verlinkt. BUG 5 View-Zähler-Endlosschleife behoben (Ref-Guard, real 9636 → +1/Öffnung). BUG 6 Käufer-Text „provisionsfrei" + `create_buy_intent` als **SECURITY-DEFINER-Migration** (`supabase/migrations/20260702121132_create_buy_intent.sql`) – Einheiten gegen Live-RPC verifiziert. ⚠️ Migration noch nicht eingespielt (kein Supabase-MCP in Session). Commits lokal, KEIN Push.
 - **Bug-Session 03** (02.07.2026): Auth-Session-Bug (Login wirkt sofort wieder ausgeloggt) — Root Cause gefunden und behoben: `middleware.ts` lag im Projekt-Root, aber die App nutzt `src/` → Next.js hat die Middleware **stillschweigend ignoriert** (lief in keinem Request, Session wurde serverseitig nie refresht). Fix: nach `src/middleware.ts` verschoben und dabei von der veralteten `get/set/remove`-Cookie-API auf `getAll`/`setAll` umgebaut (Pflicht ab `@supabase/ssr` 0.9). `src/lib/supabase/server.ts` war bereits korrekt (`await cookies()`, `getAll`/`setAll`, alle Aufrufer mit `await`) — dort keine Änderung. Beweis: Build listet jetzt `ƒ Middleware` (vorher fehlte der Eintrag). `tsc` + `build` grün. Commit lokal, KEIN Push.
+- **Autopilot 11.07.2026** (Block 0 Commit `028ea30`): DB-Types neu generiert (Drift weg),
+  nullable-FK-Guards, Notifications-Schema-Konsumenten nachgezogen (Lektion 1), AUTH-DIAG raus.
+  **Block 1**: kompletter beidseitiger Deal-Flow als Playwright-E2E (`e2e/deal-completion.spec.ts`)
+  headless GRÜN. Dabei echten Produktbug root-cause-gefixt: Session-Verlust nach Navigation =
+  Auth-Lock-Deadlock durch `await supabase.*` im onAuthStateChange-Callback + mehrere
+  Browser-Client-Instanzen (Fix: setTimeout-Deferral + Singleton-Client). Siehe Lektion 10 +
+  `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
 
 ---

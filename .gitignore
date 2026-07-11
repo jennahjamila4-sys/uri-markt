@@ -13,3 +13,6 @@ npm-debug.log*
 next-env.d.ts
 .DS_Store
 supabase/.temp/
+test-results/
+playwright-report/
+.playwright/
