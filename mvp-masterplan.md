@@ -25,10 +25,11 @@
 - [x] Listing-Detail zeigt Verkäufer-Bewertung — `5e36835`
 - [x] Keine Bewertung → sauberer Leerzustand (kein Fehler, keine erfundenen Zahlen) — `5e36835`
 
-### 3. Listings verwalten
-- [ ] Eigenes Listing bearbeiten (alle Felder inkl. Foto tauschen)
-- [ ] Löschen/Deaktivieren mit Bestätigungsdialog
-- [ ] Bearbeiten gesperrt sobald reserviert/verkauft (Meldung WARUM — Lektion 6)
+### 3. Listings verwalten — E2E: block3-manage.spec.ts (grün, Commit `c7f1352`)
+- [x] Eigenes Listing bearbeiten (alle Felder inkl. Foto tauschen) — `c7f1352`
+- [x] Löschen/Deaktivieren mit Bestätigungsdialog — `c7f1352`
+- [x] Bearbeiten gesperrt sobald reserviert/verkauft (Meldung WARUM — Lektion 6) — `c7f1352`
+- [ ] Favoriten: keine favorites-Tabelle → als eigener Block ausgelagert (nicht trivial, siehe docs/manage-listings.md)
 
 ### 4. Profil & Konto
 - [ ] Profil bearbeiten, Zahlungsangaben (IBAN/TWINT) mit fachlich korrekter Validierung + Sichtbarkeits-Flags

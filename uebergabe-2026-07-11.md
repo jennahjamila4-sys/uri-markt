@@ -148,5 +148,45 @@ Abhaken im Masterplan NUR nach von JJ gemeldetem Grün. Kein Push ohne JJ-OK.
 - `e2e/run-verify.ps1` → wie oben, aber grosses farbiges GRUEN/ROT, Fenster bleibt offen.
 - `e2e/install-shortcut.ps1` → legt Desktop-Verknüpfung „Uri-Markt Verify" an (einmalig).
 
-## NÄCHSTER BLOCK: 3 (Listing bearbeiten/löschen/deaktivieren)
-Reihenfolge unverändert (Startnachricht). Session neu starten.
+## ✅ Block 3 — Listing verwalten (Commit `c7f1352`, JJ-Verify GRÜN: BUILD_EXIT=0 PW_EXIT=0)
+**Arbeitsmodus:** Claude schreibt Code + fährt `tsc` selbst (grün, Exit 0). Build + E2E
+laufen NICHT hier (Umgebungslimit) — JJ fährt `Uri-Markt Verify` und meldet
+`BUILD_EXIT/PW_EXIT`. Masterplan-Haken erst nach gemeldetem GRÜN. Kein Push.
+
+**Live-DB verifiziert (D1/Lektion 4):** listings.status hat KEINEN CHECK-Constraint;
+real vorhanden active/sold. RLS: `listings_update_own` + `listings_delete_own` (nur
+Besitzer) vorhanden → Edit/Deaktivieren via UPDATE gedeckt. `updated_at` wird vom
+Trigger `set_fomo_on_sold` (BEFORE UPDATE) bei JEDEM Update gesetzt. Status-Maschine
+aus den RPCs bewiesen: `create_buy_intent` verlangt status='active' → setzt 'reserved';
+`complete_transaction` setzt 'sold'. **Keine `favorites`-Tabelle** → Favoriten als
+eigener Block ausgelagert (nicht trivial), notiert in `docs/manage-listings.md`.
+
+**Umgesetzt:**
+- `src/app/actions/listings.ts`: `updateListingAction` (typ-genau Angebot/Gesuch),
+  `setListingActiveAction` (active⇄cancelled), `deleteListingAction` gehärtet. Alle
+  Schreibpfade **atomar status-gesichert** (Status-Filter im UPDATE/DELETE, kein
+  Read-then-Write-Race); auf 0-Zeilen frischer Status-Read → präzise Begründung
+  (`explainBlockedListingAction`). Regel: bearbeiten/deaktivieren/löschen nur bei
+  active/cancelled; reserved → „Deal läuft", sold → gesperrt (Nachweis).
+- `src/components/profile/EditListingModal.tsx` (neu): typ-abhängiges Edit-Formular,
+  Foto-Tausch, sichtbare Feldfehler; reuse `AngebotSchema`/`GesuchSchema`.
+- `src/components/profile/MyListings.tsx`: Tabs Aktiv/Reserviert/Verkauft/**Deaktiviert**,
+  pro Zeile Bearbeiten / Deaktivieren·Reaktivieren / **Löschen mit Bestätigungsdialog**,
+  sichtbarer Sperr-Grund (Lektion 6). testids: my-listing-row, listing-edit-btn,
+  listing-toggle-active-btn, listing-delete-btn, listing-delete-confirm-btn,
+  listing-blocked-reason.
+- `src/components/listing/DealFlow.tsx`: deaktiviertes Inserat → „nicht verfügbar"
+  statt Kaufen (create_buy_intent blockt serverseitig ohnehin).
+- Doku: `docs/manage-listings.md` (neu). E2E: `e2e/block3-manage.spec.ts` (4 Tests,
+  self-contained, Seed/Cleanup Service-Role `E2E-BLOCK3%`).
+
+**Verify-Zyklus:** Lauf 1 rot (2 Fails) — reine Test-Selektor-Ambiguität, KEIN Produktbug
+(D1 am Playwright-Log gemessen): `name:'Aktiv'` traf per Teilstring auch Deaktiviert/
+Reaktivieren; `getByText(/Reserviert/)` traf Badge + Sperr-Grund. Nur Selektoren
+geschärft (exact / gezielt auf Testid), Produktcode unverändert (Lektion 9). Spec danach
+ASCII-only per Heredoc geschrieben (Edit-Tool schnitt an `→` ab, Übergabe-Notiz 3).
+Lauf 2 GRÜN. Masterplan §3 abgehakt (`c7f1352`).
+
+**Nächster Schritt:** Neue Session, Block 4.
+
+## DANACH: Block 4 (Profil & Konto: Zahlungsangaben-Validierung, Taler-Historie, Konto-Löschung)
