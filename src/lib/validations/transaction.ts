@@ -25,11 +25,16 @@ export const ReviewSchema = z.object({
 
 export type ReviewInput = z.infer<typeof ReviewSchema>
 
+// Kommentar-Validierung EXAKT passend zur DB-CHECK-Constraint
+// comments_content_check: char_length(btrim(content)) BETWEEN 1 AND 1000.
+// Deshalb .trim() vor min/max — leer/nur-Leerzeichen wird zu '' und von min(1)
+// blockiert; keine willkürliche Mindestlänge (Lektion 2).
 export const CommentSchema = z.object({
   listing_id: z.string().uuid('Ungültige Inserat-ID'),
   text: z.string()
-    .min(1, 'Kommentar erforderlich')
-    .max(500, 'Kommentar darf max. 500 Zeichen lang sein'),
+    .trim()
+    .min(1, 'Kommentar darf nicht leer sein')
+    .max(1000, 'Kommentar darf max. 1000 Zeichen lang sein'),
 })
 
 export type CommentInput = z.infer<typeof CommentSchema>

@@ -400,8 +400,10 @@ export async function submitReviewAction(rawData: unknown) {
 }
 
 /**
- * Post comment on listing
- * Text wird zensiert, bevor in DB gespeichert
+ * Kommentar auf einem Inserat veröffentlichen.
+ * SECURITY: user_id kommt IMMER aus der Session (getUser), nie vom Client.
+ * Die Benachrichtigung an den Inserat-Eigentümer schreibt der DB-Trigger
+ * trg_comment_notify_owner automatisch — hier NICHT nachbauen (sonst doppelt).
  */
 export async function submitCommentAction(rawData: unknown) {
   const supabase = await createServerClient()
@@ -413,48 +415,80 @@ export async function submitCommentAction(rawData: unknown) {
 
   const validated = CommentSchema.safeParse(rawData)
   if (!validated.success) {
-    throw new Error(`Ungültiger Kommentar: ${validated.error.message}`)
+    throw new Error(validated.error.issues[0]?.message ?? 'Ungültiger Kommentar')
   }
 
   const { listing_id, text } = validated.data
 
+  // Inserat muss existieren (FK erzwingt es ohnehin, aber so ist die Meldung klar).
+  const { data: listing, error: listingErr } = await supabase
+    .from('listings')
+    .select('id')
+    .eq('id', listing_id)
+    .maybeSingle()
+
+  if (listingErr) throw new Error(`Inserat konnte nicht geprüft werden: ${listingErr.message}`)
+  if (!listing) throw new Error('Dieses Inserat gibt es nicht mehr.')
+
+  // Kontaktdaten/Links serverseitig zensieren (Sicherheit; Client zeigt nur Vorwarnung).
+  const content = censorText(text).trim()
+  if (content.length < 1) {
+    throw new Error('Kommentar besteht nur aus entfernten Kontaktdaten/Links.')
+  }
+
+  // Insert — user_id aus der Session. Fehler werden sichtbar geworfen (Lektion 7).
+  const { error } = await supabase.from('comments').insert({
+    listing_id,
+    user_id: user.id,
+    content,
+  })
+  if (error) throw new Error(`Kommentar konnte nicht gespeichert werden: ${error.message}`)
+
+  // XP separat und NICHT-fatal: schlägt die Belohnung fehl, ist der Kommentar
+  // trotzdem gespeichert — kein Fehler an den Nutzer, kein Rollback.
   try {
-    // Verify listing exists
-    const { data: listing } = await supabase
-      .from('listings')
-      .select('id')
-      .eq('id', listing_id)
-      .single()
-
-    if (!listing) {
-      throw new Error('Inserat nicht gefunden')
-    }
-
-    // Censor text – die comments-Tabelle hat genau eine Textspalte `content`
-    const content = censorText(text)
-
-    // Insert comment
-    const { error } = await supabase.from('comments').insert({
-      listing_id,
-      user_id: user.id,
-      content,
-    })
-
-    if (error) throw error
-
-    // Award XP for commenting
     await supabase.rpc('award_xp', {
       p_user_id: user.id,
       p_amount: 5,
       p_reason: 'Kommentar hinterlassen',
       p_idempotency_key: `comment_${listing_id}_${user.id}_${Date.now()}`,
     })
-
-    revalidatePath(`/listing/${listing_id}`)
-
-    return { success: true }
-  } catch (err) {
-    console.error('[submitComment]', err)
-    throw err
+  } catch (xpErr) {
+    console.warn('[submitComment] XP-Vergabe fehlgeschlagen (Kommentar trotzdem gespeichert)', xpErr)
   }
+
+  revalidatePath(`/listing/${listing_id}`)
+  return { success: true }
+}
+
+/**
+ * Eigenen Kommentar löschen.
+ * SECURITY: RLS (comments_delete_own) erlaubt nur user_id = auth.uid().
+ * Zusätzlich prüfen wir die zurückgegebenen Zeilen: 0 gelöscht ->
+ * Kommentar existiert nicht (mehr) oder gehört nicht dem Nutzer.
+ */
+export async function deleteCommentAction(commentId: unknown) {
+  const supabase = await createServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (typeof commentId !== 'string' || !/^[0-9a-f-]{36}$/i.test(commentId)) {
+    throw new Error('Ungültige Kommentar-ID')
+  }
+
+  const { data, error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .select('id')
+
+  if (error) throw new Error(`Kommentar konnte nicht gelöscht werden: ${error.message}`)
+  if (!data || data.length === 0) {
+    throw new Error('Kommentar nicht gefunden oder keine Berechtigung.')
+  }
+
+  return { success: true }
 }

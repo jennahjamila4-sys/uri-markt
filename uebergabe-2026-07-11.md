@@ -237,3 +237,103 @@ DB-Operationen/Verifikation im Planungs-Chat (Supabase-MCP). Kein Push.
 
 **Nächster Schritt:** Neue Session, Block 5 (Kommentar-UI auf Listing-Detail;
 comments-Tabelle existiert, Spalte `content`).
+
+## ✅ Block 5 — Kommentar-UI (12.07.2026) — VERIFY GRUEN (BUILD_EXIT=0 PW_EXIT=0)
+**Arbeitsmodus:** Code + `tsc` + `eslint` selbst (alle grün, Exit 0). Build + E2E laufen
+NICHT in dieser Umgebung (Sandbox-Limit 45s/Befehl, kein Serverprozess) → JJ faehrt
+`Uri-Markt Verify` und meldet `BUILD_EXIT/PW_EXIT`. Masterplan-Haken erst nach GRUEN.
+
+### ⚠️ STOPP-PUNKT git push (Schritt 1 der Startnachricht)
+`git push` ist aus dieser Sandbox NICHT moeglich: der Netz-Proxy blockt GitHub
+(`fatal: unable to access '.../uri-markt.git/': Received HTTP code 403 from proxy
+after CONNECT`). Der Stand (31 Commits vor origin, HEAD `18ce756`) muss von JJ auf der
+eigenen Maschine gepusht werden:
+```
+cd C:\Users\El Hamd\uri-markt
+git push origin main
+```
+(Untracked `.claude/` und `tsconfig.tsbuildinfo.old` NICHT mitcommitten.)
+
+### Live-DB verifiziert (D1/D2, keine Migration noetig)
+- `comments`: id, listing_id (NOT NULL, FK listings ON DELETE CASCADE), user_id
+  (NULLABLE, FK profiles ON DELETE SET NULL), content (NOT NULL), created_at.
+  CHECK `comments_content_check`: char_length(btrim(content)) BETWEEN 1 AND 1000.
+- RLS: `comments_select_public` (anon+authenticated, true), `comments_insert_own`
+  (WITH CHECK user_id=auth.uid()), `comments_delete_own` (user_id=auth.uid()).
+  KEINE UPDATE-Policy -> kein Bearbeiten (Lektion 6, kein Bearbeiten-Button).
+- Grants D2: comments anon SELECT / authenticated SELECT,INSERT,DELETE;
+  notifications authenticated SELECT,UPDATE; profiles anon SELECT / auth SELECT,UPDATE.
+- Trigger `trg_comment_notify_owner` (AFTER INSERT, SECURITY DEFINER) schreibt dem
+  Inserat-Eigentuemer eine `comment_new`-Notification (Titel „Neuer Kommentar",
+  Message „Zu deinem Inserat …") — NICHT wenn Eigentuemer == Kommentierender. Im
+  App-Code bewusst NICHT nachgebaut (sonst doppelt).
+- `award_xp(p_user_id, p_amount, p_reason, p_idempotency_key)` existiert.
+
+### 🐛 Kaputt gefunden (D1): alte CommentSection gegen falsches Schema
+Die bestehende `CommentSection.tsx` selektierte `censored_text` + `text` — Spalten, die
+die Live-Tabelle NICHT hat (nur `content`). Das waere zur Laufzeit gebrochen. Komplett
+neu geschrieben.
+
+### Umgesetzt
+- `src/lib/validations/transaction.ts`: `CommentSchema.text` jetzt `.trim().min(1).max(1000)`
+  exakt passend zur DB-CHECK (vorher max 500, ohne trim). Keine willkuerliche Mindestlaenge
+  (Lektion 2).
+- `src/app/actions/transactions.ts`:
+  - `submitCommentAction`: user_id aus der Session (nie Client); Inserat-Existenz-Check;
+    serverseitige Zensur, danach Leer-Guard (falls nur Kontaktdaten -> klare Meldung);
+    Insert auf `content`; DB-Fehler werden SICHTBAR geworfen (Lektion 7). XP jetzt in
+    eigenem try/catch = NICHT-fatal (Kommentar bleibt gespeichert, kein Rollback/Fehler
+    an den Nutzer bei XP-Problemen).
+  - `deleteCommentAction` (neu): loescht nur eigenen Kommentar (RLS), prueft
+    zurueckgegebene Zeilen (0 -> „nicht gefunden oder keine Berechtigung").
+- `src/components/listing/CommentSection.tsx` (Vollersatz):
+  - Liste: Autor (Name+Avatar), Zeit (dd.MM.yyyy, HH:mm de-CH), Text. Explizite
+    Spaltenliste, Join `profiles!comments_user_id_fkey(username,avatar_url)`, kein SELECT *.
+  - Sortierung: neueste zuerst (absteigend). Begruendung: Eingabefeld steht UEBER der
+    Liste, frischer Kommentar erscheint sofort oben ohne Scrollen. Einheitlich.
+  - user_id null ODER Profil weg -> „Geloeschter Nutzer", kein Crash.
+  - Nicht eingeloggt: sichtbarer Hinweis + „Anmelden"-Button (oeffnet Auth-Modal),
+    kein stummes Nichts.
+  - Client-Validierung passend zur DB: leer/nur Leerzeichen blockiert mit Meldung;
+    >1000 blockiert mit Meldung + roter Zeichenzaehler `n/1000`. Senden-Button NICHT
+    bei leer/zu-lang disabled (sonst keine sichtbare Meldung) — nur waehrend Request.
+  - Doppelklick-Schutz: `submittingRef` (greift sofort) + `disabled={isSubmitting}`.
+  - Eigene Kommentare loeschen mit zweistufiger Bestaetigung; fremde: kein Button.
+  - Kein Bearbeiten-Button.
+  - Fehler sichtbar via Inline-`comment-error` + Toast (kein Error-Swallowing).
+  - testids: comment-section, comment-count, comment-input, comment-char-count,
+    comment-submit, comment-error, comment-login-hint, comment-login-btn, comment-item,
+    comment-author, comment-delete-btn, comment-delete-confirm-btn, comment-empty.
+
+### Lueckenscan-Ergebnis
+- Einziger Konsument von Listing-Kommentaren ist `CommentSection` in `ListingDetail`.
+  (Die `comment`-Treffer in profile/[username], ReviewModal, ReviewList betreffen das
+  Bewertungs-`comment`, nicht Listing-Kommentare.)
+- Feed-Karten-Zaehler: BEWUSST NICHT gebaut — es gibt keine `comment_count`-Spalte auf
+  `listings`, und der Feed fragt Kommentare nicht ab. Ein Zaehler braeuchte
+  Denormalisierung (Trigger-gepflegte Spalte) = DB-Migration = eigener Block. Als
+  offene Schuld notiert.
+- Leerzustand „Noch keine Kommentare. Sei der Erste!" (testid comment-empty).
+- Geloeschtes Listing: `ListingDetail` zeigt bereits „gibt's nicht mehr"; kein
+  Kommentarbereich. Bei nur reserviertem/verkauftem (aber existierendem) Listing bleibt
+  Kommentieren erlaubt (bewusst; Fragen zu verkauften Artikeln sind ok).
+
+### E2E (neu, `e2e/block5-comments.spec.ts`) — echte Accounts A/B, kein Mocking (Lektion 9)
+Seed per Service-Role: 1 Listing von B + 1 Fremd-Kommentar von B. 5 Tests:
+1. A kommentiert Bs Listing -> erscheint sofort; DB-Beweis dass Trigger B eine
+   comment_new-Notification schrieb; B sieht „Neuer Kommentar" in der UI (frischer
+   Kontext, ueber die Glocke).
+2. Leerer / Nur-Leerzeichen-Kommentar -> `comment-error` sichtbar, kein DB-Insert.
+3. >1000 Zeichen -> Zaehler „1001/1000" + Fehlermeldung, kein DB-Insert.
+4. A loescht eigenen Kommentar (mit Bestaetigung) -> weg (UI + DB); Bs Fremd-Kommentar
+   hat keinen Loeschen-Button.
+5. Nicht eingeloggt -> Kommentare sichtbar, kein Formular, Login-Hinweis + -Link.
+Cleanup afterAll: Kommentare/Notifications/Listing (Marker `E2E-B5%`) wieder abgeraeumt.
+
+### Status
+- `npx tsc --noEmit`: Exit 0. `npx eslint` (3 Quelldateien + Spec): Exit 0.
+- JJ-Verify GRUEN gemeldet (BUILD_EXIT=0 PW_EXIT=0). Masterplan §6 „comments-Tabelle +
+  Kommentar-UI" abgehakt, committet. Push kann die Sandbox nicht (Proxy sperrt GitHub)
+  -> `Uri-Markt Push` (e2e/push.ps1) bei JJ.
+- Umgebung: Datei-Ops nur ueber Shell (Read/Write/Edit-Tools erreichen den Repo-Mount
+  nicht); Mount erlaubt kein `unlink` (nur rename) -> git-Locks ggf. per rename raeumen.
