@@ -37,10 +37,10 @@
 - [x] Konto-Löschung funktioniert: Service-Client `auth.admin.deleteUser`, blockiert bei offenen Deals (Grund sichtbar, Lektion 6), Logout+Redirect — `7dd55d9`
 
 ### 5. Taler-Kauf (Stripe) — E2E mit Stripe-Testmodus
-- [ ] Checkout Session (rk_-Key, kein payment_method_types), Webhook mit constructEvent()
-- [ ] Gutschrift atomar+idempotent via credit_taler-RPC (Planungs-Chat legt an), kein Doppelklick-Doppelkauf
+- [x] Checkout Session (kein payment_method_types), Webhook mit constructEvent() — sk_test_; rk_ = Go-Live-Haertung offen — `91d0cc0`
+- [x] Gutschrift atomar+idempotent via credit_taler-RPC, kein Doppelklick-Doppelkauf (E2E: 2. Webhook = keine Doppelgutschrift) — `91d0cc0`
 - [ ] Guthaben-Prüfung VOR Verpflichtung, DB-Constraint nicht-negativ (Planungs-Chat)
-- [ ] Anzeige immer credits/100, Rundung konsistent
+- [x] Anzeige immer credits/100, Rundung konsistent (rappenToTaler, toFixed(2)) — `91d0cc0`
 - [ ] Voraussetzung JJ: Stripe-Konto (Einzelfirma) aktiviert
 
 ### 6. Recht & Start
