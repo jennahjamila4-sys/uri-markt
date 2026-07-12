@@ -337,3 +337,21 @@ Cleanup afterAll: Kommentare/Notifications/Listing (Marker `E2E-B5%`) wieder abg
   -> `Uri-Markt Push` (e2e/push.ps1) bei JJ.
 - Umgebung: Datei-Ops nur ueber Shell (Read/Write/Edit-Tools erreichen den Repo-Mount
   nicht); Mount erlaubt kein `unlink` (nur rename) -> git-Locks ggf. per rename raeumen.
+
+## ✅ Nach Block 5: Commits + Push-Werkzeug (12.07.2026)
+- Commit 1 `ccdd59a`: Block 5 (Kommentar-UI + E2E + .gitignore-Root-Cause + Uebergabe).
+- Commit 2: Masterplan §6 abgehakt (Hash `ccdd59a`), Kommentar-Zaehler als **Block 9**
+  ausgelagert (braucht `comment_count`-Denormalisierung), Push-Werkzeug.
+- `.gitignore`: `.claude/` + `tsconfig.tsbuildinfo.old` ergaenzt (waren nur untracked,
+  kein `git rm --cached` noetig).
+- **Push-Werkzeug (neu):** Die Sandbox kann nicht pushen (Proxy sperrt GitHub, 403).
+  Deshalb `e2e/push.ps1` (git status -> git push origin main -> `PUSH_EXIT: n`, grosses
+  farbiges GRUEN/ROT, Fenster bleibt offen) + `e2e/install-shortcut-push.ps1` (legt
+  Desktop-Verknuepfung „Uri-Markt Push" an, einmalig ausfuehren).
+- OFFEN fuer JJ: einmalig `install-shortcut-push.ps1` laufen lassen, dann „Uri-Markt
+  Push" klicken -> pusht den kompletten Stand (jetzt 33 Commits vor origin) nach GitHub.
+
+## 📋 NAECHSTE BLOECKE (Stand 12.07.2026)
+- Block 0-5 ✅ (Verify GRUEN). Offen: Block 6 (Stripe-Taler-Kauf — STRIPE_WEBHOOK_SECRET
+  in .env.local noch LEER = STOPP-PUNKT), Block 7 (5-Taler-Texte + Rechtsseiten), Block 8
+  (Vercel-Deploy), Block 9 (Kommentar-Zaehler auf Feed-Karten, s.o.).

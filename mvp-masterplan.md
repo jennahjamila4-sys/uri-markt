@@ -46,7 +46,13 @@
 ### 6. Recht & Start
 - [ ] Impressum, Datenschutz (DSG 2023), AGB inkl. Taler-Klausel (Anwalts-Review vor Echtgeld — JJ)
 - [ ] 5-Taler-Startguthaben: ALLE Anker (DB-Default, Onboarding-RPC, Frontend-/Marketing-Texte inkl. Pioneer) im selben Block
-- [ ] comments-Tabelle (Migration Planungs-Chat) + Kommentar-UI ohne PGRST205
+- [x] comments-Tabelle (Migration Planungs-Chat) + Kommentar-UI ohne PGRST205 — `ccdd59a`
+  (Liste/Autor/Zeit, neueste zuerst; user_id null -> „Geloeschter Nutzer"; Login-Gate;
+  Validierung 1-1000 + Zaehler; eigene loeschen mit Bestaetigung, kein Bearbeiten;
+  Benachrichtigung via DB-Trigger; E2E `block5-comments.spec.ts` GRUEN)
+  - [ ] (ausgelagert als **Block 9**) Kommentar-Zaehler auf Feed-Karten — braucht
+    `comment_count`-Denormalisierung (Trigger-gepflegte Spalte auf `listings`),
+    DB-Migration im Planungs-Chat; nicht trivial, daher eigener Block.
 
 ### 7. Deploy
 - [ ] Vercel: Site-URL, Redirect-Allow-List, Env-Vars — Login/Signup auf echter Domain E2E-getestet
