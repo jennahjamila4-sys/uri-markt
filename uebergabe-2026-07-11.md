@@ -190,3 +190,50 @@ Lauf 2 GRÜN. Masterplan §3 abgehakt (`c7f1352`).
 **Nächster Schritt:** Neue Session, Block 4.
 
 ## DANACH: Block 4 (Profil & Konto: Zahlungsangaben-Validierung, Taler-Historie, Konto-Löschung)
+
+## ✅ Block 4 — Profil & Konto (Commit `7dd55d9`, JJ-Verify GRÜN: BUILD_EXIT=0 PW_EXIT=0)
+**Arbeitsmodus:** Code + `tsc` selbst (grün). Build + E2E via `Uri-Markt Verify` bei JJ.
+DB-Operationen/Verifikation im Planungs-Chat (Supabase-MCP). Kein Push.
+
+**Live-DB verifiziert (D1, keine Migration nötig):**
+- Zahlungsangaben liegen in `profiles_private` (iban, twint_phone, phone, address +
+  show_*-Flags), RLS: nur Eigentümer liest/schreibt. War bereits fertig implementiert
+  (swiss.ts Mod-97 + Tests, PaymentInfoForm, savePaymentInfoAction) → nur verifiziert.
+- Taler-Historie: `wallet_transactions`, RLS `wallet_select_own`. Reale Typen aktuell
+  nur `commission` (negativ) / `commission_refund` (positiv); Topups kommen erst Block 6
+  → UI rendert generisch über Typen.
+- Konto-Löschung: gesamte FK-Kette geprüft — `auth.users`→CASCADE zu profiles/
+  profiles_private; von profiles alles CASCADE oder SET NULL, **kein RESTRICT** →
+  `auth.admin.deleteUser` läuft garantiert durch. `transactions`-SELECT-Policy =
+  `buyer_id OR seller_id` → Offene-Deals-Zählung stimmt unter Nutzer-Session.
+
+**Umgesetzt:**
+- `src/lib/supabase/admin.ts` (neu): Service-Role-Client, NUR Server (Konto-Löschung).
+- `src/app/actions/profile.ts`: `updateProfileAction` (Name/Gemeinde/Kategorien,
+  user_id serverseitig) + `deleteAccountAction` (offene Deals pending/confirmed als
+  Käufer ODER Verkäufer → blockiert mit sichtbarer Begründung, Lektion 6; sonst
+  admin.deleteUser). savePaymentInfoAction unverändert.
+- `src/lib/validations/profile.ts`: `EditProfileSchema` (Gemeinde nur aus GEMEINDEN-Liste).
+- `src/components/profile/EditProfileForm.tsx`, `TalerHistory.tsx`,
+  `DeleteAccountSection.tsx` (zweistufig: Wort „LÖSCHEN" tippen; Erfolg → signOut +
+  Redirect). ProfileDashboard: neue Kacheln „Taler-Historie" + „Konto".
+- `src/app/profile/page.tsx`: lädt wallet_transactions (RLS own) und reicht sie durch.
+- E2E `e2e/block4-account.spec.ts` (4 Tests, self-contained, Seed/Cleanup Service-Role
+  `E2E-B4%`): Profil-Edit persistiert (DB+F5); Taler-Historie mit Vorzeichen;
+  Löschung blockiert bei offenem Deal (Grund sichtbar, Konto bleibt); Löschung eines
+  Wegwerf-Users erfolgreich (Redirect + Profil weg + Re-Login schlägt fehl).
+
+**Verify-Zyklen (D1/D3, ehrlich dokumentiert):**
+- Zyklus 1 ROT (BUILD_EXIT=1): rohes `"` in JSX-Text (DeleteAccountSection) — `next build`
+  fährt ESLint (`react/no-unescaped-entities`), `tsc` sieht das nicht. Fix: deutsches
+  „…" (U+201C), Regel NICHT deaktiviert. → **Lektion 12** ergänzt. Beweis: `eslint` auf
+  allen 8 Dateien grün.
+- Zyklus 2 ROT (PW_EXIT=1, 11/12): T4 erwartete nach Löschung URL `auth=required`, real
+  war `/`. **D1-Messung:** kein Produktbug — `/profile`→`redirect('/?auth=required')`,
+  `AppChrome` öffnet Login-Modal und entfernt den Param per replaceState (URL→`/`).
+  Falsch war die Test-Erwartung (transienter Param), nicht der Code (Lektion 9 erfüllt).
+  Fix nur im Test: prüft jetzt offenes Login-Modal + weg von /profile + DB-Beweise.
+- Zyklus 3 GRÜN: BUILD_EXIT=0 PW_EXIT=0.
+
+**Nächster Schritt:** Neue Session, Block 5 (Kommentar-UI auf Listing-Detail;
+comments-Tabelle existiert, Spalte `content`).

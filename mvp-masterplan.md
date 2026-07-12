@@ -32,9 +32,9 @@
 - [ ] Favoriten: keine favorites-Tabelle → als eigener Block ausgelagert (nicht trivial, siehe docs/manage-listings.md)
 
 ### 4. Profil & Konto
-- [ ] Profil bearbeiten, Zahlungsangaben (IBAN/TWINT) mit fachlich korrekter Validierung + Sichtbarkeits-Flags
-- [ ] Taler-Transaktionshistorie sichtbar
-- [ ] Konto-Löschung funktioniert (Schweizer Rechtspflicht)
+- [x] Profil bearbeiten (Name/Gemeinde/Kategorien) + Zahlungsangaben (IBAN Mod-97 / CH-Telefon) mit Sichtbarkeits-Flags — `7dd55d9`
+- [x] Taler-Transaktionshistorie sichtbar (wallet_transactions, Anzeige credits/100 mit Vorzeichen, Leerzustand) — `7dd55d9`
+- [x] Konto-Löschung funktioniert: Service-Client `auth.admin.deleteUser`, blockiert bei offenen Deals (Grund sichtbar, Lektion 6), Logout+Redirect — `7dd55d9`
 
 ### 5. Taler-Kauf (Stripe) — E2E mit Stripe-Testmodus
 - [ ] Checkout Session (rk_-Key, kein payment_method_types), Webhook mit constructEvent()
