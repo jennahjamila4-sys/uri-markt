@@ -6,6 +6,7 @@ import { defineConfig, devices } from '@playwright/test'
 // Tests echte Daten in der Live-DB anlegen und sich sonst gegenseitig stoeren.
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/preflight.ts',
   testMatch: /.*\.spec\.ts$/,
   fullyParallel: false,
   workers: 1,

@@ -192,6 +192,21 @@ oder Migration auf profiles/Policies angewendet wurde.)
    stattdessen escapen (`&quot;`/`&#39;`), deutsche Anführungszeichen („ …“)
    verwenden oder den Text als JS-String `{'…'}` schreiben.
 
+13. **Token-Sparsamkeit ist aktive Pflicht.** Lücke: lange Sessions, Wiederholungen
+   und das Nacherzählen bereits bewiesener Stände verbrennen Budget ohne Mehrwert.
+   → Kompakt arbeiten: nichts wiederholen, PROVEN-Stände nie neu verifizieren, keine
+   Code-Erklärungen an JJ (nur Ergebnisse/Ursachen), ein Fix pro Zyklus. Nach JEDEM
+   grünen Block Session sofort beenden (Übergabe schreiben, committen, stoppen) statt
+   weiterzulaufen.
+
+14. **Preflight-Pflicht fuer E2E.** Lücke (12.07.2026, Block 6): Leere/fehlende
+   Env-Variablen (z.B. STRIPE_WEBHOOK_SECRET) würden erst mitten im E2E-Lauf rot —
+   teuer und unklar. → Jeder E2E-Lauf startet mit einem Preflight (Playwright
+   `globalSetup` = `e2e/preflight.ts`), der ALLE benötigten Variablen (Supabase
+   URL/Anon/Service, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, E2E_USER_A/B) prüft und
+   SOFORT mit „FEHLT: X — so beheben: Y" stoppt. JJ wird nie gebeten, .env.local
+   manuell zu prüfen.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)

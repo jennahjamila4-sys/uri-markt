@@ -14,6 +14,7 @@ import {
 import { BuyerDashboard, type BuyerTransaction } from './BuyerDashboard'
 import { PaymentInfoForm, type PaymentInfo } from './PaymentInfoForm'
 import { TalerHistory, type WalletTxItem } from './TalerHistory'
+import { TalerPurchase } from './TalerPurchase'
 import { EditProfileForm } from './EditProfileForm'
 import { DeleteAccountSection } from './DeleteAccountSection'
 import type { Profile, UserLevel } from '@/types'
@@ -38,6 +39,7 @@ type View =
   | 'purchases'
   | 'payment'
   | 'wallet'
+  | 'buy'
   | 'account'
 
 export function ProfileDashboard({
@@ -76,6 +78,7 @@ export function ProfileDashboard({
     { key: 'purchases', emoji: '🛒', label: 'Meine Käufe', badge: activePurchases },
     { key: 'sales', emoji: '💰', label: 'Meine Verkäufe', badge: pendingSales },
     { key: 'payment', emoji: '💳', label: 'Zahlungen' },
+    { key: 'buy', emoji: '➕', label: 'Taler kaufen' },
     { key: 'wallet', emoji: '🪙', label: 'Taler-Historie' },
     { key: 'account', emoji: '⚙️', label: 'Konto' },
   ]
@@ -178,6 +181,7 @@ export function ProfileDashboard({
               {view === 'purchases' && '🛒 Meine Käufe'}
               {view === 'sales' && '💰 Meine Verkäufe'}
               {view === 'payment' && '💳 Zahlungen'}
+              {view === 'buy' && '➕ Taler kaufen'}
               {view === 'wallet' && '🪙 Taler-Historie'}
               {view === 'account' && '⚙️ Konto'}
             </h2>
@@ -205,6 +209,9 @@ export function ProfileDashboard({
             />
           )}
           {view === 'payment' && <PaymentInfoForm initial={paymentInfo} />}
+          {view === 'buy' && (
+            <TalerPurchase credits={profile.credits ?? 0} />
+          )}
           {view === 'wallet' && <TalerHistory items={walletTransactions} />}
           {view === 'account' && (
             <div className="space-y-6">
