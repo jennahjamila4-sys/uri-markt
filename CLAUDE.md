@@ -183,6 +183,14 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Läuft `gen types` mangels Access-Token/CLI NICHT, ist das ein **STOPP-Punkt**: in
    der Übergabe dokumentieren und JJ melden — der Planungs-Chat verifiziert die
    Live-Signatur per MCP. Nie raten, nie von Hand nachziehen.
+12. **`tsc` grün ist KEIN Build-Beweis.** Lücke (11.07.2026, Block 4): `next build`
+   führt ESLint mit (u.a. `react/no-unescaped-entities`) — ein rohes `"` oder `'`
+   in JSX-*Text* bricht den Build, obwohl `tsc --noEmit` grün ist. → Vor JEDER
+   Verify-Anforderung neuen JSX-Text mit Sonderzeichen (Anführungszeichen,
+   Apostrophe) auf Escaping prüfen: `npx eslint <geänderte Dateien>` muss grün
+   sein. ESLint-Regeln werden NIE deaktiviert, um einen Build grün zu bekommen —
+   stattdessen escapen (`&quot;`/`&#39;`), deutsche Anführungszeichen („ …“)
+   verwenden oder den Text als JS-String `{'…'}` schreiben.
 
 ---
 

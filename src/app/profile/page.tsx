@@ -9,6 +9,7 @@ import type { MyListingItem } from '@/components/profile/MyListings'
 import type { SellerTransaction } from '@/components/listing/SellerDashboard'
 import type { BuyerTransaction } from '@/components/profile/BuyerDashboard'
 import type { PaymentInfo } from '@/components/profile/PaymentInfoForm'
+import type { WalletTxItem } from '@/components/profile/TalerHistory'
 
 export default async function ProfilePage() {
   const supabase = await createServerClient()
@@ -89,6 +90,14 @@ export default async function ProfilePage() {
     .eq('id', user.id)
     .maybeSingle()
 
+  // Taler-Bewegungen des Nutzers (RLS: nur eigene). Neueste zuerst.
+  const { data: walletTx } = await supabase
+    .from('wallet_transactions')
+    .select('id,amount,type,description,created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
   return (
     <>
       <Header />
@@ -104,6 +113,7 @@ export default async function ProfilePage() {
             (buyerTransactions ?? []) as unknown as BuyerTransaction[]
           }
           paymentInfo={(paymentInfo ?? null) as PaymentInfo | null}
+          walletTransactions={(walletTx ?? []) as WalletTxItem[]}
           reviewedTxIds={reviewedTxIds}
         />
       </main>

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { checkSwissIban, isValidSwissPhone } from '@/lib/validators/swiss'
+import { GEMEINDEN } from '@/types'
 
 /** Präzise IBAN-Fehlermeldungen: Länge/Land vs. Prüfziffer unterscheiden. */
 export const IBAN_MSG = {
@@ -58,3 +59,17 @@ export const PaymentInfoSchema = z
   })
 
 export type PaymentInfoInput = z.infer<typeof PaymentInfoSchema>
+
+/**
+ * Basis-Profil bearbeiten (Tabelle `profiles`).
+ * Name optional; Gemeinde nur aus der bekannten Uri-Liste oder leer;
+ * bevorzugte Kategorien als freie ID-Liste (max. 10). Leere Werte werden in der
+ * Action zu null. Gleiches Schema wird im Formular und serverseitig genutzt.
+ */
+export const EditProfileSchema = z.object({
+  full_name: z.string().trim().max(100, 'Name darf max. 100 Zeichen lang sein').default(''),
+  gemeinde: z.union([z.enum(GEMEINDEN), z.literal('')]).default(''),
+  preferred_categories: z.array(z.string()).max(10, 'Max. 10 Kategorien').default([]),
+})
+
+export type EditProfileInput = z.infer<typeof EditProfileSchema>

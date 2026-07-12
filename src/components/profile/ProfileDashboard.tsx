@@ -13,6 +13,9 @@ import {
 } from '@/components/listing/SellerDashboard'
 import { BuyerDashboard, type BuyerTransaction } from './BuyerDashboard'
 import { PaymentInfoForm, type PaymentInfo } from './PaymentInfoForm'
+import { TalerHistory, type WalletTxItem } from './TalerHistory'
+import { EditProfileForm } from './EditProfileForm'
+import { DeleteAccountSection } from './DeleteAccountSection'
 import type { Profile, UserLevel } from '@/types'
 
 interface Props {
@@ -22,6 +25,7 @@ interface Props {
   sellerTransactions: SellerTransaction[]
   buyerTransactions: BuyerTransaction[]
   paymentInfo: PaymentInfo | null
+  walletTransactions: WalletTxItem[]
   /** Transaktions-IDs, die der Nutzer bereits bewertet hat */
   reviewedTxIds: string[]
 }
@@ -33,6 +37,8 @@ type View =
   | 'sales'
   | 'purchases'
   | 'payment'
+  | 'wallet'
+  | 'account'
 
 export function ProfileDashboard({
   profile,
@@ -41,6 +47,7 @@ export function ProfileDashboard({
   sellerTransactions,
   buyerTransactions,
   paymentInfo,
+  walletTransactions,
   reviewedTxIds,
 }: Props) {
   const [view, setView] = useState<View>('overview')
@@ -69,6 +76,8 @@ export function ProfileDashboard({
     { key: 'purchases', emoji: '🛒', label: 'Meine Käufe', badge: activePurchases },
     { key: 'sales', emoji: '💰', label: 'Meine Verkäufe', badge: pendingSales },
     { key: 'payment', emoji: '💳', label: 'Zahlungen' },
+    { key: 'wallet', emoji: '🪙', label: 'Taler-Historie' },
+    { key: 'account', emoji: '⚙️', label: 'Konto' },
   ]
 
   return (
@@ -169,6 +178,8 @@ export function ProfileDashboard({
               {view === 'purchases' && '🛒 Meine Käufe'}
               {view === 'sales' && '💰 Meine Verkäufe'}
               {view === 'payment' && '💳 Zahlungen'}
+              {view === 'wallet' && '🪙 Taler-Historie'}
+              {view === 'account' && '⚙️ Konto'}
             </h2>
             <button
               onClick={() => setView('overview')}
@@ -194,6 +205,13 @@ export function ProfileDashboard({
             />
           )}
           {view === 'payment' && <PaymentInfoForm initial={paymentInfo} />}
+          {view === 'wallet' && <TalerHistory items={walletTransactions} />}
+          {view === 'account' && (
+            <div className="space-y-6">
+              <EditProfileForm profile={profile} />
+              <DeleteAccountSection />
+            </div>
+          )}
         </div>
       )}
     </div>
