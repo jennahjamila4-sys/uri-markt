@@ -218,6 +218,12 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Gilt für alle PS-Skripte, Migrationen und Fixes. Zusätzlich: Jedes PS-Skript hat
    `try/finally` mit `Read-Host` im finally + `Start-Transcript` in eine Log-Datei —
    ein Skript, das sich bei Fehler sofort schliesst, ist selbst ein Bug.
+   **Ergänzung (16.07.2026, Deploy-Zyklus 2):** CLI-Befehle in Skripten IMMER mit
+   Non-Interactive-Flags aufrufen (`--yes`, `--force` o.ä., gegen die CLI-Doku
+   verifiziert, nie geraten) und benötigte Werte per stdin/Argument mitgeben —
+   jeder mögliche Prompt hängt unsichtbar, sobald stdout/stderr gecaptured wird.
+   Vor Script-Abgabe JEDEN Befehl einzeln fragen: „Kann der hier eine Eingabe
+   erwarten?" (auch Bestätigungen, Overwrite-Fragen, Erstlauf-Setups).
 
 16. **Ist-Zustand vor Annahme.** Lücke (16.07.2026, Deploy ROT): `vercel link --yes`
    wollte das Projekt neu anlegen (409 „already exists") — das Vercel-Projekt

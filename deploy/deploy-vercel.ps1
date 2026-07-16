@@ -63,14 +63,17 @@ function Invoke-Cli {
     return ($out -join "`n")
 }
 
-# Setzt eine Env-Var in Vercel (Production) idempotent: erst rm (toleriert), dann add.
+# Setzt eine Env-Var in Vercel (Production) idempotent und NON-INTERAKTIV.
+# Doku-verifiziert (vercel.com/docs/cli/env): '--force' ueberschreibt eine
+# bestehende Variable OHNE Rueckfrage; der Wert kommt per stdin (dokumentiertes
+# Muster 'cat file | vercel env add NAME target'). Das fruehere rm+add ist
+# damit ersatzlos gestrichen -- 'env rm' war der Haengepunkt (Zyklus 2) und
+# wird nicht mehr gebraucht: --force ist in EINEM Aufruf idempotent, egal ob
+# die Variable schon existiert oder nicht (Erstlauf-Problem 'not found' entfaellt).
 function Set-VercelEnv([string]$name, [string]$value) {
     if ([string]::IsNullOrEmpty($value)) { Stop-Rot "$name (Wert leer)" "Wert in .env.local eintragen" }
-    Invoke-Cli -Label "vercel env rm $name production" -TolerateFailure -Quiet -Cmd {
-        vercel env rm $name production --yes
-    } | Out-Null
-    Write-Info (">> vercel env add $name production  (Wert: " + (Mask $value) + ")")
-    $out = $value | vercel env add $name production 2>&1 | ForEach-Object { "$_" }
+    Write-Info (">> vercel env add $name production --force  (Wert: " + (Mask $value) + ")")
+    $out = $value | vercel env add $name production --force 2>&1 | ForEach-Object { "$_" }
     if ($LASTEXITCODE -ne 0) {
         # Ausgabe kann Secret-Echos enthalten -> nicht ungefiltert ausgeben
         $safe = $out | Where-Object { $_ -notmatch [regex]::Escape($value.Substring(0, [Math]::Min(8, $value.Length))) }
@@ -181,9 +184,11 @@ try {
     }
 
     # ----- e) Produktions-Deploy ----------------------------------------
-    Write-Info "--- Deploy (vercel --prod) -- Build-Log folgt ---"
+    # --yes: beantwortet alle Setup-Fragen mit Defaults (Doku: cli/deploy),
+    # damit der Deploy nie auf eine unsichtbare Eingabe warten kann.
+    Write-Info "--- Deploy (vercel --prod --yes) -- Build-Log folgt ---"
     # stdout (= Deployment-URL) einfangen, stderr (= Build-Log) bleibt sichtbar
-    $deployUrl = (vercel --prod)
+    $deployUrl = (vercel --prod --yes)
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace("$deployUrl")) {
         Stop-Rot "Produktions-Deploy" "Build-Log oben pruefen (haeufig: ESLint/tsc-Fehler -- lokal 'npm run build' ausfuehren)"
     }
@@ -239,8 +244,8 @@ try {
     }
 
     # ----- h) Redeploy (Env-Werte wirken erst mit neuem Deploy) ----------
-    Write-Info "--- Redeploy (vercel --prod) ---"
-    $redeploy = (vercel --prod)
+    Write-Info "--- Redeploy (vercel --prod --yes) ---"
+    $redeploy = (vercel --prod --yes)
     if ($LASTEXITCODE -ne 0) {
         Stop-Rot "Redeploy" "Build-Log oben pruefen; Env-Vars sind gesetzt, 'vercel --prod' manuell wiederholen"
     }
