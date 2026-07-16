@@ -207,6 +207,18 @@ oder Migration auf profiles/Policies angewendet wurde.)
    SOFORT mit „FEHLT: X — so beheben: Y" stoppt. JJ wird nie gebeten, .env.local
    manuell zu prüfen.
 
+15. **Fehlerklassen statt Einzelfälle behandeln.** Wenn ein Skript oder Fix einen
+   Fehlerfall abfängt (z. B. `index.lock` löschen), muss die gesamte Fehlerklasse
+   behandelt werden (alle Git-Lock-Dateien: `HEAD.lock`, `index.lock`,
+   `refs/**/*.lock`), nicht nur die eine beobachtete Ausprägung. Vorher immer die
+   Ursache prüfen statt blind aufräumen (läuft der Prozess noch?). Skripte, die einen
+   Zustand voraussetzen (kein Lock, kein laufender Prozess, Datei existiert), müssen
+   diesen Zustand am Anfang prüfen und bei Verletzung mit ROT + Ursache +
+   Behebungsanweisung stoppen — nie mitten im Ablauf mit einem git-fatal sterben.
+   Gilt für alle PS-Skripte, Migrationen und Fixes. Zusätzlich: Jedes PS-Skript hat
+   `try/finally` mit `Read-Host` im finally + `Start-Transcript` in eine Log-Datei —
+   ein Skript, das sich bei Fehler sofort schliesst, ist selbst ein Bug.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
