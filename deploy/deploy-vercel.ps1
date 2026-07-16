@@ -15,8 +15,8 @@ $RepoRoot    = Split-Path -Parent $PSScriptRoot   # deploy\ -> Repo-Root
 $EnvFile     = Join-Path $RepoRoot '.env.local'
 $LogFile     = Join-Path $PSScriptRoot '_deploy.log'
 $ProjectName = 'uri-markt'
+$TeamScope   = 'jennahjamila4-7437s-projects'
 $WebhookPath = '/api/webhooks/stripe'
-$GitRepo     = 'jennahjamila4-sys/uri-markt'
 
 $script:Ok = $false
 
@@ -155,12 +155,22 @@ try {
     }
     Write-Host ("   OK: eingeloggt als " + $who.Trim())
 
-    # ----- c) Projekt verlinken (idempotent) ----------------------------
+    # ----- c) Projekt verlinken (NUR bestehendes Projekt, NIE erstellen) -
+    # Ist-Zustand (16.07.2026, Dashboard-verifiziert): Projekt 'uri-markt'
+    # existiert bereits im Team $TeamScope, ist git-connected und deployt
+    # automatisch bei jedem Push. 'vercel link --yes' ohne --project ging in
+    # den Create-Pfad -> 409 "already exists". Deshalb explizit auf das
+    # BESTEHENDE Projekt verlinken (Syntax laut vercel-Doku: link --yes
+    # --project <name>; --scope ist globale Option).
     if (Test-Path (Join-Path $RepoRoot '.vercel\project.json')) {
         Write-Host "   OK: Projekt bereits verlinkt (.vercel/project.json vorhanden)"
     } else {
-        # Ordnername = uri-markt -> vercel link --yes erstellt/verlinkt Projekt 'uri-markt'
-        Invoke-Cli -Label "vercel link --yes (Projekt $ProjectName)" -Cmd { vercel link --yes } | Out-Null
+        Invoke-Cli -Label "vercel link (bestehendes Projekt $ProjectName, Team $TeamScope)" -Cmd {
+            vercel link --yes --project $ProjectName --scope $TeamScope
+        } | Out-Null
+        if (-not (Test-Path (Join-Path $RepoRoot '.vercel\project.json'))) {
+            Stop-Rot "Vercel-Link" "Bestehendes Projekt '$ProjectName' im Team '$TeamScope' konnte nicht verlinkt werden -- im Vercel-Dashboard pruefen und JJ melden. Es wird bewusst KEIN neues Projekt erstellt."
+        }
     }
 
     # ----- d) Env-Vars nach Vercel (Production) -------------------------
@@ -236,14 +246,12 @@ try {
     }
     Write-Host ("   Redeploy OK: " + ("$redeploy".Trim() -split "`n" | Select-Object -Last 1).Trim())
 
-    # ----- i) GitHub-Anbindung (optional, Fehler nicht-fatal) ------------
-    Invoke-Cli -Label "vercel git connect $GitRepo (optional)" -TolerateFailure -Cmd {
-        vercel git connect "https://github.com/$GitRepo"
-    } | Out-Null
+    # (ehem. Schritt i "vercel git connect" ersatzlos gestrichen:
+    #  Repo ist laut Dashboard bereits git-connected, Auto-Deploy aktiv.)
 
     $script:Ok = $true
 
-    # ----- j) Endausgabe --------------------------------------------------
+    # ----- i) Endausgabe --------------------------------------------------
     Write-Host ""
     Write-Gruen "====================================================="
     Write-Gruen "   DEPLOY GRUEN"

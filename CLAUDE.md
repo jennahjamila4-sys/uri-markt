@@ -219,6 +219,16 @@ oder Migration auf profiles/Policies angewendet wurde.)
    `try/finally` mit `Read-Host` im finally + `Start-Transcript` in eine Log-Datei —
    ein Skript, das sich bei Fehler sofort schliesst, ist selbst ein Bug.
 
+16. **Ist-Zustand vor Annahme.** Lücke (16.07.2026, Deploy ROT): `vercel link --yes`
+   wollte das Projekt neu anlegen (409 „already exists") — das Vercel-Projekt
+   existierte längst, war git-connected und deployte automatisch bei jedem Push.
+   → Vor jedem Script/Plan gegen externe Systeme (Vercel, Stripe, GitHub, Supabase)
+   den Live-Zustand prüfen: existierende Projekte, Webhooks, Verbindungen,
+   Auto-Deploys. Live-Realität schlägt jede Übergabe-Doku. Externe Ressourcen nie
+   implizit erstellen — nur explizit mit Bestehendem verlinken; schlägt das fehl:
+   ROT mit klarer Meldung, kein Create-Fallback. Jeder ROT-Fall wird sofort und
+   unaufgefordert als neue Lektion hier dokumentiert.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
