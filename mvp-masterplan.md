@@ -44,8 +44,8 @@
 - [ ] Voraussetzung JJ: Stripe-Konto (Einzelfirma) aktiviert
 
 ### 6. Recht & Start
-- [ ] Impressum, Datenschutz (DSG 2023), AGB inkl. Taler-Klausel (Anwalts-Review vor Echtgeld — JJ)
-- [ ] 5-Taler-Startguthaben: ALLE Anker (DB-Default, Onboarding-RPC, Frontend-/Marketing-Texte inkl. Pioneer) im selben Block
+- [x] Impressum, Datenschutz (DSG 2023), AGB inkl. Taler-Klausel — Block 7 (statische Seiten `/impressum` `/datenschutz` `/agb` + globaler Footer + Signup-Zustimmung; E2E `block7-legal.spec.ts` GRUEN). ⚠️ Anwalts-Review vor Echtgeld weiterhin offen (JJ)
+- [x] 5-Taler-Startguthaben Frontend-Texte — Block 7 (Onboarding-Abschluss-Screen 100→5 korrigiert; einzige nutzersichtbare Fundstelle; DB-Default/RPC = 5 laut Live-DB). „Pionier-Plätze" = eigenes Badge-Feature, unverändert korrekt
 - [x] comments-Tabelle (Migration Planungs-Chat) + Kommentar-UI ohne PGRST205 — `ccdd59a`
   (Liste/Autor/Zeit, neueste zuerst; user_id null -> „Geloeschter Nutzer"; Login-Gate;
   Validierung 1-1000 + Zaehler; eigene loeschen mit Bestaetigung, kein Bearbeiten;

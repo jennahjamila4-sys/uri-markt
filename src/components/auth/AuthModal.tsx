@@ -23,6 +23,7 @@ export function AuthModal() {
       password: '',
       username: '',
       gemeinde: '',
+      acceptTerms: false,
     },
   })
 
@@ -45,7 +46,9 @@ export function AuthModal() {
             username: data.username,
             gemeinde: data.gemeinde,
           },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          // Fallback auf den echten Browser-Origin: ohne ihn ergäbe eine fehlende
+          // NEXT_PUBLIC_APP_URL den String "undefined/auth/callback" (Prod-Bruch).
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin}/auth/callback`,
         },
       })
 
@@ -224,6 +227,43 @@ export function AuthModal() {
             {registerForm.formState.errors.password?.message && (
               <p className="text-xs text-uri-danger">
                 {registerForm.formState.errors.password.message}
+              </p>
+            )}
+            <label className="flex items-start gap-3 text-sm text-white/80">
+              <input
+                type="checkbox"
+                data-testid="register-terms"
+                {...registerForm.register('acceptTerms')}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+              />
+              <span>
+                Ich akzeptiere die{' '}
+                <a
+                  href="/agb"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold hover:underline"
+                >
+                  AGB
+                </a>{' '}
+                und die{' '}
+                <a
+                  href="/datenschutz"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gold hover:underline"
+                >
+                  Datenschutzerklärung
+                </a>
+                .
+              </span>
+            </label>
+            {registerForm.formState.errors.acceptTerms?.message && (
+              <p
+                data-testid="register-terms-error"
+                className="text-xs text-uri-danger"
+              >
+                {registerForm.formState.errors.acceptTerms.message}
               </p>
             )}
             <button

@@ -57,7 +57,7 @@ export function OnboardingScreen5({ onComplete }: Props) {
         </h2>
 
         <div className="bg-gradient-to-b from-gold/20 to-amber-600/20 border-2 border-gold rounded-xl p-8">
-          <div className="text-5xl font-bold text-gold mb-2">100</div>
+          <div className="text-5xl font-bold text-gold mb-2">5</div>
           <div className="text-xl text-white/80">Uri-Taler Guthaben</div>
           <p className="text-white/60 text-sm mt-2">Dein Startkapital für erste Käufe</p>
         </div>

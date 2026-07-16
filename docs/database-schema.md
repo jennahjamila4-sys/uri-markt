@@ -225,4 +225,4 @@
 - [ ] Phase 4: Taler-Gutschrift atomar machen (kein Read-then-Write auf `credits`)
 - [x] Phase 3/4: KI-Modellnamen gegen aktuell verfügbare Modelle prüfen → zentrale Konstante `CLAUDE_MODEL = 'claude-sonnet-4-6'` in `src/lib/ai.ts` (alter Wert `claude-sonnet-4-20250514` war deprecated)
 - [ ] `smart_matches`: Unique-Constraint auf (`gesuch_id`, `matched_listing_id`) verifizieren
-- [ ] Onboarding-Bonus 100 Taler = `10000` credits (Rappen) sicherstellen
+- [ ] Onboarding-Bonus 5 Taler = `500` credits (Rappen) sicherstellen

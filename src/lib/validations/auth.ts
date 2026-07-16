@@ -9,6 +9,9 @@ export const RegisterSchema = z.object({
     .max(20, 'Max. 20 Zeichen')
     .regex(/^[a-zA-Z0-9_]+$/, 'Nur Buchstaben, Zahlen und _'),
   gemeinde: z.string().min(1, 'Bitte Gemeinde wählen'),
+  acceptTerms: z.boolean().refine((v) => v === true, {
+    message: 'Bitte AGB und Datenschutzerklärung zustimmen',
+  }),
 })
 
 export const LoginSchema = z.object({

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Syne, DM_Sans } from 'next/font/google'
 import { Toaster } from 'sonner'
 import { AppChrome } from '@/components/layout/AppChrome'
+import { Footer } from '@/components/layout/Footer'
 import './globals.css'
 
 const syne = Syne({
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="de" className="dark">
       <body className={`${syne.variable} ${dmSans.variable} font-body bg-obsidian text-white`}>
         {children}
+        <Footer />
         <AppChrome />
         <Toaster
           theme="dark"
