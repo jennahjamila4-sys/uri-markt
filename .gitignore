@@ -18,6 +18,8 @@ playwright-report/
 .playwright/
 e2e/_build.log
 e2e/_pw.log
+e2e/_commit.log
+deploy/_deploy.log
 
 # Claude Code lokale Settings + verwaister tsbuildinfo (Root-Cause statt manuellem Weglassen)
 .claude/
