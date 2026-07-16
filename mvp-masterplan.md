@@ -55,8 +55,8 @@
     DB-Migration im Planungs-Chat; nicht trivial, daher eigener Block.
 
 ### 7. Deploy
-- [ ] Vercel: Site-URL, Redirect-Allow-List, Env-Vars — Login/Signup auf echter Domain E2E-getestet
-- [ ] Smoke-Test 5/5 auf Production
+- [x] Vercel: Site-URL, Redirect-Allow-List, Env-Vars — `710479d`+`cbb6646`+`72895b7` (Deploy-Script GRUEN, Env-Vars via Script gesynct, Supabase-Auth-URLs gesetzt; Login/Signup von JJ auf Live-Domain https://uri-markt-gamma.vercel.app getestet)
+- [x] Smoke-Test 5/5 auf Production — von JJ bestaetigt (16.07.2026), inkl. Taler-Testkauf idempotent auf Live-Domain
 
 ## Abnahme-Regel
 Ein Kriterium gilt als erfüllt, wenn: (a) E2E oder automatisierter Test grün, (b) tsc+build 0 Errors, (c) kein bestehendes Kriterium dabei gebrochen wurde (Regression = Block nicht fertig). Claude Code hakt Kriterien in DIESER Datei ab (Checkbox → [x]) mit Commit-Hash daneben.

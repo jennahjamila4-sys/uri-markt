@@ -1,61 +1,25 @@
-# Übergabe 16.07.2026 — Block 8 (Vercel-Deploy-Vorbereitung)
+# Uebergabe 16.07.2026 — Block 8 abgeschlossen (Deploy LIVE)
 
-Arbeitsmodus: Planungs-Chat mit Repo-Mount. Kein Push ohne JJ-OK. D1–D5, Lektionen 1–14.
+> Ersetzt alle aelteren Uebergabe-Dateien. Naechste Session: zuerst CLAUDE.md, dann diese Datei.
 
-## ✅ ERLEDIGT (tsc GRÜN, Exit 0)
+## BEWIESEN (Stand heute)
 
-### docs/deploy-vercel.md (neu)
-Vollständige Klickanleitung für JJ: Env-Liste (aus `process.env.`-Repo-Suche, nicht
-Gedächtnis), Stripe-Prod-Webhook, Supabase-Auth-URLs, Vercel-Import, Smoke-Test.
+- **App live auf https://uri-markt-gamma.vercel.app** — Deploy-Script `deploy/deploy-vercel.ps1` GRUEN durchgelaufen (Log: `deploy/_deploy.log`).
+- Env-Vars (Supabase, Stripe, APP_URL) via Script nach Vercel Production gesynct.
+- Stripe-Prod-Webhook aktiv (checkout.session.completed auf Live-Domain, Endpoint-Secret in Vercel).
+- Supabase-Auth-URLs gesetzt (Site URL + Redirect /auth/callback).
+- Taler-Kauf idempotent auf Live-Domain getestet (JJ: Smoke-Test 5/5 + Taler-Testkauf gruen).
+- Deploy-Zyklen (D5): Zyklus 1 ROT = `vercel link` wollte Projekt neu anlegen (409) -> Fix `cbb6646` (nur bestehendes Projekt verlinken, Lektion 16). Zyklus 2 Haenger = interaktiver Prompt bei gecapturetem `vercel env add` -> Fix `72895b7` (alle vercel-Aufrufe non-interaktiv: `env add --force` per stdin statt rm+add, `--prod --yes`; Lektion-15-Ergaenzung).
+- Commits Block 8: `710479d`, `cbb6646`, `72895b7` (+ dieser Abschluss-Commit). KEIN Push bisher.
 
-**Tatsächlich im Code genutzte Env-Variablen (6):** `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_APP_URL`. — NICHT genutzt (nicht in Vercel setzen):
-`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`,
-`QR_SIGNING_SECRET` (kommen erst mit Phase 3/4), `SUPABASE_ACCESS_TOKEN`/`E2E_*` (nur dev).
+## OFFEN
 
-### vercel.json (neu, mit Grund)
-`"regions": ["cdg1"]` (Paris): Supabase-DB liegt in EU Paris; Vercel-Default wäre
-Washington → ~80–100 ms pro DB-Roundtrip + Datenverarbeitung ausserhalb EU. Sonst nichts
-— Next.js 15 App Router braucht keine weitere Konfiguration.
+- Anwaltliche AGB-Pruefung vor Echtgeld (JJ).
+- Vercel Pro vor Go-Live (JJ).
+- Consent-Persistierung (optional).
+- Aus mvp-masterplan.md weiterhin offen: Foto-Upload-E2E, Status-Sticker-Assertion, 48h-Auto-Expiry, Favoriten-Block, Guthaben-Check + Nicht-negativ-Constraint, rk_-Key-Haertung, Kommentar-Zaehler (Block 9).
+- JJ-Featureliste APP_TEST -> Planung Block 9+ durch Planungs-Chat: Onboarding-Umbau, Smart-Formulare V33, Entwurf-Speichern, Match-System mit Benachrichtigungen, Kaeuferdaten aus Profil vorbefuellen, Reserviert-Benachrichtigung.
 
-### Root-Cause-Fix (D3, einer): AuthModal emailRedirectTo
-- Symptom (präventiv gefunden): `src/components/auth/AuthModal.tsx` baute
-  `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback` OHNE Fallback → bei fehlender
-  Variable ginge der String `undefined/auth/callback` an Supabase (Signup-Mails kaputt).
-- Fix: `?? window.location.origin` ergänzt (Client-Komponente, Origin immer vorhanden).
-  Verhalten bei gesetzter Variable unverändert (kein Regressionsrisiko auf Block-7-E2E).
+## NAECHSTER SCHRITT
 
-### Geprüft und SAUBER (keine Änderung nötig)
-- Stripe `success_url`/`cancel_url` (`src/app/actions/taler.ts`): an echten
-  Request-Origin gebunden, Fallback-Kette korrekt.
-- Middleware-Matcher: schliesst `api/webhooks` aus → Stripe-Webhook wird nicht abgefangen.
-- Share-/Referral-Links: haben `window.location.origin`-Fallback.
-- Kein hartcodiertes `localhost` ausser letztem Dev-Fallback (taler.ts) + UI-Hinweistext.
-- Auth-Callback-Pfad aus Code gelesen: `/auth/callback` (`src/app/auth/callback/route.ts`).
-
-## 🔎 Beweise
-- `npx tsc --noEmit` → Exit 0 (Sandbox, nach Fix).
-- ESLint in der Sandbox nicht lauffähig (Prozess stirbt am Speicherlimit — wie Block 7).
-  Diff enthält keinen neuen JSX-Text, nur JS-Kommentare → kein Lektion-12-Risiko.
-  Voller Beweis (build inkl. eslint): über „Uri-Markt Verify" bei JJ.
-
-## ⚠️ WICHTIG: Commit-Stand
-- **Block 7 ist NUR gestaged, nie committet** (letzter Commit = Block 6 `03e2679`);
-  `e2e/block7-commit-push.ps1` wurde nie ausgeführt.
-- Die Sandbox kann im Repo-Mount keine Dateien löschen → stale `.git/index.lock`
-  blockiert Commits aus dieser Session. **JJ führt `e2e/block8-commit.ps1` aus**
-  (Rechtsklick → Mit PowerShell ausführen): entfernt das Lock, committet Block 7 und
-  Block 8 GETRENNT, **kein Push**.
-
-## Session-Lektion (Umgebung, nicht CLAUDE.md-Code-Workflow)
-Datei-Edit über Host-Tool hat `AuthModal.tsx` einmal am Ende abgeschnitten
-(Sync-Problem Host↔Mount); per `git show :pfad` wiederhergestellt, Fix danach per
-Python-Skript direkt im Mount. → In Repo-Mount-Sessions nach jedem Edit
-`wc -l` + `tail` der Datei prüfen.
-
-## 📋 NÄCHSTE SCHRITTE (exakt)
-1. JJ: „Uri-Markt Verify" laufen lassen (build inkl. eslint + Playwright) → GRÜN melden.
-2. JJ: `e2e/block8-commit.ps1` ausführen (Commits lokal, kein Push).
-3. Nach JJ-OK: Push (dann Deploy nach `docs/deploy-vercel.md` Abschnitt 4).
-4. Danach offen: Block 9 (Kommentar-Zähler Feed-Karten).
+Block-9-Planung im Planungs-Chat (Featureliste APP_TEST priorisieren + offene Masterplan-Punkte einordnen).
