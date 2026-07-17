@@ -254,6 +254,19 @@ oder Migration auf profiles/Policies angewendet wurde.)
    und neutralisiert sind (Lektion 1: Wer konsumiert das noch? — auch der Compiler
    ist ein Konsument).
 
+19. **Off-Canvas-UI muss unsichtbar UND inert sein.** Lücke (17.07.2026, Block 9
+   E2E ROT): Das geschlossene NotificationPanel blieb nur per `translate-x-full`
+   verschoben im DOM — fuer Playwright „visible", fuer Tastatur fokussierbar, und
+   `getByText().first()` traf dessen Texte statt der Feed-Karte („element is
+   outside of the viewport", 20s Retry). → Jedes geschlossene Off-Canvas-Element
+   bekommt zusaetzlich `invisible pointer-events-none` + `aria-hidden` (A11y-
+   Pflicht, kein Workaround). In Tests: Playwright-„visible" heisst NICHT „im
+   Viewport"; Texte, die auch in Toasts/Panels vorkommen (z.B. Titel in
+   Notification-Messages), nie per seitenweitem `getByText` klicken, sondern
+   role-basiert (heading/button). D1 gilt auch fuer Test-Rot: erst
+   error-context.md lesen — die Hypothese (Animation) war falsch, das Log nannte
+   die echte Ursache woertlich.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)

@@ -135,9 +135,16 @@ async function createGesuch(page: Page, title: string, budget: number) {
 /** Detail des eigenen Gesuchs oeffnen (Feed → Tab Gesuche → Karte) */
 async function openGesuchDetail(page: Page, gesuchTitle: string) {
   await page.goto('/')
-  await page.getByRole('button', { name: /Gesuche/ }).click()
-  await expect(page.getByText(gesuchTitle).first()).toBeVisible()
-  await page.getByText(gesuchTitle).first().click()
+  // Tab-Klick kann vor React-Hydration verpuffen → klicken und kurz auf die
+  // Karten-Ueberschrift warten, sonst erneut klicken (Timing-Robustheit).
+  // Karten-Ueberschrift (h3) gezielt treffen — Notification-Toast/-Panel
+  // enthalten den Gesuch-Titel ebenfalls als <p> (Selektor-Robustheit).
+  const heading = page.getByRole('heading', { name: gesuchTitle })
+  await expect(async () => {
+    await page.getByRole('button', { name: /Gesuche/ }).click()
+    await expect(heading.first()).toBeVisible({ timeout: 3_000 })
+  }).toPass({ timeout: 20_000 })
+  await heading.first().click()
   await expect(page.getByTestId('gesuch-matches')).toBeVisible()
 }
 
@@ -249,8 +256,9 @@ test.describe.serial('Block 9: Smart-Match-System', () => {
     await createFreeAngebot(pageA, OFFER_TX)
 
     await pageB.goto('/')
-    await expect(pageB.getByText(OFFER_TX).first()).toBeVisible()
-    await pageB.getByText(OFFER_TX).first().click()
+    const offerHeading = pageB.getByRole('heading', { name: OFFER_TX })
+    await expect(offerHeading.first()).toBeVisible()
+    await offerHeading.first().click()
     await pageB.getByRole('button', { name: /^🛒 Kaufen$/ }).click()
     const buyModal = pageB
       .locator('.animate-slide-up', { hasText: 'Kaufabsicht bestätigen' })

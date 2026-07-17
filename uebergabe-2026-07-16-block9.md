@@ -1,4 +1,20 @@
-# Uebergabe 16.07.2026 — Block 9 (Match-System: Trigger + UI)
+# Uebergabe 16./17.07.2026 — Block 9 (Match-System: Trigger + UI)
+
+## Verify-Zyklen (D5)
+
+- **Zyklus 1 ROT (Build):** tsconfig ohne `supabase/functions/**`-exclude → next build
+  type-checkte den jsr:-Import der Edge-Function-Referenzkopie. Fix: exclude ergaenzt
+  (Lektion 18). Danach BUILD_EXIT=0.
+- **Zyklus 2 ROT (PW, Test 1):** Symptom „element outside of the viewport" beim Klick
+  auf den Gesuch-Titel. Bewiesene Ursache (error-context.md): geschlossenes
+  NotificationPanel bleibt off-canvas im DOM; die Match-Notification-Message enthaelt
+  beide Titel → `getByText().first()` traf den Panel-Text statt der Feed-Karte.
+  Fix (Produkt/A11y): Panel geschlossen = `invisible pointer-events-none` +
+  `aria-hidden`. Test-Seite (erlaubte Robustheit, Lektion 9): Karten-h3 per
+  `getByRole('heading')` klicken; Tab-Klick gegen Hydration-Race mit
+  `toPass`-Retry. Lektion 19. Die Animations-Hypothese (reduced-motion) war
+  NICHT die Ursache — bewusst nicht in diesem Zyklus umgesetzt (D3);
+  reduced-motion als separater A11y-Schritt empfohlen.
 
 > Ersetzt aeltere Uebergabe-Dateien. Naechste Session: zuerst CLAUDE.md, dann diese Datei.
 

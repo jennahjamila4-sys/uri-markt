@@ -73,10 +73,13 @@ export function NotificationPanel() {
         />
       )}
 
-      {/* Panel */}
+      {/* Panel. Geschlossen: invisible + pointer-events-none + aria-hidden —
+          Off-Canvas-Inhalt darf nicht wahrnehmbar/fokussierbar/klickbar sein
+          (A11y; ausserdem traf Playwright sonst Panel-Texte statt Feed-Karten). */}
       <div
+        aria-hidden={!isOpen}
         className={`fixed right-0 top-0 z-50 h-[100dvh] w-[85vw] max-w-sm transform border-l border-glass-border bg-obsidian-2 transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
+          isOpen ? 'translate-x-0' : 'invisible pointer-events-none translate-x-full'
         }`}
       >
         <div className="flex items-center justify-between border-b border-glass-border p-4">
