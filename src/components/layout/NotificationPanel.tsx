@@ -11,6 +11,7 @@ const TYPE_ICON: Record<string, string> = {
   tx_completed: '🏆',
   tx_rejected: '❌',
   no_show: '⚠️',
+  match: '🎯',
   smart_match: '🎯',
   default: '🔔',
 }
@@ -31,6 +32,7 @@ export function NotificationPanel() {
   const setOpen = useAppStore((s) => s.setNotificationPanelOpen)
   const notifications = useAppStore((s) => s.notifications)
   const markAllRead = useAppStore((s) => s.markAllRead)
+  const markRead = useAppStore((s) => s.markRead)
   const user = useAppStore((s) => s.user)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
 
@@ -46,11 +48,19 @@ export function NotificationPanel() {
     }
   }
 
-  const handleClick = (listingId?: string) => {
+  // Klick auf Eintrag: als gelesen markieren + zum Inserat navigieren
+  const handleClick = async (id: string, listingId?: string) => {
+    markRead(id)
     if (listingId) {
       setSelectedListingId(listingId)
       setOpen(false)
     }
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id)
+    if (error) console.error('[NotificationPanel] markRead', error.message)
   }
 
   return (
@@ -98,7 +108,7 @@ export function NotificationPanel() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => handleClick(n.listing_id ?? undefined)}
+                  onClick={() => handleClick(n.id, n.listing_id ?? undefined)}
                   className="flex w-full items-start gap-3 border-b border-glass-border/50 p-4 text-left transition hover:bg-white/5"
                 >
                   <span className="text-xl">{icon}</span>

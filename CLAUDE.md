@@ -235,6 +235,25 @@ oder Migration auf profiles/Policies angewendet wurde.)
    ROT mit klarer Meldung, kein Create-Fallback. Jeder ROT-Fall wird sofort und
    unaufgefordert als neue Lektion hier dokumentiert.
 
+17. **Cowork-Sandbox kann keine Build-/Test-Gates ausfuehren.** Lücke (16.07.2026,
+   Block 9): In der Cowork-Session (Sandbox-Shell, 45s-Limit pro Aufruf,
+   Hintergrundprozesse sterben mit dem Aufruf) sind `tsc --noEmit`, `next build`,
+   `eslint` und Playwright NICHT lauffaehig; `pgrep`-Polling matcht zudem den
+   eigenen Aufruf → „RUNNING"-Phantome (20 Min. auf einen laengst toten Prozess
+   gewartet). → In Cowork-Sessions Gates gar nicht erst lokal versuchen: Code
+   fertigstellen, in der Uebergabe als UNGETESTET markieren, Gates laufen bei JJ
+   via `e2e/run-verify.ps1` (Build prueft Types+ESLint, dann Playwright).
+   Prozess-Messungen nie ueber pgrep-Substring, sondern ueber Ergebnis-Dateien.
+
+18. **Vollzugsmeldung erst nach Nachweis JEDES Teilschritts.** Lücke (16.07.2026,
+   Block 9 ROT): „Referenzkopie abgelegt" als ✅ gemeldet, aber der zwingend dazu-
+   gehoerende tsconfig-exclude (`supabase/functions/**`) fehlte → `next build`
+   type-checkte den Deno-/jsr:-Import und brach. → Vor jedem ✅ die Teilschritte
+   des Auftrags einzeln abhaken (Checkliste gegen den Auftragstext); eine Datei
+   „nur ablegen" ist erst fertig, wenn ihre Auswirkungen auf Build/Gates bedacht
+   und neutralisiert sind (Lektion 1: Wer konsumiert das noch? — auch der Compiler
+   ist ein Konsument).
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
@@ -314,6 +333,15 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   Browser-Client-Instanzen (Fix: setTimeout-Deferral + Singleton-Client). Siehe Lektion 10 +
   `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
+
+- **Block 9** (16.07.2026): Match-System — Edge-Function-Trigger `calculate-smart-matches`
+  beidseitig (Gesuch+Angebot, fire-and-forget) statt lokalem Regel-Matcher (geloescht);
+  `max_budget` im Gesuch-Insert nachgezogen; „🎯 Deine Matches" auf dem eigenen
+  Gesuch-Detail; Notification-Panel: Typ `match`, Klick=is_read, Badge-Fix beim
+  Initial-Load; Referenzkopie `supabase/functions/calculate-smart-matches/index.ts`
+  (+ tsconfig-exclude nach ROT, Lektion 18); E2E `e2e/block9-match.spec.ts` (4 Tests
+  + Cleanup) + Preflight-Login-Probe. Gates laufen bei JJ (Lektion 17). Details:
+  `uebergabe-2026-07-16-block9.md`. KEIN Push.
 
 ---
 

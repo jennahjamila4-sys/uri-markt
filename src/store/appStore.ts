@@ -10,6 +10,7 @@ interface AppState {
   unreadCount: number
   addNotification: (n: Notification) => void
   markAllRead: () => void
+  markRead: (id: string) => void
   setNotifications: (ns: Notification[]) => void
 
   onboardingCompleted: boolean
@@ -51,7 +52,21 @@ export const useAppStore = create<AppState>()(
           unreadCount: s.unreadCount + 1,
         })),
       markAllRead: () => set({ unreadCount: 0 }),
-      setNotifications: (ns) => set({ notifications: ns }),
+      // Einzelne Notification als gelesen: aus Liste nehmen + Badge senken
+      markRead: (id) =>
+        set((s) => {
+          const wasUnread = s.notifications.some((n) => n.id === id && !n.is_read)
+          return {
+            notifications: s.notifications.filter((n) => n.id !== id),
+            unreadCount: wasUnread ? Math.max(0, s.unreadCount - 1) : s.unreadCount,
+          }
+        }),
+      // Initial-Load: Badge = Anzahl ungelesener (vorher blieb er fälschlich 0)
+      setNotifications: (ns) =>
+        set({
+          notifications: ns,
+          unreadCount: ns.filter((n) => !n.is_read).length,
+        }),
 
       onboardingCompleted: false,
       setOnboardingCompleted: (v) => set({ onboardingCompleted: v }),

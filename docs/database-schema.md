@@ -172,6 +172,11 @@
 | created_at | timestamptz | now() |
 
 > Für `upsert(onConflict: 'gesuch_id,matched_listing_id')` muss eine Unique-Constraint auf diesen beiden Spalten existieren → vor Phase 2/3 prüfen.
+>
+> **Grant-Stand (Block 9, vom Planungs-Chat live bewiesen):** `authenticated`
+> hat auf `smart_matches` nur **SELECT + UPDATE** (own-only via RLS über
+> `user_id`), **kein INSERT/DELETE**. Zeilen schreibt ausschliesslich die Edge
+> Function `calculate-smart-matches` (Service-Role).
 
 ### `xp_log`  (PK: `id`)  ⚠️ NICHT `xp_events`
 | Spalte | Typ | Default / Notiz |

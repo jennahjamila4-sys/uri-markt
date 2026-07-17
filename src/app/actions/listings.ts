@@ -3,8 +3,29 @@ import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { AngebotSchema } from '@/lib/validations/listing'
 import { GesuchSchema } from '@/lib/validations/onboarding'
-import { calculateSmartMatches } from '@/lib/smartMatch'
 import type { Database } from '@/types/database'
+
+/**
+ * Smart-Match-Berechnung anstossen (Edge Function `calculate-smart-matches`,
+ * matcht beide Richtungen: Gesuch→Angebote und Angebot→Gesuche).
+ * Fire-and-forget: Ein Fehler wird geloggt, die Veröffentlichung schlägt
+ * dadurch NIEMALS fehl und der Fehler wird nicht uminterpretiert (Lektion 7).
+ */
+async function triggerSmartMatches(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  listingId: string
+): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke('calculate-smart-matches', {
+      body: { listing_id: listingId },
+    })
+    if (error) {
+      console.error('[triggerSmartMatches]', listingId, error)
+    }
+  } catch (err) {
+    console.error('[triggerSmartMatches]', listingId, err)
+  }
+}
 
 // Status, in denen ein Inserat noch verändert werden darf. Sobald ein Deal läuft
 // (reserved) oder abgeschlossen ist (sold), ist Bearbeiten/Deaktivieren gesperrt.
@@ -87,6 +108,9 @@ export async function createListingAction(rawData: unknown) {
     p_idempotency_key: `listing_created_${listing.id}`,
   })
 
+  // Angebot→Gesuche matchen (fire-and-forget, blockiert nie)
+  await triggerSmartMatches(supabase, listing.id)
+
   revalidatePath('/')
   return { id: listing.id, title: listing.title }
 }
@@ -117,6 +141,8 @@ export async function createGesuchAction(rawData: unknown) {
         category: validated.data.category,
         gemeinde: validated.data.gemeinde,
         price: validated.data.max_budget || null,
+        // Edge Function calculate-smart-matches liest max_budget (Budget-Scoring)
+        max_budget: validated.data.max_budget || null,
         price_type: 'fixed',
       })
       .select('id, title')
@@ -132,8 +158,8 @@ export async function createGesuchAction(rawData: unknown) {
       p_idempotency_key: `gesuch_created_${listing.id}`,
     })
 
-    // Smart Matches berechnen (regelbasiert)
-    await calculateSmartMatches(listing.id)
+    // Gesuch→Angebote matchen (Edge Function, fire-and-forget, blockiert nie)
+    await triggerSmartMatches(supabase, listing.id)
 
     revalidatePath('/')
     revalidatePath('/profile')

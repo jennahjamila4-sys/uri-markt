@@ -29,7 +29,29 @@ const REQUIRED: { key: string; fix: string }[] = [
   { key: 'E2E_USER_B_PASSWORD', fix: 'Test-Konto B Passwort in .env.local.' },
 ]
 
-export default function globalSetup(): void {
+/** Login-Probe: existiert das Konto und stimmt das Passwort? (Lektion 14) */
+async function probeLogin(
+  env: Record<string, string>,
+  label: string,
+  email: string,
+  password: string
+): Promise<string | null> {
+  const r = await fetch(
+    `${env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    }
+  )
+  if (r.ok) return null
+  return `  FEHLT: ${label}-Login (${email}) schlaegt fehl (HTTP ${r.status}) - so beheben: node e2e/setup-users.mjs ausfuehren bzw. Zugangsdaten in .env.local korrigieren.`
+}
+
+export default async function globalSetup(): Promise<void> {
   let env: Record<string, string>
   try {
     env = loadEnv()
@@ -49,5 +71,20 @@ export default function globalSetup(): void {
         '\n\nBitte die genannten Werte in .env.local ergaenzen und Verify erneut starten.\n'
     )
   }
-  console.log('[preflight] Alle benoetigten Env-Variablen vorhanden.')
+  // E2E-Konten: Existenz + Login wirklich proben, nicht nur Env-Werte lesen
+  const loginErrors = (
+    await Promise.all([
+      probeLogin(env, 'E2E_USER_A', env.E2E_USER_A_EMAIL, env.E2E_USER_A_PASSWORD),
+      probeLogin(env, 'E2E_USER_B', env.E2E_USER_B_EMAIL, env.E2E_USER_B_PASSWORD),
+    ])
+  ).filter((e): e is string => e !== null)
+  if (loginErrors.length > 0) {
+    throw new Error(
+      '\n\n=== PREFLIGHT ABGEBROCHEN: E2E-Konten nicht nutzbar ===\n' +
+        loginErrors.join('\n') +
+        '\n'
+    )
+  }
+
+  console.log('[preflight] Env-Variablen vorhanden, E2E-Konten-Login geprueft.')
 }

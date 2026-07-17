@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { DealFlow } from './DealFlow'
 import { CommentSection } from './CommentSection'
+import { GesuchMatches } from './GesuchMatches'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
 
@@ -185,6 +186,12 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
           {listing.type === 'Angebot' && (
             <DealFlow listing={listing} currentUser={currentUser} />
           )}
+
+          {/* 🎯 Matches: nur auf dem EIGENEN Gesuch (RLS sichert zusätzlich own-only) */}
+          {listing.type === 'Gesuch' &&
+            currentUser?.id === listing.user_id && (
+              <GesuchMatches gesuchId={listing.id} userId={currentUser.id} />
+            )}
 
           <div className="flex gap-2">
             <button className="flex-1 rounded-xl border border-glass-border px-4 py-3" onClick={() => {}}>

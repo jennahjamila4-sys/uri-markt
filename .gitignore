@@ -24,3 +24,9 @@ deploy/_deploy.log
 # Claude Code lokale Settings + verwaister tsbuildinfo (Root-Cause statt manuellem Weglassen)
 .claude/
 tsconfig.tsbuildinfo.old
+
+.vercel
+.env*
+
+# JJ-Desktop-Helfer im Root gehoeren nicht ins Repo (e2e/ und deploy/ Skripte bleiben versioniert)
+/*.ps1
