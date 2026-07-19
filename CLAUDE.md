@@ -427,9 +427,11 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   authenticated-`UPDATE transactions` → 42501) → auf SECURITY-DEFINER-RPC
   `reject_buy_intent` umgestellt (Lektion 22). E2E `e2e/block11-deal.spec.ts`
   (8 Tests) + Buy-Modal-Selektoren aller Alt-Specs nachgezogen (Lektion 24). DB
-  nur gelesen (Migrationen von JJ eingespielt). **Gates ungefahren (Sandbox down,
-  Lektion 17) → bei JJ via run-verify.ps1.** TEIL 10 (Altformulare löschen) bei JJ
-  auszuführen. Details: `uebergabe-2026-07-19.md`. KEIN Commit/Push.
+  nur gelesen (Migrationen von JJ eingespielt). Verify-Rot → 2 Root-Cause-Fixes
+  (Prefill überschrieb Eingabe = echter Bug, Lektion 25; Entwürfe-Button/Tab
+  Selektor-Kollision, Lektion 24-Nachtrag). **Verify grün** (run-verify.ps1: tsc +
+  ESLint + Playwright). Altformulare gelöscht. Commit `8636368` auf `main`, **KEIN
+  Push**. Details: `uebergabe-2026-07-19.md`.
 - **Block 9** (16.07.2026): Match-System — Edge-Function-Trigger `calculate-smart-matches`
   beidseitig (Gesuch+Angebot, fire-and-forget) statt lokalem Regel-Matcher (geloescht);
   `max_budget` im Gesuch-Insert nachgezogen; „🎯 Deine Matches" auf dem eigenen
