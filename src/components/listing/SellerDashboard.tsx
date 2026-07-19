@@ -11,6 +11,7 @@ import {
 } from '@/app/actions/transactions'
 import { ContactSection } from './ContactSection'
 import { ReviewModal } from './ReviewModal'
+import { CoffeeModal } from './CoffeeModal'
 import { paymentMethodShort } from '@/lib/paymentMethod'
 
 export interface SellerTransaction {
@@ -41,10 +42,29 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
   const router = useRouter()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [reviewTxId, setReviewTxId] = useState<string | null>(null)
+  // Block 10: Kaffee-Modal nach Annahme eines Gratis-Inserats (Provisions-Moment).
+  const [coffeeOpen, setCoffeeOpen] = useState(false)
+  // Guthaben lokal halten, damit eine Spende den angezeigten Stand sofort aktualisiert.
+  const [walletCredits, setWalletCredits] = useState(credits)
 
   // credits ist in Rappen (1 Taler = 100). Für Anzeige und für den Vergleich
   // gegen die in Talern geführte Provision in Taler umrechnen.
-  const creditsInTaler = credits / 100
+  const creditsInTaler = walletCredits / 100
+
+  // Verkauf annehmen (Provisions-Moment). Bei einem Gratis-Inserat erscheint
+  // danach EINMAL das Kaffee-Modal — nie blockierend, die Annahme ist schon durch.
+  const handleConfirm = async (id: string) => {
+    setPendingId(id)
+    try {
+      const res = await confirmSaleAction(id)
+      toast.success('Verkauf bestätigt – Kontaktdaten freigeschaltet!')
+      if (res.isFree) setCoffeeOpen(true)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Aktion fehlgeschlagen')
+    } finally {
+      setPendingId(null)
+    }
+  }
 
   if (transactions.length === 0) {
     return (
@@ -162,13 +182,7 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
                 <div className="flex gap-2">
                   <button
                     disabled={busy || !enoughCredits}
-                    onClick={() =>
-                      run(
-                        tx.id,
-                        () => confirmSaleAction(tx.id),
-                        'Verkauf bestätigt – Kontaktdaten freigeschaltet!'
-                      )
-                    }
+                    onClick={() => handleConfirm(tx.id)}
                     className="flex-1 rounded-lg bg-uri-success py-3 font-display font-bold text-obsidian transition hover:opacity-90 disabled:opacity-40"
                   >
                     {busy ? '…' : '✅ Bestätigen'}
@@ -265,6 +279,16 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
           transactionId={reviewTxId}
           onClose={() => setReviewTxId(null)}
           onSubmitted={() => router.refresh()}
+        />
+      )}
+
+      {coffeeOpen && (
+        <CoffeeModal
+          onDonated={(newBalanceRappen) => setWalletCredits(newBalanceRappen)}
+          onClose={() => {
+            setCoffeeOpen(false)
+            router.refresh()
+          }}
         />
       )}
     </div>

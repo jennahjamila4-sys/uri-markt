@@ -1,7 +1,6 @@
 'use client'
 import { useAppStore } from '@/store/appStore'
-import { AngebotForm } from './AngebotForm'
-import { GesuchForm } from './GesuchForm'
+import { ChameleonForm } from './ChameleonForm'
 import { X } from 'lucide-react'
 
 export function CreateModal() {
@@ -9,8 +8,13 @@ export function CreateModal() {
   const setIsOpen = useAppStore((s) => s.setCreateModalOpen)
   const createModalTab = useAppStore((s) => s.createModalTab)
   const setCreateModalTab = useAppStore((s) => s.setCreateModalTab)
+  const resumeDraft = useAppStore((s) => s.resumeDraft)
 
   if (!isOpen) return null
+
+  // Entwurf nur vorbefüllen, wenn der aktive Tab zum Entwurfs-Typ passt.
+  const draftInitial =
+    resumeDraft && resumeDraft.mode === createModalTab ? resumeDraft : undefined
 
   return (
     <div className="fixed inset-0 z-50 flex items-end">
@@ -56,10 +60,20 @@ export function CreateModal() {
         </div>
 
         {createModalTab === 'Angebot' && (
-          <AngebotForm onSuccess={() => setIsOpen(false)} />
+          <ChameleonForm
+            key={draftInitial?.draftId ?? 'new-angebot'}
+            mode="Angebot"
+            initial={draftInitial}
+            onSuccess={() => setIsOpen(false)}
+          />
         )}
         {createModalTab === 'Gesuch' && (
-          <GesuchForm onSuccess={() => setIsOpen(false)} />
+          <ChameleonForm
+            key={draftInitial?.draftId ?? 'new-gesuch'}
+            mode="Gesuch"
+            initial={draftInitial}
+            onSuccess={() => setIsOpen(false)}
+          />
         )}
       </div>
     </div>

@@ -1,14 +1,39 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import {
   deleteListingAction,
   setListingActiveAction,
+  deleteDraftAction,
+  publishDraftAction,
 } from '@/app/actions/listings'
 import { useAppStore } from '@/store/appStore'
+import { createClient } from '@/lib/supabase/client'
 import { EditListingModal } from './EditListingModal'
+import type { SmartData } from '../create/SmartFields'
+
+// Block 10: voll geladener Entwurf (für Fortsetzen mit vollständiger Vorbefüllung).
+interface DraftRow {
+  id: string
+  title: string
+  type: string
+  category: string
+  description: string | null
+  condition: string | null
+  price: number | null
+  max_budget: number | null
+  price_type: string
+  gemeinde: string
+  gemeinden: string[]
+  smart_data: SmartData | null
+  image_urls: string[] | null
+  created_at: string | null
+}
+
+const DRAFT_COLS =
+  'id,title,type,category,description,condition,price,max_budget,price_type,gemeinde,gemeinden,smart_data,image_urls,created_at'
 
 export interface MyListingItem {
   id: string
@@ -30,6 +55,7 @@ const TABS = [
   { key: 'reserved', label: 'Reserviert' },
   { key: 'sold', label: 'Verkauft' },
   { key: 'cancelled', label: 'Deaktiviert' },
+  { key: 'draft', label: '📝 Entwürfe' },
 ] as const
 
 const STATUS_BADGE: Record<string, string> = {
@@ -63,6 +89,125 @@ export function MyListings({ listings }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [editItem, setEditItem] = useState<MyListingItem | null>(null)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
+  const user = useAppStore((s) => s.user)
+  const openDraft = useAppStore((s) => s.openDraft)
+
+  // Block 10: Entwürfe (status='draft') werden client-seitig geladen (RLS lässt
+  // nur eigene Entwürfe durch). Voll geladen, damit „Fortsetzen“ das Formular
+  // komplett vorbefüllt (inkl. smart_data).
+  const [drafts, setDrafts] = useState<DraftRow[]>([])
+  const [draftsLoaded, setDraftsLoaded] = useState(false)
+
+  const loadDrafts = async () => {
+    if (!user) return
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('listings')
+      .select(DRAFT_COLS)
+      .eq('user_id', user.id)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('[loadDrafts]', error)
+      toast.error('Entwürfe konnten nicht geladen werden')
+      return
+    }
+    setDrafts((data ?? []) as DraftRow[])
+    setDraftsLoaded(true)
+  }
+
+  useEffect(() => {
+    void loadDrafts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
+
+  const resumeDraft = (d: DraftRow) => {
+    openDraft({
+      mode: d.type === 'Gesuch' ? 'Gesuch' : 'Angebot',
+      draftId: d.id,
+      title: d.title,
+      category: d.category || undefined,
+      priceType: d.price_type === 'free' ? 'free' : 'fixed',
+      price: d.type !== 'Gesuch' && d.price != null ? String(d.price) : undefined,
+      maxBudget: d.max_budget != null ? String(d.max_budget) : undefined,
+      gemeinden: d.gemeinden ?? [],
+      smartData: d.smart_data ?? {},
+      condition: (d.condition ?? undefined) as
+        | 'new'
+        | 'like_new'
+        | 'good'
+        | 'acceptable'
+        | undefined,
+      description: d.description || undefined,
+      imageUrls: d.image_urls ?? [],
+    })
+  }
+
+  const buildDraftPublishPayload = (d: DraftRow) => {
+    const gemeinden = (d.gemeinden && d.gemeinden.length > 0 ? d.gemeinden : [d.gemeinde]).filter(
+      Boolean
+    )
+    const smart_data =
+      d.smart_data && Object.keys(d.smart_data).length > 0 ? d.smart_data : undefined
+    if (d.type === 'Gesuch') {
+      return {
+        title: d.title,
+        category: d.category,
+        gemeinde: gemeinden[0],
+        gemeinden,
+        smart_data,
+        max_budget: d.max_budget ?? undefined,
+        description: d.description ?? undefined,
+      }
+    }
+    return {
+      title: d.title,
+      description: d.description ?? undefined,
+      category: d.category,
+      condition: (d.condition as 'new' | 'like_new' | 'good' | 'acceptable') ?? 'good',
+      price_type: d.price_type === 'free' ? 'free' : 'fixed',
+      price: d.price_type === 'free' ? undefined : (d.price ?? undefined),
+      gemeinde: gemeinden[0],
+      gemeinden,
+      smart_data,
+      image_urls: d.image_urls ?? [],
+      pickup_available: true,
+      shipping_available: false,
+      shipping_cost: 0,
+    }
+  }
+
+  const handlePublishDraft = async (d: DraftRow) => {
+    setBusyId(d.id)
+    try {
+      await publishDraftAction(d.id, buildDraftPublishPayload(d))
+      setDrafts((prev) => prev.filter((x) => x.id !== d.id))
+      toast.success('Entwurf veröffentlicht! 🎉')
+    } catch (err) {
+      // Unvollständiger Entwurf: im Formular fortsetzen (dort sichtbare Fehler + Scroll).
+      toast.error(
+        (err instanceof Error ? err.message : 'Veröffentlichen fehlgeschlagen') +
+          ' – bitte im Formular vervollständigen.'
+      )
+      resumeDraft(d)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleDeleteDraft = async (id: string) => {
+    setBusyId(id)
+    try {
+      await deleteDraftAction(id)
+      setDrafts((prev) => prev.filter((x) => x.id !== id))
+      toast.success('Entwurf gelöscht')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Löschen fehlgeschlagen')
+    } finally {
+      setBusyId(null)
+      setConfirmId(null)
+    }
+  }
 
   const filtered = items.filter((l) => l.status === tab)
 
@@ -116,7 +261,83 @@ export function MyListings({ listings }: Props) {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {tab === 'draft' ? (
+        drafts.length === 0 ? (
+          <div className="rounded-xl border border-glass-border bg-obsidian-3 p-6 text-center">
+            <p className="text-white/60">
+              {draftsLoaded ? 'Noch keine Entwürfe. Fang an – speichern kannst du jederzeit. ✍️' : 'Lädt …'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {drafts.map((d) => {
+              const busy = busyId === d.id
+              return (
+                <div
+                  key={d.id}
+                  data-testid="draft-row"
+                  className="rounded-xl border border-glass-border bg-obsidian-3 p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/60">
+                      {d.type}
+                    </span>
+                    <p className="min-w-0 flex-1 truncate font-semibold text-white" data-testid="draft-title">
+                      {d.title}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => resumeDraft(d)}
+                      disabled={busy}
+                      data-testid="draft-resume-btn"
+                      className="rounded-lg border border-glass-border px-3 py-1.5 text-xs text-white/80 transition hover:border-gold/60 hover:text-gold disabled:opacity-50"
+                    >
+                      Fortsetzen
+                    </button>
+                    <button
+                      onClick={() => handlePublishDraft(d)}
+                      disabled={busy}
+                      data-testid="draft-publish-btn"
+                      className="btn-gold rounded-lg px-3 py-1.5 text-xs font-bold disabled:opacity-50"
+                    >
+                      {busy ? '…' : 'Veröffentlichen'}
+                    </button>
+                    {confirmId === d.id ? (
+                      <span className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDeleteDraft(d.id)}
+                          disabled={busy}
+                          data-testid="draft-delete-confirm-btn"
+                          className="rounded-lg bg-uri-danger px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          {busy ? 'Löscht…' : 'Wirklich löschen'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          disabled={busy}
+                          className="rounded-lg border border-glass-border px-3 py-1.5 text-xs text-white/60"
+                        >
+                          Abbrechen
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmId(d.id)}
+                        disabled={busy}
+                        data-testid="draft-delete-btn"
+                        className="rounded-lg border border-glass-border px-3 py-1.5 text-xs text-white/60 transition hover:border-uri-danger/60 hover:text-uri-danger disabled:opacity-50"
+                      >
+                        Löschen
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-glass-border bg-obsidian-3 p-6 text-center">
           <p className="text-white/60">Keine Inserate in dieser Kategorie.</p>
         </div>

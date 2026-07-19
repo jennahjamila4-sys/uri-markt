@@ -1,0 +1,84 @@
+# MVP-RESTPLAN BIS LAUNCH (v2 — 17.07.2026)
+> Verbindliche Blockfolge bis zum launchfähigen MVP. Ersetzt keine Block-Detailpläne — er steuert sie.
+> Regel: EIN Block = EIN Planungs-Chat + EINE Claude-Code-Session. Kein Block beginnt, bevor der vorherige seine DONE-Kriterien erfüllt hat. Kein Workaround, nur Root-Cause. Selflearning immer aktiv: jeder ROT-Fall wird sofort als Lektion in CLAUDE.md dokumentiert.
+
+---
+
+## 1. ZIEL — „MVP FERTIG" HEISST EXAKT:
+
+Ein Besucher aus Uri kann ohne einen einzigen toten Klick: sich registrieren (mit AGB-Consent) → Angebot mit Foto inserieren ODER Gesuch erstellen (smarte, entlastende Formulare, Entwurf speicherbar) → automatisch gematcht und benachrichtigt werden (beide Richtungen, KI-Semantik) → reservieren (Verkäufer sieht es sofort, 48h-Auto-Expiry) → Deal abschliessen (10% Taler-Kommission) → bewerten → Taler per Stripe nachkaufen. Jedes sichtbare UI-Element tut, was es verspricht (keine Fake-Interaktionen). Rechtlich sauber (Impressum/DSG/AGB), technisch sauber (tsc/build/E2E grün, Least-Privilege-Grants), live auf Vercel.
+
+---
+
+## 2. FIXER ARBEITSZYKLUS PRO BLOCK (immer identisch — nie abweichen)
+
+1. **Planungs-Chat (neu pro Block):** liest CLAUDE.md + neueste Übergabe + diesen Restplan. Verifiziert Live-DB (D1) VOR dem Plan. Spielt Migrationen via MCP ein (JJ klickt „Zulassen", D2-Check danach). Erstellt Block-MD mit kopierfertiger Startnachricht. Übergibt Dateien IMMER mit Tabelle: WAS / WOHIN (exakter Pfad) / WANN.
+2. **JJ:** Dateien exakt gemäss Tabelle speichern. Claude Code Desktop → neue Session → Startnachricht als Text einfügen.
+3. **Claude Code:** liest CLAUDE.md + Übergabe. Schritt 0 = Repo-Ist-Zustand messen. Implementiert (D3: ein Fix pro Zyklus, max 3 Zyklen dann STOPP). E2E headless grün + tsc/eslint 0 Errors → Commit (KEIN Push) → meldet „selbst getestet, funktioniert" + Testliste.
+4. **JJ:** „Uri-Markt Verify" doppelklicken → GRÜN/ROT an Claude Code.
+5. **Bei GRÜN:** JJ gibt Push frei (push.ps1) → danach `deploy/deploy-vercel.ps1` doppelklicken (Live-App aktuell halten!) → 2-Minuten-Live-Check auf https://uri-markt-gamma.vercel.app (neues Feature einmal anklicken).
+6. **Abschluss:** Claude Code schreibt Übergabe (BEWIESEN/UNGETESTET/ANGEFANGEN) + neue Lektionen in CLAUDE.md → Session beenden. JJ meldet im Planungs-Chat „Block X live" → Planungs-Chat schliesst ab → **neuer Planungs-Chat für den nächsten Block** (tokensparender Schnitt).
+
+---
+
+## 3. BLOCKFOLGE MIT DONE-KRITERIEN
+
+### BLOCK 9 — MATCH-SYSTEM (läuft — Plan: `block-9-match-system.md`)
+Teil A DONE (Function v3 deployed, KI-Scoring live bewiesen, Grants gehärtet). Offen: Claude-Code-Teil.
+**DONE wenn:** Trigger bei Gesuch- UND Angebot-Veröffentlichung ✓ Match-Sektion auf eigenem Gesuch-Detail (Score, Ausblenden persistent) ✓ Glocke mit Badge, match- und tx_pending-Einträge verlinken, is_read ✓ E2E Tests 1–4 grün ✓ Verify+Push+Deploy+Live-Check ✓
+
+### BLOCK 10 — SMARTE FORMULARE + ENTWÜRFE (APP_TEST 2, 4, 4.1, 4.2)
+Entlastungs-Prinzip: so wenig Pflichtfelder wie möglich, Formular passt sich der Kategorie an (V33-Chamäleon), Nutzer denkt nie „was soll ich hier eintragen".
+- Migrationen (Planungs-Chat): `smart_data jsonb` auf listings + Draft-Status inkl. RLS-Policy (Entwürfe NUR für Eigentümer sichtbar — Leak-Schutz) + danach `npx supabase gen types` (Lektion 11)
+- `gesuchConfig.ts` aus V33 (9 Kategorien, lokales Keyword-Matching, KI-Fallback erst nach 15+ Zeichen ohne Treffer — Kosten/Latenz)
+- Chamäleon-Formular für Gesuch UND Angebot; dynamische Felder in `smart_data`; Detail-Ansicht zeigt smart_data als 2-Spalten-Grid
+- „Als Entwurf speichern"-Button + Tab „📝 Entwürfe" in Meine Inserate; Entwurf → Veröffentlichen löst Match-Trigger aus (Cross-Feature, Lektion 1!)
+- Smart-Match-Verzahnung: smart_data-Felder fliessen in den KI-Prompt der Edge Function ein (Planungs-Chat deployt Function-Update)
+**DONE wenn:** Kategorie wählen verändert Formular ✓ Entwurf speichern/fortsetzen/veröffentlichen ✓ Entwürfe für Fremde unsichtbar (E2E mit User B!) ✓ veröffentlichter Entwurf erzeugt Matches ✓ types regeneriert, kein Handedit ✓ Zyklus Schritt 4–6 ✓
+
+### BLOCK 11 — REIBUNGSLOSER DEAL (APP_TEST 6 + Testschulden)
+Entlastungs-Prinzip: Kaufanfrage in einem Klick — nichts doppelt eintippen.
+- Kaufformular: Kontaktdaten vorbefüllt aus `profiles_private` (existiert bereits, RLS ok), editierbar, Änderungen optional zurückspeichern („Für nächstes Mal merken")
+- Konto-Modal Tab „Angaben" (+ „Zahlungen" mit IBAN/Twint, Schweizer Format-Validierung nach Lektion 2)
+- „🔄 Wieder erhältlich"-Sticker nach Auto-Expiry (Status-Wahrheit überall, Masterplan)
+- 48h-Deal-Frist SICHTBAR machen (JJ-Anforderung 17.07.): Nach Bestätigung der Kaufanfrage sehen Verkäufer UND Käufer prominent einen Countdown mit empathisch-verkaufspsychologischem Text, z.B. „⏳ Noch 43 Std. — schliesst euren Deal ab, sonst geht „[Titel]" automatisch zurück in den Markt und jemand anderes greift zu." (DB-Wahrheit: expire_stale_reservations läuft bereits; hier kommt nur die ehrliche Anzeige + Text dazu)
+- Testschulden: Foto-Upload-E2E + Status-Sticker-Assertionen (reserviert/verkauft/wieder erhältlich)
+**DONE wenn:** Kaufanfrage ohne manuelle Dateneingabe möglich ✓ Prefill-E2E ✓ Sticker-E2E ✓ Foto-Upload-E2E ✓ Zyklus ✓
+
+### BLOCK 12 — ONBOARDING, FOMO-TEXTE & EHRLICHE UI (APP_TEST 1, 1.1, 1.2, 3)
+FOMO = emotionale, empathische Verkaufs-Schlüsselwörter — KEINE erfundenen Zahlen (Wettbewerbsrecht).
+- Onboarding Seite 1 neu: drei Zielgruppen-Trigger („Endlich alles loswerden, was rumsteht — kostenlos inserieren", „Finden ohne zu suchen — Smart Match meldet sich bei dir", „Für Firmen & Vereine: Events und Kurse füllen — ganz Uri sieht es")
+- Benachrichtigungs-Auswahl raus aus Onboarding → Profil-Einstellungen; Seite 3 („Was interessiert dich") entfernen
+- Taler-Karten-Texte: entlastend-emotional („Dein Weg frei von Ballast — lokal, unkompliziert, ohne Inserate-Gebühr")
+- Empty-States & Notification-Texte im gleichen Ton (Match-Texte sind ab Block 9 schon so)
+- Kommentar-Zähler-Denormalisierung (Migration + Feed-Badge — letzter Masterplan-Rest)
+- Herz-Button EHRLICH machen: echte Favoriten (Migration `favorites`, RLS own-only, Herz speichert, Tab „❤️ Favoriten") — ein Herz, das nichts tut, ist eine Vertrauens-Lücke und fliegt sonst raus
+**DONE wenn:** Onboarding 2 Seiten mit Triggern ✓ Benachrichtigungen im Profil ✓ Taler-Texte neu ✓ Kommentar-Zähler korrekt (E2E: Kommentar → Zähler +1) ✓ Herz speichert persistent (E2E) ✓ Zyklus ✓
+
+### BLOCK 13 — GO-LIVE-HÄRTUNG (letzter Block vor Echtgeld)
+- Stripe: `sk_test_` → Live-Keys + `rk_`-Restricted-Key, Prod-Webhook-Secret prüfen, ein echter 5-Taler-Testkauf
+- Signup-Consent persistieren (Zeitstempel in DB — Nachweispflicht revDSG)
+- Rechtstexte: JJs echte Firmendaten in Impressum/Datenschutz/AGB, Platzhalter-Suche über ganzes Repo = 0 Treffer
+- **JJ-Gates (ohne die KEIN Echtgeld):** Anwalts-Freigabe AGB (Taler-/No-Cash-out-Klausel) · Vercel Pro (Hobby verbietet kommerzielle Nutzung) · Stripe-Live-Aktivierung (Einzelfirma, IBAN, ID)
+- Finale Smoke-Suite auf der Live-Domain: kompletter Zielsatz aus Abschnitt 1 einmal durchspielen
+**DONE wenn:** alle Gates ✓ Live-Smoke ✓ → LAUNCH
+
+---
+
+## 4. LÜCKEN-REGISTER (geprüft, bewusst entschieden)
+
+| Punkt | Entscheid |
+|---|---|
+| Auktionen, Event-Ticketing/QR, Boosts, Coffee, Browser-Push, Header-Dropdown V33, Admin-Stats | Post-Launch (V33-Plan bleibt gültig, Architektur ist additiv vorbereitet) |
+| Live-Viewer-Zahlen | Bleiben deterministisch-visuell, nie als echte Zahlen ausgeben (Wettbewerbsrecht) — bereits so gebaut |
+| `phase-3/4`-Plandateien mit Alt-Code | Für MVP irrelevant (Block-MDs sind massgeblich); Korrektur erst wenn Event-/Boost-Phase startet |
+| `database.ts` Handedits aus Phase 2 | Wird durch `gen types` in Block 10 automatisch bereinigt |
+| Offener Grant-Vorfall 02.07. (`profiles`) | Vor JEDER neuen Migration prüft der Planungs-Chat die profiles-Grants mit (D2-Routine) — seit Block 6 stabil |
+| E2E-Testdaten auf Live-DB | Jeder E2E-Lauf räumt eigene Listings/Notifications am Ende auf (steht in jeder Startnachricht) |
+
+---
+
+## 5. DATEI-REGELN (Lektion 16.07. — bindend)
+- Jede Dateiübergabe an JJ: Tabelle WAS / WOHIN (exakter Pfad!) / WANN. Nie „Ablageort egal".
+- Deno-Function-Code NUR nach `supabase/functions/<name>/index.ts`, `supabase/functions/**` steht in tsconfig-`exclude`.
+- Block-MDs und Übergaben: ins Claude-Projekt UND nach `C:\Users\El Hamd\uri-markt\docs\planung\` (Repo-Doku, vom Build ignoriert da .md).

@@ -183,7 +183,13 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
 
         <div className="mt-[7px] flex items-center gap-1 text-[11.5px] text-white/35">
           <MapPin size={12} className="stroke-[1.6]" />
-          <span>{listing.gemeinde}</span>
+          {/* Block 10: kompakt „Altdorf +2“, wenn mehrere Gemeinden hinterlegt sind. */}
+          <span>
+            {listing.gemeinde}
+            {listing.gemeinden && listing.gemeinden.length > 1
+              ? ` +${listing.gemeinden.length - 1}`
+              : ''}
+          </span>
         </div>
 
         {listing.type === 'Angebot' && !isSold && !isReserved ? (

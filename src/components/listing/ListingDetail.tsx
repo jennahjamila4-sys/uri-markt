@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { DealFlow } from './DealFlow'
 import { CommentSection } from './CommentSection'
 import { GesuchMatches } from './GesuchMatches'
+import { smartFieldLabel } from '@/lib/gesuchConfig'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
 
@@ -117,6 +118,23 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
 
   const price = listing.price_type === 'free' ? 'Gratis' : `CHF ${(listing.price || 0).toLocaleString('de-CH')}`
 
+  // Block 10: smart_data (Match-Signale) + alle Gemeinden aufbereiten.
+  const smart =
+    listing.smart_data && typeof listing.smart_data === 'object' && !Array.isArray(listing.smart_data)
+      ? (listing.smart_data as Record<string, string | string[] | number>)
+      : null
+  const smartEntries = smart
+    ? Object.entries(smart).filter(
+        ([, v]) => v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+      )
+    : []
+  const gemeindenList =
+    listing.gemeinden && listing.gemeinden.length > 0
+      ? listing.gemeinden
+      : listing.gemeinde
+        ? [listing.gemeinde]
+        : []
+
   const handleShare = async () => {
     const url = `${process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin}/l/${listing.id}`
     if (navigator.share) {
@@ -181,6 +199,38 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
               </button>
             )}
           </div>
+
+          {/* Block 10: alle Gemeinden als Chips */}
+          {gemeindenList.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {gemeindenList.map((g) => (
+                <span
+                  key={g}
+                  data-testid="detail-gemeinde"
+                  className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/80"
+                >
+                  📍 {g}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Block 10: smart_data als 2-Spalten-Grid (Angebot UND Gesuch) */}
+          {smartEntries.length > 0 && (
+            <div
+              data-testid="smart-data-grid"
+              className="grid grid-cols-2 gap-3 rounded-xl border border-glass-border bg-obsidian-3 p-3"
+            >
+              {smartEntries.map(([k, v]) => (
+                <div key={k}>
+                  <p className="text-xs text-white/50">{smartFieldLabel(listing.category, k)}</p>
+                  <p className="text-sm font-semibold text-white">
+                    {Array.isArray(v) ? v.join(', ') : String(v)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Deal-Flow (Kaufen / Status / Verkäufer-Hinweis) */}
           {listing.type === 'Angebot' && (

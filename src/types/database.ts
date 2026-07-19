@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -123,6 +123,7 @@ export type Database = {
           event_location: string | null
           fomo_expires_at: string | null
           gemeinde: string
+          gemeinden: string[]
           id: string
           image_url: string | null
           image_urls: string[] | null
@@ -136,6 +137,7 @@ export type Database = {
           price_type: string
           shipping_available: boolean | null
           shipping_cost: number | null
+          smart_data: Json | null
           status: string
           ticket_price: number | null
           title: string
@@ -159,6 +161,7 @@ export type Database = {
           event_location?: string | null
           fomo_expires_at?: string | null
           gemeinde: string
+          gemeinden?: string[]
           id?: string
           image_url?: string | null
           image_urls?: string[] | null
@@ -172,6 +175,7 @@ export type Database = {
           price_type: string
           shipping_available?: boolean | null
           shipping_cost?: number | null
+          smart_data?: Json | null
           status?: string
           ticket_price?: number | null
           title: string
@@ -195,6 +199,7 @@ export type Database = {
           event_location?: string | null
           fomo_expires_at?: string | null
           gemeinde?: string
+          gemeinden?: string[]
           id?: string
           image_url?: string | null
           image_urls?: string[] | null
@@ -208,6 +213,7 @@ export type Database = {
           price_type?: string
           shipping_available?: boolean | null
           shipping_cost?: number | null
+          smart_data?: Json | null
           status?: string
           ticket_price?: number | null
           title?: string
@@ -705,6 +711,7 @@ export type Database = {
         }
         Returns: Json
       }
+      donate_coffee: { Args: { p_amount_rappen: number }; Returns: Json }
       escalate_no_show: {
         Args: { p_seller_id: string; p_transaction_id: string }
         Returns: Json

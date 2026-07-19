@@ -25,6 +25,12 @@ export const GesuchSchema = z.object({
   category: z.string().min(1, 'Kategorie erforderlich'),
   max_budget: z.number().positive('Budget muss > 0 sein').optional(),
   gemeinde: z.enum(GEMEINDEN, { errorMap: () => ({ message: 'Ungültige Gemeinde' }) }),
+  // Block 10: eine oder mehrere Gemeinden (gemeinde = erste, gemeinden = alle).
+  gemeinden: z.array(z.enum(GEMEINDEN)).min(1).optional(),
+  // Block 10: kategorie-spezifische Match-Signale (jsonb). Nur befüllte Keys.
+  smart_data: z
+    .record(z.string(), z.union([z.string(), z.array(z.string()), z.number()]))
+    .optional(),
   description: z.string().max(1000, 'Beschreibung darf max. 1000 Zeichen lang sein').optional(),
   needed_by: z.string().datetime('Ungültiges Datumsformat').optional(),
 })

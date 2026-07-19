@@ -1,9 +1,14 @@
 'use server'
+import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { AngebotSchema } from '@/lib/validations/listing'
 import { GesuchSchema } from '@/lib/validations/onboarding'
+import { CATEGORIES } from '@/types'
+import { CLAUDE_MODEL_FAST } from '@/lib/ai'
 import type { Database } from '@/types/database'
+
+type SmartDataInsert = Database['public']['Tables']['listings']['Insert']['smart_data']
 
 /**
  * Smart-Match-Berechnung anstossen (Edge Function `calculate-smart-matches`,
@@ -82,8 +87,19 @@ export async function createListingAction(rawData: unknown) {
   const validated = AngebotSchema.safeParse(rawData)
   if (!validated.success) throw new Error('Ungültige Eingaben')
 
+  // Block 10: eine oder mehrere Gemeinden. gemeinde = erste (Kompatibilität mit
+  // Feed/Karte), gemeinden = alle. Fallback auf die primäre gemeinde.
+  const gemeinden =
+    validated.data.gemeinden && validated.data.gemeinden.length > 0
+      ? validated.data.gemeinden
+      : [validated.data.gemeinde]
+
   const insertData: Database['public']['Tables']['listings']['Insert'] = {
     ...validated.data,
+    gemeinde: gemeinden[0],
+    gemeinden,
+    // Block 10: nur befüllte Match-Signale (das Formular entfernt leere Keys).
+    smart_data: (validated.data.smart_data ?? null) as Database['public']['Tables']['listings']['Insert']['smart_data'],
     // Anzeige (ListingCard/Feed/Profil) liest die Singular-Spalte image_url;
     // das Formular lädt Bilder als image_urls[]. Erstes Bild spiegeln.
     image_url: validated.data.image_urls?.[0] ?? null,
@@ -128,6 +144,11 @@ export async function createGesuchAction(rawData: unknown) {
   const validated = GesuchSchema.safeParse(rawData)
   if (!validated.success) throw new Error('Ungültige Eingaben')
 
+  const gemeinden =
+    validated.data.gemeinden && validated.data.gemeinden.length > 0
+      ? validated.data.gemeinden
+      : [validated.data.gemeinde]
+
   try {
     // Create Gesuch listing
     const { data: listing, error: insertError } = await supabase
@@ -139,7 +160,10 @@ export async function createGesuchAction(rawData: unknown) {
         type: 'Gesuch',
         status: 'active',
         category: validated.data.category,
-        gemeinde: validated.data.gemeinde,
+        gemeinde: gemeinden[0],
+        gemeinden,
+        // Block 10: kategorie-spezifische Match-Signale (jsonb).
+        smart_data: (validated.data.smart_data ?? null) as Database['public']['Tables']['listings']['Insert']['smart_data'],
         price: validated.data.max_budget || null,
         // Edge Function calculate-smart-matches liest max_budget (Budget-Scoring)
         max_budget: validated.data.max_budget || null,
@@ -328,4 +352,246 @@ export async function dismissMatchAction(matchId: string) {
   if (error) throw new Error('Aktion fehlgeschlagen')
 
   revalidatePath('/profile')
+}
+
+// ============================================================================
+// BLOCK 10 — Entwürfe (Drafts) + KI-Kategorie-Fallback
+// ============================================================================
+
+/**
+ * Entwurf: bewusst permissiv. Einzige harte Anforderung ist ein Titel (≥3).
+ * NOT-NULL-Spalten ohne Nutzereingabe werden als Leerstring/Default gespeichert
+ * (category ''/gemeinde '' erfüllen NOT NULL; price_type default 'fixed';
+ * gemeinden default []). Kein triggerSmartMatches — ein Entwurf matcht nie.
+ */
+const DraftSchema = z.object({
+  type: z.enum(['Angebot', 'Gesuch']),
+  title: z.string().min(3, 'Titel muss mindestens 3 Zeichen lang sein').max(150),
+  category: z.string().optional(),
+  description: z.string().max(2000).optional(),
+  condition: z.enum(['new', 'like_new', 'good', 'acceptable']).optional(),
+  price_type: z.enum(['fixed', 'vhb', 'free', 'auction']).optional(),
+  price: z.number().min(0).optional(),
+  max_budget: z.number().min(0).optional(),
+  gemeinde: z.string().optional(),
+  gemeinden: z.array(z.string()).optional(),
+  smart_data: z
+    .record(z.string(), z.union([z.string(), z.array(z.string()), z.number()]))
+    .optional(),
+  image_urls: z.array(z.string().url()).max(5).optional(),
+})
+
+export async function saveDraftAction(rawData: unknown) {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  const parsed = DraftSchema.safeParse(rawData)
+  if (!parsed.success) {
+    throw new Error(parsed.error.errors[0]?.message ?? 'Titel fehlt (mind. 3 Zeichen)')
+  }
+  const d = parsed.data
+  const gemeinden = d.gemeinden ?? (d.gemeinde ? [d.gemeinde] : [])
+
+  const insertData: Database['public']['Tables']['listings']['Insert'] = {
+    user_id: user.id,
+    type: d.type,
+    status: 'draft',
+    title: d.title,
+    // NOT-NULL erfüllen; Entwurf darf unvollständig sein.
+    category: d.category ?? '',
+    gemeinde: gemeinden[0] ?? '',
+    gemeinden,
+    price_type: d.price_type ?? 'fixed',
+    price: d.type === 'Gesuch' ? (d.max_budget ?? null) : (d.price ?? null),
+    max_budget: d.type === 'Gesuch' ? (d.max_budget ?? null) : null,
+    condition: d.type === 'Angebot' ? (d.condition ?? null) : null,
+    description: d.description ?? null,
+    smart_data: (d.smart_data ?? null) as SmartDataInsert,
+    image_urls: d.image_urls ?? [],
+    image_url: d.image_urls?.[0] ?? null,
+  }
+
+  const { data: draft, error } = await supabase
+    .from('listings')
+    .insert([insertData])
+    .select('id, title')
+    .single()
+
+  if (error) throw new Error('Entwurf konnte nicht gespeichert werden')
+
+  revalidatePath('/profile')
+  return { id: draft.id, title: draft.title }
+}
+
+/**
+ * Entwurf veröffentlichen: vollständige Validierung nach Typ; Übergang
+ * status draft → active ist atomar über den Status-Filter abgesichert.
+ * WICHTIG (Lektion 1): Nach erfolgreicher Veröffentlichung wird
+ * triggerSmartMatches aufgerufen — sonst matcht ein veröffentlichter Entwurf nie.
+ */
+export async function publishDraftAction(draftId: string, rawData: unknown) {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  // Typ des Entwurfs frisch aus der DB lesen (nicht dem Client vertrauen).
+  const { data: existing } = await supabase
+    .from('listings')
+    .select('type, status, user_id')
+    .eq('id', draftId)
+    .maybeSingle()
+  if (!existing) throw new Error('Entwurf nicht gefunden')
+  if (existing.user_id !== user.id) throw new Error('Nur der Besitzer kann veröffentlichen')
+  if (existing.status !== 'draft') throw new Error('Dieses Inserat ist kein Entwurf mehr')
+
+  let patch: Database['public']['Tables']['listings']['Update']
+
+  if (existing.type === 'Gesuch') {
+    const parsed = GesuchSchema.safeParse(rawData)
+    if (!parsed.success) throw new Error('Ungültige Eingaben')
+    const gemeinden =
+      parsed.data.gemeinden && parsed.data.gemeinden.length > 0
+        ? parsed.data.gemeinden
+        : [parsed.data.gemeinde]
+    patch = {
+      title: parsed.data.title,
+      description: parsed.data.description ?? null,
+      category: parsed.data.category,
+      gemeinde: gemeinden[0],
+      gemeinden,
+      smart_data: (parsed.data.smart_data ?? null) as SmartDataInsert,
+      price: parsed.data.max_budget ?? null,
+      max_budget: parsed.data.max_budget ?? null,
+      price_type: 'fixed',
+      status: 'active',
+    }
+  } else {
+    const parsed = AngebotSchema.safeParse(rawData)
+    if (!parsed.success) throw new Error('Ungültige Eingaben')
+    const gemeinden =
+      parsed.data.gemeinden && parsed.data.gemeinden.length > 0
+        ? parsed.data.gemeinden
+        : [parsed.data.gemeinde]
+    patch = {
+      title: parsed.data.title,
+      description: parsed.data.description ?? null,
+      category: parsed.data.category,
+      condition: parsed.data.condition,
+      price_type: parsed.data.price_type,
+      price: parsed.data.price_type === 'free' ? null : (parsed.data.price ?? null),
+      gemeinde: gemeinden[0],
+      gemeinden,
+      smart_data: (parsed.data.smart_data ?? null) as SmartDataInsert,
+      image_urls: parsed.data.image_urls ?? [],
+      image_url: parsed.data.image_urls?.[0] ?? null,
+      pickup_available: parsed.data.pickup_available,
+      shipping_available: parsed.data.shipping_available,
+      shipping_cost: parsed.data.shipping_cost ?? null,
+      status: 'active',
+    }
+  }
+
+  const { data: updated, error } = await supabase
+    .from('listings')
+    .update(patch)
+    .eq('id', draftId)
+    .eq('user_id', user.id)
+    .eq('status', 'draft')
+    .select('id')
+
+  if (error) throw new Error('Veröffentlichen fehlgeschlagen')
+  if (!updated || updated.length === 0) {
+    throw new Error('Entwurf konnte nicht veröffentlicht werden (nicht mehr Entwurf?)')
+  }
+
+  // Lektion 1: neuer Codepfad zum Veröffentlichen → Matches JETZT anstossen.
+  await triggerSmartMatches(supabase, draftId)
+
+  revalidatePath('/')
+  revalidatePath('/profile')
+  return { id: draftId }
+}
+
+/**
+ * Entwurf löschen. Nur eigener Entwurf (status='draft'); aktive/laufende
+ * Inserate werden hier bewusst NICHT angefasst (dafür gilt deleteListingAction).
+ */
+export async function deleteDraftAction(draftId: string) {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  const { data: deleted, error } = await supabase
+    .from('listings')
+    .delete()
+    .eq('id', draftId)
+    .eq('user_id', user.id)
+    .eq('status', 'draft')
+    .select('id')
+
+  if (error) throw new Error('Löschen fehlgeschlagen')
+  if (!deleted || deleted.length === 0) {
+    throw new Error('Entwurf nicht gefunden')
+  }
+
+  revalidatePath('/profile')
+}
+
+/**
+ * KI-Kategorie-Fallback: nur wenn die lokale Keyword-Erkennung nichts fand.
+ * Nutzt CLAUDE_MODEL_FAST (src/lib/ai.ts). Nie blockierend — jeder Fehler wird
+ * geloggt und als { category: null } zurückgegeben (Lektion 7: kein Swallowing,
+ * aber ein KI-Ausfall darf das Formular nie brechen).
+ */
+export async function suggestCategoryAction(
+  text: string
+): Promise<{ category: string | null }> {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) return { category: null }
+
+  const clean = (text ?? '').trim()
+  if (clean.length < 15) return { category: null }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    console.error('[suggestCategory] ANTHROPIC_API_KEY fehlt')
+    return { category: null }
+  }
+
+  const list = CATEGORIES.map((c) => `${c.id} = ${c.label}`).join('\n')
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL_FAST,
+        max_tokens: 12,
+        messages: [
+          {
+            role: 'user',
+            content: `Ordne den Text genau einer Kategorie-ID zu. Antworte NUR mit der ID (kleingeschrieben) oder mit "none", wenn nichts klar passt.\n\nKategorien:\n${list}\n\nText: ${clean.slice(0, 200)}`,
+          },
+        ],
+      }),
+    })
+    if (!res.ok) {
+      console.error('[suggestCategory] http', res.status)
+      return { category: null }
+    }
+    const data = await res.json()
+    const block = (data.content ?? []).find((b: { type: string }) => b.type === 'text')
+    const raw = String(block?.text ?? '').trim().toLowerCase().replace(/[^a-z]/g, '')
+    const match = CATEGORIES.find((c) => c.id === raw)
+    return { category: match ? match.id : null }
+  } catch (err) {
+    console.error('[suggestCategory]', err)
+    return { category: null }
+  }
 }

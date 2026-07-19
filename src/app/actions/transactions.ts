@@ -97,6 +97,19 @@ export async function confirmSaleAction(transaction_id: string) {
       throw new Error(result.error ?? 'Bestätigung fehlgeschlagen')
     }
 
+    // Block 10: War das ein Gratis-Inserat? Dann zeigt der Client im Anschluss
+    // (Provisions-Moment) das Kaffee-Modal. price_type ist die Wahrheit, nicht
+    // der Betrag.
+    let isFree = false
+    if (tx.listing_id) {
+      const { data: l } = await supabase
+        .from('listings')
+        .select('price_type')
+        .eq('id', tx.listing_id)
+        .maybeSingle()
+      isFree = l?.price_type === 'free'
+    }
+
     // Notify buyer (nur wenn Käufer/Inserat noch existieren – FKs sind nullable)
     if (tx.buyer_id && tx.listing_id) {
       await supabase.rpc('send_notification', {
@@ -111,7 +124,7 @@ export async function confirmSaleAction(transaction_id: string) {
     revalidatePath('/profile')
     revalidatePath('/')
 
-    return { ...result, success: true }
+    return { ...result, success: true, isFree }
   } catch (err) {
     console.error('[confirmSale]', err)
     throw err

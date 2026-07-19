@@ -1,7 +1,18 @@
 # Smart Match System
-> Status: ✅ Fertig (Edge Function v2, KI-Semantik aktiv)
-> Zuletzt aktualisiert: 16.07.2026 (Block 9)
+> Status: ✅ Fertig (Edge Function v5, KI-Semantik + smart_data + Gemeinden-Überlappung)
+> Zuletzt aktualisiert: 18.07.2026 (Block 10)
 > Abhängigkeiten: feed, ai-features, create-listing, profile, notifications
+
+## Block 10 — Function v5 (18.07.2026)
+Gegenüber v4 nutzt das Scoring jetzt zusätzlich:
+- **`smart_data`**: die kategorie-spezifischen Match-Signale (Grösse, Marke, Farbe,
+  Zustand …) fliessen sowohl in den KI-Prompt als auch in die Fallback-Heuristik ein.
+  Übereinstimmung erhöht den Score, klarer Widerspruch (z.B. Grösse S vs. XL) senkt ihn.
+- **Gemeinden-Überlappung**: Der Gemeinde-Bonus (+10) greift, sobald sich die
+  `gemeinden`-Listen von Gesuch und Angebot überschneiden (Fallback auf die alte
+  Singular-Spalte `gemeinde`). Der Aufruf bleibt unverändert über den bestehenden
+  `triggerSmartMatches` (auch beim **Veröffentlichen eines Entwurfs** — neuer Codepfad).
+Logik-Beweis = E2E `block10-smart-forms.spec.ts` Test 3.
 
 ## Übersicht
 Matching läuft vollständig in der Supabase Edge Function

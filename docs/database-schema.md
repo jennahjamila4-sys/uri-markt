@@ -10,6 +10,42 @@
 
 ---
 
+## 0-B. Block 10 — Smarte Formulare (17./18.07.2026)
+
+Ergänzungen durch Block 10 (Migrationen 10-1/10-2 vom Planungs-Chat live eingespielt,
+Types via `gen types` neu generiert):
+
+**`listings` — neue Spalten**
+- `smart_data jsonb NULL` — kategorie-spezifische Match-Signale (nur befüllte Keys,
+  z.B. `{ "g-farbe": ["Rot"], "g-groesse": "M", "verhandelbar": "Ja" }`). Fliesst in
+  die Edge Function `calculate-smart-matches` (v5) ein.
+- `gemeinden text[] NOT NULL DEFAULT '{}'` — eine oder mehrere Gemeinden. `gemeinde`
+  (Singular, NOT NULL) bleibt die erste Auswahl (Kompatibilität mit Feed/Karte),
+  `gemeinden` enthält alle. Bestehende 15 Inserate wurden auf `gemeinden = [gemeinde]`
+  migriert.
+
+**`listings.status = 'draft'`** — kein CHECK-Constraint; Entwürfe sind reguläre Zeilen.
+Beim Entwurf erfüllen `category`/`gemeinde` NOT NULL als Leerstring (`''`).
+
+**RLS-Policy „Listings: public select" (ersetzt)**
+`USING (status <> 'draft' OR user_id = auth.uid())` — Entwürfe sind API-seitig NUR für
+den Eigentümer sichtbar (Draft-Leak-Schutz, per E2E Test 2 bewiesen).
+
+**Grant-Stand (gehärtet)**
+- `listings`: `anon` = nur SELECT; `authenticated` = SELECT/INSERT/UPDATE/DELETE
+  (RLS regelt Zeilenzugriff). Kein Schreibzugriff für `anon`.
+- `wallet_transactions`: `anon` = nichts; `authenticated` = nur SELECT. Schreiben
+  ausschliesslich über SECURITY-DEFINER-RPCs.
+
+**Neue RPC `donate_coffee(p_amount_rappen bigint) → jsonb`**
+SECURITY DEFINER, `search_path` fixiert, EXECUTE nur `authenticated`/`service_role`.
+Atomarer Abzug (ein UPDATE mit Guthaben-Bedingung, kein Read-then-Write). Erlaubt
+100/300/500/1000 Rappen. Wallet-Log Typ `'coffee'`. Antwort `{success, new_balance}`
+bzw. `{success:false, error}` (freundlicher Text bei zu wenig Guthaben). Wird im
+Provisions-Moment (Annahme eines Gratis-Inserats) vom Kaffee-Modal aufgerufen.
+
+---
+
 ## 0. Wichtige Konventionen (zuerst lesen)
 
 1. **Taler-Guthaben = `profiles.credits` (bigint).** Wird als **Rappen** behandelt:

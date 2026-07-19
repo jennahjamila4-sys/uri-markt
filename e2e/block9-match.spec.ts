@@ -1,4 +1,4 @@
-import { test, expect, type Page, type BrowserContext } from '@playwright/test'
+import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
 // ─── Env aus .env.local laden (Playwright-Runner laedt sie nicht selbst) ─────
@@ -74,24 +74,37 @@ async function login(page: Page, email: string, password: string) {
   await expect(page.getByRole('button', { name: 'Anmelden' })).toHaveCount(0)
 }
 
+// ─── Create-Helfer: Single-Screen-Chamaeleon-Formular (Block 10) ─────────────
+// Referenz: e2e/block10-smart-forms.spec.ts. Kein Wizard/„Weiter" mehr; Kategorie
+// per Fallback-Select (deterministisch), Gemeinde per Chip, Publish = „Veröffentlichen".
+
+/** Kategorie explizit ueber das Fallback-Select setzen (Banner ggf. aufklappen). */
+async function setCategory(modal: Locator, value: string) {
+  const change = modal.getByText('ändern')
+  if (await change.count()) await change.first().click()
+  await modal.locator('#field-category select').selectOption(value)
+}
+
+/** Gemeinde-Chip in den gewuenschten Zustand bringen (robust gegen Vorbefuellung). */
+async function ensureGemeinde(modal: Locator, name: string, want = true) {
+  const chip = modal.locator('#field-gemeinde').getByRole('button', { name, exact: true })
+  const cls = (await chip.getAttribute('class')) ?? ''
+  const active = cls.includes('bg-gold')
+  if (active !== want) await chip.click()
+}
+
 /** Angebot erstellen: Kategorie Kleider & Mode, Festpreis, Gemeinde Altdorf */
 async function createAngebot(page: Page, title: string, price: number) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Inserat erstellen' }).click()
   const modal = page.locator('.animate-slide-up')
-  // Step 1: Kategorie (Zustand hat Default 'good')
-  await modal.getByRole('button', { name: /Kleider & Mode/ }).click()
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  // Step 2: Titel
-  await modal.getByPlaceholder('Was verkaufst du?').fill(title)
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  // Step 3: Festpreis (Default 'fixed') + Preis + Gemeinde
-  await modal.locator('#field-price input').fill(String(price))
-  await modal.getByRole('combobox').selectOption('Altdorf')
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  // Step 4: Rechts-Checkbox + Veroeffentlichen
+  await modal.getByRole('button', { name: /Angebot$/ }).click()
+  await modal.locator('#field-title input').fill(title)
+  await setCategory(modal, 'kleider')
+  await modal.locator('input[placeholder="Preis in CHF"]').fill(String(price))
+  await ensureGemeinde(modal, 'Altdorf', true)
   await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen' }).click()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
   await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
 }
 
@@ -100,15 +113,13 @@ async function createFreeAngebot(page: Page, title: string) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Inserat erstellen' }).click()
   const modal = page.locator('.animate-slide-up')
-  await modal.getByRole('button', { name: /Sonstiges/ }).click()
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  await modal.getByPlaceholder('Was verkaufst du?').fill(title)
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  await modal.getByRole('button', { name: 'Gratis' }).click()
-  await modal.getByRole('combobox').selectOption('Altdorf')
-  await modal.getByRole('button', { name: 'Weiter' }).click()
+  await modal.getByRole('button', { name: /Angebot$/ }).click()
+  await modal.locator('#field-title input').fill(title)
+  await setCategory(modal, 'sonstiges')
+  await modal.getByRole('button', { name: /Gratis/ }).click()
+  await ensureGemeinde(modal, 'Altdorf', true)
   await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen' }).click()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
   await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
 }
 
@@ -117,18 +128,12 @@ async function createGesuch(page: Page, title: string, budget: number) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Inserat erstellen' }).click()
   const modal = page.locator('.animate-slide-up')
-  // Tab-Beschriftung enthaelt das Emoji („🔍 Gesuch") → Regex statt Exakt-Match
   await modal.getByRole('button', { name: /Gesuch$/ }).click()
-  // Step 1: Titel + Kategorie
-  await modal.getByPlaceholder('z.B. Gebrauchtes Mountainbike, Grösse M').fill(title)
-  await modal.getByRole('button', { name: /Kleider & Mode/ }).click()
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  // Step 2: Budget + Gemeinde
-  await modal.getByPlaceholder('z.B. 500').fill(String(budget))
-  await modal.getByRole('combobox').selectOption('Altdorf')
-  await modal.getByRole('button', { name: 'Weiter' }).click()
-  // Step 3: Bestaetigen
-  await modal.getByRole('button', { name: 'Gesuch aufgeben' }).click()
+  await modal.locator('#field-title input').fill(title)
+  await setCategory(modal, 'kleider')
+  await modal.locator('input[placeholder="z.B. 50"]').fill(String(budget))
+  await ensureGemeinde(modal, 'Altdorf', true)
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
   await expect(page.getByText('Gesuch erstellt! Wir suchen passende Angebote. 🎯')).toBeVisible()
 }
 

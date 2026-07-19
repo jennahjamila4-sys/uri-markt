@@ -267,6 +267,30 @@ oder Migration auf profiles/Policies angewendet wurde.)
    error-context.md lesen — die Hypothese (Animation) war falsch, das Log nannte
    die echte Ursache woertlich.
 
+20. **UI-Redesign zieht ALLE Test-Helfer nach (Lektion 1 auf Test-Ebene).**
+   Lücke (18.07.2026, Block 10): Das Chamäleon-Formular ersetzt den bisherigen
+   Mehr-Schritt-Wizard (kein `Weiter`, andere Platzhalter, Single-Screen). Damit
+   brechen ALLE E2E-Specs, die über das Create-Modal ein Inserat/Gesuch anlegen
+   (block9, deal-completion, block6-taler, ggf. block2/3/5) — sie steuern die
+   alten Selektoren. → Bei jedem Formular-/Flow-Redesign sofort fragen „welche
+   Tests fahren diesen Flow?" und deren Helfer im selben Block mitziehen. Erfolgs-
+   Toast-Strings bewusst stabil halten (hier: „Inserat erfolgreich erstellt! 🎉"
+   / „Gesuch erstellt! …") reduziert den Bruch auf die Navigation, ersetzt die
+   Helfer-Anpassung aber nicht. Neuer Schreib-Codepfad (Entwurf → Veröffentlichen)
+   muss DIESELBEN Seiteneffekte auslösen wie der bestehende (`triggerSmartMatches`),
+   sonst matcht ein veröffentlichter Entwurf nie.
+
+21. **Sicherung vor Reparatur.** Lücke (18.07.2026, Umgebungs-Crash): Cowork war
+   weg, das Repo blieb zwar intakt, aber uncommittete Block-10-Arbeit hing
+   ungesichert am seidenen Faden. → Kein destruktives Script (rm/reset/clean,
+   Ordner-Löschung, `git reset --hard`, `git clean`) läuft, solange uncommittete
+   Arbeit im Baum liegt — erst sichern (Commit/Stash/Backup), dann reparieren.
+   Jedes destruktive Script bekommt einen Pfad-Guard, der beweist, dass es im
+   richtigen Repo (`uri-markt`) und nirgends sonst wirkt (Abbruch mit ROT, wenn
+   der erwartete Pfad/Marker fehlt). Nach jedem Crash oder Umgebungs-Neustart
+   zuerst ein D1-Check des Repo-Stands (`git status`, Datei-Existenz der
+   Übergabe-Liste) — nichts anfassen, bevor der Ist-Stand bewiesen ist.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)

@@ -12,12 +12,13 @@ const STORE_MIN = 40
 const NOTIFY_MIN = 50
 const STRONG_MIN = 75
 
-const COLS = 'id,user_id,title,description,price,max_budget,category,gemeinde,type,status'
+const COLS = 'id,user_id,title,description,price,max_budget,category,gemeinde,gemeinden,type,status,smart_data'
 
 interface L {
   id: string; user_id: string; title: string; description: string | null
   price: number | null; max_budget: number | null; category: string | null
-  gemeinde: string | null; type: string; status: string
+  gemeinde: string | null; gemeinden: string[] | null; type: string; status: string
+  smart_data: Record<string, unknown> | null
 }
 
 let lastAiStatus = 'not_called'
@@ -64,10 +65,10 @@ Deno.serve(async (req) => {
 
       if (!existing && score >= NOTIFY_MIN) {
         const strong = score >= STRONG_MIN
-        const title = strong ? '\u{1F3AF} Perfekter Match gefunden!' : '\u2728 Das k\u00f6nnte dir gefallen'
+        const title = strong ? '\u{1F3AF} Perfekter Match gefunden!' : '✨ Das könnte dir gefallen'
         const message = strong
-          ? `\u201E${offer.title}\u201C passt zu ${score}% zu deinem Gesuch \u201E${gesuch.title}\u201C \u2014 schau es dir an, bevor es weg ist!`
-          : `Wir haben etwas entdeckt, das zu deinem Gesuch \u201E${gesuch.title}\u201C passen k\u00f6nnte: \u201E${offer.title}\u201C (${score}% Match).`
+          ? `„${offer.title}“ passt zu ${score}% zu deinem Gesuch „${gesuch.title}“ — schau es dir an, bevor es weg ist!`
+          : `Wir haben etwas entdeckt, das zu deinem Gesuch „${gesuch.title}“ passen könnte: „${offer.title}“ (${score}% Match).`
         const { error: nErr } = await supabase.rpc('send_notification', {
           p_recipient_id: gesuch.user_id,
           p_title: title,
@@ -86,22 +87,39 @@ Deno.serve(async (req) => {
   }
 })
 
+// smart_data kompakt als Text (fuer KI-Prompt und Heuristik). Fehler senken nie den Score.
+function smartText(l: L): string {
+  if (!l.smart_data) return ''
+  try {
+    return Object.entries(l.smart_data)
+      .filter(([, v]) => v !== null && v !== '' && v !== false && v !== undefined)
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join('/') : String(v)}`)
+      .join(', ').slice(0, 200)
+  } catch { return '' }
+}
+
+function fullText(l: L): string {
+  return `${l.title} ${l.description ?? ''} ${smartText(l)}`
+}
+
 function tokens(l: L): Set<string> {
   return new Set(
-    `${l.title} ${l.description ?? ''}`
+    fullText(l)
       .toLowerCase().normalize('NFKD')
-      .replace(/[^a-z\u00e0-\u00ff0-9\s]/gi, ' ')
+      .replace(/[^a-zà-ÿ0-9\s]/gi, ' ')
       .split(/\s+/).filter((w) => w.length >= 4)
   )
+}
+
+function gemeindenOf(l: L): string[] {
+  const arr = l.gemeinden && l.gemeinden.length > 0 ? l.gemeinden : [l.gemeinde]
+  return arr.filter((g): g is string => !!g)
 }
 
 async function calcScore(gesuch: L, offer: L): Promise<number> {
   let semantic: number
   const ai = ANTHROPIC_KEY
-    ? await scoreWithAI(
-        `${gesuch.title} ${gesuch.description ?? ''}`,
-        `${offer.title} ${offer.description ?? ''}`
-      )
+    ? await scoreWithAI(fullText(gesuch), fullText(offer))
     : null
   if (ai !== null) {
     semantic = ai
@@ -120,7 +138,8 @@ async function calcScore(gesuch: L, offer: L): Promise<number> {
   } else {
     score += 10
   }
-  if (gesuch.gemeinde && offer.gemeinde && gesuch.gemeinde === offer.gemeinde) score += 10
+  const gGem = gemeindenOf(gesuch), oGem = gemeindenOf(offer)
+  if (gGem.some((g) => oGem.includes(g))) score += 10
   return Math.min(score, 100)
 }
 
@@ -138,7 +157,7 @@ async function scoreWithAI(gesuch: string, angebot: string): Promise<number | nu
         max_tokens: 5,
         messages: [{
           role: 'user',
-          content: `Wie gut passt dieses Angebot zu diesem Gesuch auf einem Secondhand-Marktplatz? Beruecksichtige Synonyme und Sprachen (Handy=Phone=Smartphone=Natel). Antworte NUR mit einer Zahl 0-100.\nGesuch: ${gesuch.slice(0, 200)}\nAngebot: ${angebot.slice(0, 200)}`,
+          content: `Wie gut passt dieses Angebot zu diesem Gesuch auf einem Secondhand-Marktplatz? Beruecksichtige Synonyme und Sprachen (Handy=Phone=Smartphone=Natel). Strukturierte Details (z.B. groesse, marke, zustand) sind starke Signale: Uebereinstimmung erhoeht die Zahl, klarer Widerspruch (z.B. Groesse S vs. XL) senkt sie. Antworte NUR mit einer Zahl 0-100.\nGesuch: ${gesuch.slice(0, 300)}\nAngebot: ${angebot.slice(0, 300)}`,
         }],
       }),
     })
