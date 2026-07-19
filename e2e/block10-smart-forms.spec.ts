@@ -170,7 +170,9 @@ async function buyOffer(page: Page, title: string) {
   const buyModal = page.locator('.animate-slide-up', { hasText: 'Kaufabsicht bestätigen' }).last()
   await expect(buyModal).toBeVisible()
   await buyModal.getByPlaceholder('z.B. Max, 079 123 45 67').fill('E2E Käufer, 079 000 00 00')
-  await buyModal.getByRole('checkbox').check()
+  // Block 11: Kaufmodal hat jetzt zwei Checkboxen (💾 merken + Kaufabsicht) —
+  // gezielt die Kaufabsicht-Checkbox setzen (Selektor-Robustheit, Lektion 9).
+  await buyModal.getByTestId('agree-intent').check()
   await buyModal.getByRole('button', { name: /Kaufabsicht senden/ }).click()
   await expect(page.getByText('Kaufabsicht bestätigen')).toBeHidden()
 }
@@ -284,7 +286,7 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
 
     // A sieht den Entwurf im Entwuerfe-Tab
     await openMyListings(pageA)
-    await pageA.getByRole('button', { name: /Entwürfe/ }).click()
+    await pageA.getByTestId('mylistings-tab-draft').click()
     await expect(pageA.getByTestId('draft-row').filter({ hasText: DRAFT_1 })).toBeVisible()
 
     // B sieht ihn NICHT im Feed …
@@ -317,7 +319,7 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
 
     // … und veroeffentlicht ihn aus dem Entwuerfe-Tab (neuer Codepfad → Matches).
     await openMyListings(pageA)
-    await pageA.getByRole('button', { name: /Entwürfe/ }).click()
+    await pageA.getByTestId('mylistings-tab-draft').click()
     const row = pageA.getByTestId('draft-row').filter({ hasText: OFFER_DRAFT })
     await row.getByTestId('draft-publish-btn').click()
     await expect(pageA.getByText('Entwurf veröffentlicht! 🎉')).toBeVisible()

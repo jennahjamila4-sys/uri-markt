@@ -13,6 +13,7 @@ import { ContactSection } from './ContactSection'
 import { ReviewModal } from './ReviewModal'
 import { CoffeeModal } from './CoffeeModal'
 import { paymentMethodShort } from '@/lib/paymentMethod'
+import { useMinuteTick, dealRemainingText } from '@/lib/reservation'
 
 export interface SellerTransaction {
   id: string
@@ -27,6 +28,8 @@ export interface SellerTransaction {
     id: string
     title: string
     image_url: string | null
+    /** öffentlicher 48h-Ablauf; einzige Wahrheit für den Deal-Countdown (TEIL 6) */
+    reserved_until: string | null
   } | null
 }
 
@@ -40,6 +43,7 @@ interface Props {
 
 export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props) {
   const router = useRouter()
+  const now = useMinuteTick()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [reviewTxId, setReviewTxId] = useState<string | null>(null)
   // Block 10: Kaffee-Modal nach Annahme eines Gratis-Inserats (Provisions-Moment).
@@ -121,6 +125,8 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
         // Hat der Verkäufer selbst die Übergabe schon bestätigt?
         const selfCompleted = !!tx.seller_completed_at
         const reviewed = reviewedTxIds.includes(tx.id)
+        // TEIL 6: Deal-Countdown aus der einen Wahrheit reserved_until.
+        const remaining = dealRemainingText(tx.listing?.reserved_until, now)
 
         return (
           <div
@@ -150,8 +156,13 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
             {/* PENDING: Bestätigen / Ablehnen */}
             {tx.status === 'pending' && (
               <div className="mt-4 space-y-3">
-                <p className="rounded-lg border border-amber-600/30 bg-amber-900/15 px-3 py-2 text-xs text-amber-300">
-                  ⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.
+                <p
+                  data-testid="seller-countdown"
+                  className="rounded-lg border border-amber-600/30 bg-amber-900/15 px-3 py-2 text-xs text-amber-300"
+                >
+                  {remaining
+                    ? `⏳ Noch ${remaining.replace(/^noch /, '')}, um die Anfrage anzunehmen — sonst wird das Inserat wieder frei.`
+                    : '⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.'}
                 </p>
                 <div className="rounded-lg border border-glass-border bg-obsidian-4 p-3 text-sm">
                   <div className="flex justify-between text-white/70">
@@ -209,6 +220,16 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
                 Warten auf die Gegenseite (Kontakt bleibt sichtbar). */}
             {tx.status === 'confirmed' && (
               <div className="mt-4 space-y-3">
+                {remaining && (
+                  <p
+                    data-testid="seller-countdown"
+                    className="rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-gold"
+                  >
+                    ⏳ Noch {remaining.replace(/^noch /, '')} — schliesst euren Deal
+                    zu „{tx.listing?.title ?? 'diesem Inserat'}“ ab, sonst geht er
+                    automatisch zurück in den Markt und jemand anderes greift zu.
+                  </p>
+                )}
                 <ContactSection transactionId={tx.id} role="seller" />
                 {selfCompleted ? (
                   <div className="rounded-xl border border-amber-600/40 bg-amber-900/20 p-4 text-center">

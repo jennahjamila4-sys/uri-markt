@@ -4,6 +4,11 @@ import Image from 'next/image'
 import { Eye, Heart, MapPin } from 'lucide-react'
 import { CATEGORIES } from '@/types'
 import { useAppStore } from '@/store/appStore'
+import {
+  useMinuteTick,
+  reservedRemainingText,
+  isRecentlyRelisted,
+} from '@/lib/reservation'
 import type { ListingWithProfile } from '@/types'
 
 interface ListingCardProps {
@@ -68,6 +73,10 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
   const isOwn = !!currentUserId && listing.user_id === currentUserId
   const isSold = listing.status === 'sold'
   const isReserved = listing.status === 'reserved'
+  const now = useMinuteTick()
+  // TEIL 5: „Wieder erhältlich" nur wenn aktiv UND kürzlich reaktiviert.
+  const relisted =
+    listing.status === 'active' && isRecentlyRelisted(listing.relisted_at, now)
   const isFree = listing.price_type === 'free'
   const price = isFree
     ? 'Gratis'
@@ -91,6 +100,7 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
   return (
     <div
       onClick={onClick}
+      data-testid="listing-card"
       className={`group relative cursor-pointer overflow-hidden rounded-[20px] border bg-[linear-gradient(165deg,#141416,#0c0c0d)] shadow-card transition-[transform,box-shadow,border-color] duration-300 ease-smooth hover:-translate-y-[5px] hover:border-white/20 hover:shadow-[0_18px_50px_rgba(0,0,0,0.6)] ${
         highlight ? 'gold-sweep border-gold/50' : 'border-glass-border'
       }`}
@@ -152,13 +162,27 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
           </div>
         )}
 
-        {/* Reserviert-Overlay (echter Status) – Inserat bleibt sichtbar, Kaufen ist im Detail gesperrt */}
+        {/* Reserviert-Overlay (echter Status) – Inserat bleibt sichtbar, Kaufen
+            ist im Detail gesperrt. Countdown aus reserved_until (TEIL 4). */}
         {isReserved && (
           <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
-            <span className="-rotate-3 rounded-[7px] border-[1.4px] border-amber-400 px-2.5 py-1 font-display text-xs font-bold tracking-wide text-amber-400">
-              ⏳ RESERVIERT
+            <span
+              data-testid="reserved-badge"
+              className="-rotate-3 rounded-[7px] border-[1.4px] border-amber-400 px-2.5 py-1 text-center font-display text-[11px] font-bold leading-tight tracking-wide text-amber-400"
+            >
+              {reservedRemainingText(listing.reserved_until, now)}
             </span>
           </div>
+        )}
+
+        {/* „🔄 Wieder erhältlich"-Sticker (TEIL 5) – nur echt (relisted_at). */}
+        {relisted && (
+          <span
+            data-testid="relisted-badge"
+            className="absolute bottom-2.5 right-2.5 z-[3] inline-flex items-center gap-1 rounded-full border border-uri-success/50 bg-uri-success/15 px-2.5 py-[5px] font-display text-[9.5px] font-bold tracking-wide text-uri-success"
+          >
+            🔄 Wieder erhältlich!
+          </span>
         )}
       </div>
 

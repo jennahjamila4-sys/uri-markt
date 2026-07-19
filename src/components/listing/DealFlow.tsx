@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createBuyIntentAction } from '@/app/actions/transactions'
+import { getMyContactAction, rememberContactAction } from '@/app/actions/profile'
+import { useMinuteTick, reservedRemainingText } from '@/lib/reservation'
 import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/paymentMethod'
 import type { Listing, Profile } from '@/types'
 
@@ -17,6 +19,41 @@ export function DealFlow({ listing, currentUser }: Props) {
   const [buyerContact, setBuyerContact] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [agreedToIntent, setAgreedToIntent] = useState(false)
+  // TEIL 2: Prefill aus profiles_private + „für nächstes Mal merken".
+  const [remember, setRemember] = useState(true)
+  const [prefillError, setPrefillError] = useState<string | null>(null)
+  const now = useMinuteTick()
+
+  // Beim Öffnen des Kaufformulars die eigenen Kontaktdaten laden und das Feld
+  // vorbefüllen (editierbar). Leere Zeile = leeres Feld, kein Fehler. „Merken"
+  // ist standardmässig AN, wenn noch nichts hinterlegt war (Erst-Käufer), sonst
+  // AUS (kein ungewolltes Überschreiben). Nur beim Öffnen — ein späterer
+  // Methodenwechsel überschreibt eine manuelle Eingabe nicht.
+  useEffect(() => {
+    if (!showBuyModal) return
+    let active = true
+    ;(async () => {
+      const c = await getMyContactAction()
+      if (!active) return
+      if (c.error) {
+        setPrefillError(c.error)
+        return
+      }
+      setPrefillError(null)
+      const stored =
+        paymentMethod === 'twint' ? c.twint_phone ?? c.phone ?? '' : c.phone ?? ''
+      // Prefill füllt NUR ein leeres Feld. Der async Prefill darf eine bereits
+      // getippte Eingabe NIEMALS überschreiben (sonst verliert ein schnell
+      // tippender Nutzer seinen Text, sobald der Server-Roundtrip auflöst).
+      setBuyerContact((prev) => (prev.trim().length > 0 ? prev : stored))
+      setRemember(stored.trim().length === 0)
+    })()
+    return () => {
+      active = false
+    }
+    // Absichtlich nur beim Öffnen (kein paymentMethod in den Deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBuyModal])
 
   // Case 1: Listing is sold – show FOMO zone
   if (listing.status === 'sold') {
@@ -34,13 +71,15 @@ export function DealFlow({ listing, currentUser }: Props) {
     )
   }
 
-  // Case 2: Listing is reserved
+  // Case 2: Listing is reserved – Countdown aus reserved_until (TEIL 4)
   if (listing.status === 'reserved') {
     return (
       <div className="bg-amber-900/20 border border-amber-600 rounded-lg p-4 text-center">
-        <p className="text-amber-400 font-semibold">⏳ Bereits reserviert</p>
+        <p className="text-amber-400 font-semibold" data-testid="reserved-badge">
+          {reservedRemainingText(listing.reserved_until, now)}
+        </p>
         <p className="text-white/60 text-sm mt-1">
-          Jemand anderes interessiert sich dafür
+          Jemand anderes interessiert sich gerade dafür — schau später nochmal vorbei.
         </p>
       </div>
     )
@@ -161,12 +200,27 @@ export function DealFlow({ listing, currentUser }: Props) {
                 }
                 className="w-full px-4 py-3 bg-obsidian-2 border border-glass-border rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-gold"
               />
+              {prefillError && (
+                <p className="mt-2 text-xs text-uri-danger">{prefillError}</p>
+              )}
+              {/* „Für nächstes Mal merken" – speichert die Angabe in profiles_private zurück. */}
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-white/70">
+                <input
+                  type="checkbox"
+                  data-testid="remember-contact"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 accent-gold"
+                />
+                💾 Für nächstes Mal merken
+              </label>
             </div>
 
             {/* Checkbox */}
             <label className="flex items-start gap-3 mb-6 cursor-pointer">
               <input
                 type="checkbox"
+                data-testid="agree-intent"
                 checked={agreedToIntent}
                 onChange={(e) => setAgreedToIntent(e.target.checked)}
                 className="w-4 h-4 accent-gold mt-1"
@@ -199,6 +253,22 @@ export function DealFlow({ listing, currentUser }: Props) {
 
                     toast.success('✓ Kaufanfrage gesendet! Der Verkäufer wird benachrichtigt.')
                     setShowBuyModal(false)
+
+                    // „Merken" ist nicht Teil des Kaufs: der Kauf ist bereits
+                    // durch. Schlägt das Zurückschreiben fehl, sichtbar melden
+                    // (Lektion 6), aber nie den erfolgreichen Kauf zurücknehmen.
+                    if (remember) {
+                      try {
+                        await rememberContactAction(
+                          paymentMethod === 'twint' ? 'twint_phone' : 'phone',
+                          buyerContact
+                        )
+                      } catch {
+                        toast.error(
+                          'Kaufanfrage ist raus – deine Angabe konnte ich nur nicht merken 🙈'
+                        )
+                      }
+                    }
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : 'Fehler beim Senden')
                   } finally {

@@ -1,8 +1,8 @@
 # Übergabe 18.07.2026 — Block 10: Smarte Formulare + Entwürfe
 
-> Status: **BEWIESEN** — Verify-Lauf 18.07.2026 grün (Build + ESLint + alle Playwright-Specs
-> inkl. migrierte Alt-Specs). Commit + Push von JJ freigegeben, aber **auf Windows auszuführen**
-> (Cowork-Shell nicht verfügbar — Sandbox startet nicht).
+> Status: **ABGESCHLOSSEN** — Verify-Lauf 18.07.2026 grün (Build + ESLint + alle Playwright-Specs
+> inkl. migrierte Alt-Specs). Commit `4eb5d5548e29d56a685888e516e7124f1f04ca4b` auf `main` gepusht
+> (`8575101..4eb5d55`, GitHub jennahjamila4-sys/uri-markt).
 
 ---
 

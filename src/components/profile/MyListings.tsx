@@ -48,6 +48,8 @@ export interface MyListingItem {
 
 interface Props {
   listings: MyListingItem[]
+  /** Vorgewählter Tab (TEIL 8: Entwürfe-Schnellzugriff öffnet direkt 'draft'). */
+  initialTab?: (typeof TABS)[number]['key']
 }
 
 const TABS = [
@@ -82,8 +84,8 @@ function blockedReason(status: string): string | null {
   return null
 }
 
-export function MyListings({ listings }: Props) {
-  const [tab, setTab] = useState<(typeof TABS)[number]['key']>('active')
+export function MyListings({ listings, initialTab = 'active' }: Props) {
+  const [tab, setTab] = useState<(typeof TABS)[number]['key']>(initialTab)
   const [items, setItems] = useState(listings)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
@@ -250,6 +252,7 @@ export function MyListings({ listings }: Props) {
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
+            data-testid={`mylistings-tab-${t.key}`}
             className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-display font-bold transition ${
               tab === t.key
                 ? 'bg-gold text-obsidian'

@@ -270,7 +270,8 @@ test.describe.serial('Block 9: Smart-Match-System', () => {
       .last()
     await expect(buyModal).toBeVisible()
     await buyModal.getByPlaceholder('z.B. Max, 079 123 45 67').fill('E2E Käufer, 079 000 00 00')
-    await buyModal.getByRole('checkbox').check()
+    // Block 11: Kaufmodal hat zwei Checkboxen — gezielt Kaufabsicht (Lektion 9).
+    await buyModal.getByTestId('agree-intent').check()
     await buyModal.getByRole('button', { name: /Kaufabsicht senden/ }).click()
     await expect(pageB.getByText('Kaufabsicht bestätigen')).toBeHidden()
 

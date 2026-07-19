@@ -291,6 +291,52 @@ oder Migration auf profiles/Policies angewendet wurde.)
    zuerst ein D1-Check des Repo-Stands (`git status`, Datei-Existenz der
    Übergabe-Liste) — nichts anfassen, bevor der Ist-Stand bewiesen ist.
 
+22. **Grant-Härtung trifft auch Server-Actions; Status-Wechsel nur via RPC.**
+   Lücke (19.07.2026, Block 11): `rejectTransactionAction` machte ein direktes
+   `UPDATE transactions` als Rolle `authenticated` — nach der Grant-Härtung
+   (authenticated: nur INSERT+SELECT) → 42501. „Direkter Client-Write" meint die
+   **authenticated-Rolle**, nicht nur den Browser: Server-Actions nutzen dieselbe
+   Rolle und brechen genauso. → JEDER transactions-Statuswechsel läuft über eine
+   SECURITY-DEFINER-RPC (`reject_buy_intent` ergänzt). Ausserdem: zeilenweiser
+   Grep verfehlt `.update()`/`.delete()` in der Folgezeile — immer multiline bzw.
+   `-A2` prüfen, sonst wird ein Write übersehen (genau das passierte in Schritt 0).
+
+23. **Zeitabhängige Live-Anzeige erst nach Mount (Hydration).** Lücke-Prävention
+   (Block 11, verwandt mit Lektion 19): Ein Countdown aus `Date.now()` rendert auf
+   Server und Client verschieden → Hydration-Mismatch. → `useMinuteTick` gibt
+   `null` bis zum Mount zurück; Komponenten zeigen bis dahin einen stabilen
+   Platzhalter („⏳ Reserviert"), erst nach dem Mount die tickende Zeit. Countdown
+   IMMER aus der einen DB-Wahrheit (`listings.reserved_until`), nie aus
+   `confirmed_at` nachrechnen.
+
+24. **Neues Element im bestehenden Modal bricht generische Selektoren.** Lücke
+   (Block 11, konkret zu Lektion 20): Die zweite Checkbox im Kaufmodal (💾 merken)
+   machte `getByRole('checkbox')` mehrdeutig → alle Buy-Specs (block9, block10,
+   deal-completion) wären an Strict-Mode gescheitert. → Bei jeder Modal-Erweiterung
+   die betroffenen Specs im selben Block mitziehen und für interaktive Elemente
+   stabile `data-testid` vergeben statt rollen-generisch zu greifen. **Nachtrag
+   (Verify-Rot 19.07.):** Auch ein neuer BUTTON kollidiert so — „📝 Entwürfe (n)"
+   auf /profile matchte denselben `getByRole('button',{name:/Entwürfe/})` wie der
+   MyListings-Tab → Strict-Mode. Fix: Tabs bekamen `data-testid`
+   (`mylistings-tab-<key>`), Specs zielen darauf. Assertions unverändert (kein
+   Aufweichen).
+
+25. **Async-Prefill darf getippte Eingabe nie überschreiben.** Lücke (Verify-Rot
+   19.07., deal-completion:179 — echter Produktbug, kein Testproblem): Das
+   Kaufformular lud die Kontaktdaten per Server-Roundtrip und rief danach
+   `setBuyerContact(stored)` — löste der Roundtrip NACH dem Tippen auf, war die
+   Eingabe des Nutzers weg. → Prefill füllt NUR ein leeres Feld
+   (`setBuyerContact(prev => prev.trim() ? prev : stored)`); nie ein bereits
+   befülltes überschreiben. Gilt für jeden async-Prefill auf einem editierbaren Feld.
+
+26. **Ohne grünen Verify-Lauf kein „fertig".** Solange `e2e/run-verify.ps1` nicht
+   komplett grün ist (Build = tsc + ESLint, dann Playwright), bleibt der Status
+   **UNGETESTET/ANGEFANGEN** — nie „erledigt" melden (Lektion 8/9). Ein roter Test
+   ist zuerst als möglicher echter Produktbug zu behandeln (D1: Trace/error-context
+   lesen, Ursache messen), nicht als Testproblem; erst der bewiesen unschädliche
+   Selektor-/Timing-Fall wird am Test angepasst, und auch dann ohne eine Assertion
+   aufzuweichen.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
@@ -371,6 +417,19 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
 
+- **Block 11** (19.07.2026): Reibungsloser Deal — Prefill im Kaufformular
+  (`profiles_private`, partieller Upsert), 48h-Countdown live sichtbar für alle
+  (`reserved_until` + hydration-sicherer `useMinuteTick`, `src/lib/reservation.ts`)
+  inkl. Feed-Realtime auf `listings`-UPDATEs, „🔄 Wieder erhältlich"-Sticker
+  (`relisted_at`), Deal-Countdown in Seller/Buyer-Dashboard, 48h-Hinweis beim
+  Erstellen, Entwürfe-Schnellzugriff auf `/profile`, Glocke-Typen `tx_expiring`/
+  `tx_expired`. STOPP-Befund (f): Ablehnen-Flow war gebrochen (direktes
+  authenticated-`UPDATE transactions` → 42501) → auf SECURITY-DEFINER-RPC
+  `reject_buy_intent` umgestellt (Lektion 22). E2E `e2e/block11-deal.spec.ts`
+  (8 Tests) + Buy-Modal-Selektoren aller Alt-Specs nachgezogen (Lektion 24). DB
+  nur gelesen (Migrationen von JJ eingespielt). **Gates ungefahren (Sandbox down,
+  Lektion 17) → bei JJ via run-verify.ps1.** TEIL 10 (Altformulare löschen) bei JJ
+  auszuführen. Details: `uebergabe-2026-07-19.md`. KEIN Commit/Push.
 - **Block 9** (16.07.2026): Match-System — Edge-Function-Trigger `calculate-smart-matches`
   beidseitig (Gesuch+Angebot, fire-and-forget) statt lokalem Regel-Matcher (geloescht);
   `max_budget` im Gesuch-Insert nachgezogen; „🎯 Deine Matches" auf dem eigenen

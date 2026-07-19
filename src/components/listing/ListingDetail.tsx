@@ -6,6 +6,7 @@ import { DealFlow } from './DealFlow'
 import { CommentSection } from './CommentSection'
 import { GesuchMatches } from './GesuchMatches'
 import { smartFieldLabel } from '@/lib/gesuchConfig'
+import { useMinuteTick, isRecentlyRelisted } from '@/lib/reservation'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
 
@@ -21,6 +22,7 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
   const [listing, setListing] = useState<ListingWithProfile | null>(initialListing ?? null)
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const now = useMinuteTick()
 
   useEffect(() => {
     if (listing) return
@@ -161,6 +163,15 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
 
           <div className="flex items-center justify-between">
             <div>
+              {listing.status === 'active' &&
+                isRecentlyRelisted(listing.relisted_at, now) && (
+                  <span
+                    data-testid="relisted-badge"
+                    className="mb-1 inline-flex items-center gap-1 rounded-full border border-uri-success/50 bg-uri-success/15 px-2.5 py-1 font-display text-xs font-bold text-uri-success"
+                  >
+                    🔄 Wieder erhältlich!
+                  </span>
+                )}
               <h2 className="text-2xl font-display font-bold text-white">{listing.title}</h2>
               <div className="mt-1 text-gold text-3xl font-display font-bold">{price}</div>
             </div>

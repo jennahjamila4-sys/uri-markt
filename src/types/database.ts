@@ -135,6 +135,8 @@ export type Database = {
           pickup_available: boolean | null
           price: number | null
           price_type: string
+          relisted_at: string | null
+          reserved_until: string | null
           shipping_available: boolean | null
           shipping_cost: number | null
           smart_data: Json | null
@@ -173,6 +175,8 @@ export type Database = {
           pickup_available?: boolean | null
           price?: number | null
           price_type: string
+          relisted_at?: string | null
+          reserved_until?: string | null
           shipping_available?: boolean | null
           shipping_cost?: number | null
           smart_data?: Json | null
@@ -211,6 +215,8 @@ export type Database = {
           pickup_available?: boolean | null
           price?: number | null
           price_type?: string
+          relisted_at?: string | null
+          reserved_until?: string | null
           shipping_available?: boolean | null
           shipping_cost?: number | null
           smart_data?: Json | null
@@ -535,6 +541,7 @@ export type Database = {
           completed_at: string | null
           confirmed_at: string | null
           created_at: string | null
+          expiry_warning_sent_at: string | null
           id: string
           listing_id: string | null
           payment_method: string | null
@@ -552,6 +559,7 @@ export type Database = {
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string | null
+          expiry_warning_sent_at?: string | null
           id?: string
           listing_id?: string | null
           payment_method?: string | null
@@ -569,6 +577,7 @@ export type Database = {
           completed_at?: string | null
           confirmed_at?: string | null
           created_at?: string | null
+          expiry_warning_sent_at?: string | null
           id?: string
           listing_id?: string | null
           payment_method?: string | null
@@ -761,6 +770,7 @@ export type Database = {
         Args: { p_seller_id: string; p_transaction_id: string }
         Returns: Json
       }
+      reject_buy_intent: { Args: { p_transaction_id: string }; Returns: Json }
       send_notification: {
         Args: {
           p_listing_id: string
@@ -771,6 +781,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      warn_expiring_reservations: { Args: never; Returns: Json }
     }
     Enums: {
       [_ in never]: never

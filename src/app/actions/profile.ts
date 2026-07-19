@@ -52,6 +52,90 @@ export async function savePaymentInfoAction(rawData: unknown) {
 }
 
 /**
+ * Eigene Kontaktdaten für das Prefill des Kaufformulars laden.
+ * RLS lässt nur die eigene `profiles_private`-Zeile lesen. Fehlende Zeile
+ * (maybeSingle → data null, error null) = leeres Formular, KEIN Fehler
+ * (Lektion 7: Fehler ≠ leeres Ergebnis). Ein echter Query-Fehler wird als
+ * `error`-Text zurückgegeben, damit das Formular ihn sichtbar machen kann,
+ * ohne den Kauf zu blockieren.
+ */
+export async function getMyContactAction(): Promise<{
+  phone: string | null
+  twint_phone: string | null
+  error: string | null
+}> {
+  const supabase = await createServerClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { phone: null, twint_phone: null, error: null }
+
+  const { data, error, status } = await supabase
+    .from('profiles_private')
+    .select('phone, twint_phone')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getMyContact]', status, error)
+    return {
+      phone: null,
+      twint_phone: null,
+      error: 'Deine gespeicherten Angaben konnte ich gerade nicht laden.',
+    }
+  }
+
+  return {
+    phone: data?.phone ?? null,
+    twint_phone: data?.twint_phone ?? null,
+    error: null,
+  }
+}
+
+/**
+ * Käufer-Kontakt aus dem Kaufformular für „💾 Für nächstes Mal merken"
+ * zurückschreiben. PARTIELLER Upsert: berührt NUR die eine Kontaktspalte
+ * (`phone` bzw. `twint_phone`), niemals IBAN/Adresse/Sichtbarkeits-Flags
+ * (Lektion 1). Länge auf 30 gekappt; keine strikte Format-Prüfung, da dies ein
+ * Kontakt-Hinweis ist (Name/Telefon frei), kein Auszahlungs-Feld.
+ */
+export async function rememberContactAction(
+  field: 'phone' | 'twint_phone',
+  value: string
+) {
+  const supabase = await createServerClient()
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  if (field !== 'phone' && field !== 'twint_phone') {
+    throw new Error('Ungültiges Feld')
+  }
+
+  const v = value.trim().slice(0, 30)
+  const patch: { id: string; phone?: string | null; twint_phone?: string | null } = {
+    id: user.id,
+  }
+  if (field === 'twint_phone') patch.twint_phone = v || null
+  else patch.phone = v || null
+
+  const { error } = await supabase
+    .from('profiles_private')
+    .upsert(patch, { onConflict: 'id' })
+
+  if (error) {
+    console.error('[rememberContact]', error)
+    throw new Error('Konnte deine Angabe nicht merken')
+  }
+
+  return { success: true as const }
+}
+
+/**
  * Basis-Profil aktualisieren (Name, Gemeinde, bevorzugte Kategorien).
  * user_id kommt vom Server (nie vom Client); RLS erlaubt nur das eigene Profil.
  * Leere Textfelder → null.

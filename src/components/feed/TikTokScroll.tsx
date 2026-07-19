@@ -3,6 +3,11 @@
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/appStore'
+import {
+  useMinuteTick,
+  reservedRemainingText,
+  isRecentlyRelisted,
+} from '@/lib/reservation'
 import type { ListingWithProfile } from '@/types'
 
 interface Props {
@@ -31,6 +36,7 @@ export function TikTokScroll({
 }: Props) {
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const now = useMinuteTick()
 
   // Auto-Nachladen: sobald das Lade-Panel am Ende in Sichtnähe kommt, die
   // nächste Seite anfordern. rootMargin lädt vor, damit beim Swipen nahtlos
@@ -100,12 +106,26 @@ export function TikTokScroll({
                 </span>
               )}
 
-              {/* Status-Badge bei reserviert */}
+              {/* Status-Badge bei reserviert – Countdown aus reserved_until (TEIL 4) */}
               {listing.status === 'reserved' && (
-                <span className="absolute right-4 top-4 rounded-full bg-amber-500 px-3 py-1 font-display text-sm font-bold text-black">
-                  ⏳ RESERVIERT
+                <span
+                  data-testid="reserved-badge"
+                  className="absolute right-4 top-4 rounded-full bg-amber-500 px-3 py-1 font-display text-sm font-bold text-black"
+                >
+                  {reservedRemainingText(listing.reserved_until, now)}
                 </span>
               )}
+
+              {/* „🔄 Wieder erhältlich" (TEIL 5) – aktiv + kürzlich reaktiviert */}
+              {listing.status === 'active' &&
+                isRecentlyRelisted(listing.relisted_at, now) && (
+                  <span
+                    data-testid="relisted-badge"
+                    className="absolute right-4 top-4 rounded-full bg-uri-success px-3 py-1 font-display text-sm font-bold text-black"
+                  >
+                    🔄 Wieder erhältlich!
+                  </span>
+                )}
 
               {/* Glas-Card unten */}
               <div className="absolute inset-x-4 bottom-24">

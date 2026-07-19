@@ -53,8 +53,16 @@ export function ProfileDashboard({
   reviewedTxIds,
 }: Props) {
   const [view, setView] = useState<View>('overview')
+  // TEIL 8: Tab-Vorwahl für „Meine Inserate" (Entwürfe-Schnellzugriff).
+  const [listingsTab, setListingsTab] = useState<'active' | 'draft'>('active')
 
   const activeCount = myListings.filter((l) => l.status === 'active').length
+  const draftCount = myListings.filter((l) => l.status === 'draft').length
+
+  const openListings = (tab: 'active' | 'draft') => {
+    setListingsTab(tab)
+    setView('listings')
+  }
   const dealsCount = sellerTransactions.filter(
     (t) => t.status === 'confirmed'
   ).length
@@ -139,12 +147,29 @@ export function ProfileDashboard({
         <Stat label="Aktive Inserate" value={String(activeCount)} />
       </div>
 
+      {/* TEIL 8: Entwürfe-Schnellzugriff – ein Klick, direkt im Entwürfe-Tab.
+          Bei 0 Entwürfen ausgeblendet. */}
+      {draftCount > 0 && (
+        <button
+          onClick={() => openListings('draft')}
+          data-testid="drafts-quick-btn"
+          className="flex w-full items-center justify-between rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-left transition hover:border-gold/60"
+        >
+          <span className="font-display font-bold text-white">
+            📝 Entwürfe ({draftCount})
+          </span>
+          <span className="text-sm text-gold">weiter bearbeiten →</span>
+        </button>
+      )}
+
       {/* Quick-Actions */}
       <div className="grid grid-cols-2 gap-3">
         {tiles.map((tile) => (
           <button
             key={tile.key}
-            onClick={() => setView(tile.key)}
+            onClick={() =>
+              tile.key === 'listings' ? openListings('active') : setView(tile.key)
+            }
             className={`relative rounded-2xl border p-4 text-left transition ${
               view === tile.key
                 ? 'border-gold/50 bg-gold/10'
@@ -194,7 +219,13 @@ export function ProfileDashboard({
           </div>
 
           {view === 'matches' && <SmartMatchList matches={matches} />}
-          {view === 'listings' && <MyListings listings={myListings} />}
+          {view === 'listings' && (
+            <MyListings
+              key={listingsTab}
+              listings={myListings}
+              initialTab={listingsTab}
+            />
+          )}
           {view === 'purchases' && (
             <BuyerDashboard
               transactions={buyerTransactions}

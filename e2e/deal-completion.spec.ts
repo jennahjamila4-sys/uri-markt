@@ -103,7 +103,8 @@ async function buyListing(page: Page, title: string) {
   const buyModal = page.locator('.animate-slide-up', { hasText: 'Kaufabsicht bestätigen' }).last()
   await expect(buyModal).toBeVisible()
   await buyModal.getByPlaceholder('z.B. Max, 079 123 45 67').fill('E2E Käufer, 079 000 00 00')
-  await buyModal.getByRole('checkbox').check()
+  // Block 11: Kaufmodal hat zwei Checkboxen — gezielt Kaufabsicht (Lektion 9).
+  await buyModal.getByTestId('agree-intent').check()
   await buyModal.getByRole('button', { name: /Kaufabsicht senden/ }).click()
   // Erfolg: Modal schliesst.
   await expect(page.getByText('Kaufabsicht bestätigen')).toBeHidden()

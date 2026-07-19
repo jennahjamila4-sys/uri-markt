@@ -239,7 +239,19 @@ export function ChameleonForm({ mode, initial, onSuccess }: ChameleonFormProps) 
         await createListingAction(payload)
       }
       // Erfolgs-Text bewusst identisch zum bisherigen Formular (E2E-Kompatibilität).
-      toast.success(isGesuch ? 'Gesuch erstellt! Wir suchen passende Angebote. 🎯' : 'Inserat erfolgreich erstellt! 🎉')
+      // TEIL 7: Beim Angebot der 48h-Hinweis als Toast-Description — der Titel-Text
+      // bleibt exakt gleich, damit die bestehenden E2E-Selektoren greifen (Lektion 20).
+      toast.success(
+        isGesuch
+          ? 'Gesuch erstellt! Wir suchen passende Angebote. 🎯'
+          : 'Inserat erfolgreich erstellt! 🎉',
+        !isGesuch
+          ? {
+              description:
+                '💛 Sobald jemand kaufen möchte, ist dein Inserat 48 Std. für euch beide reserviert. Schau regelmässig vorbei!',
+            }
+          : undefined
+      )
       afterSuccess()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Fehler beim Veröffentlichen')
@@ -556,6 +568,19 @@ export function ChameleonForm({ mode, initial, onSuccess }: ChameleonFormProps) 
           {isSubmitting ? 'Wird veröffentlicht …' : 'Veröffentlichen'}
         </button>
       </div>
+
+      {/* TEIL 7: dezenter 48h-Hinweis, nur beim Angebot. Faktisch wahr,
+          empathisch, kein Druck. */}
+      {!isGesuch && (
+        <p
+          data-testid="reserve-hint"
+          className="text-center text-xs leading-relaxed text-white/50"
+        >
+          💛 Gut zu wissen: Sobald jemand kaufen möchte, ist dein Inserat 48 Std.
+          für euch beide reserviert. Schau regelmässig vorbei — so entgeht dir
+          kein Deal!
+        </p>
+      )}
     </div>
   )
 }

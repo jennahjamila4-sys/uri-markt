@@ -132,8 +132,15 @@ export async function confirmSaleAction(transaction_id: string) {
 }
 
 /**
- * Verkäufer lehnt eine ausstehende Kaufanfrage ab
- * Transaktion wird storniert, Inserat wieder aktiv geschaltet
+ * Verkäufer lehnt eine ausstehende Kaufanfrage ab.
+ *
+ * Statuswechsel läuft AUSSCHLIESSLICH über die SECURITY-DEFINER-RPC
+ * `reject_buy_intent` (kein direkter Client-UPDATE auf `transactions` — die Rolle
+ * `authenticated` hat dort bewusst kein UPDATE-Recht). Die RPC prüft selbst
+ * (nur Verkäufer, nur Status `pending`) und erledigt atomar: Transaktion →
+ * `cancelled`, Inserat → `active` mit `relisted_at` (→ „🔄 Wieder erhältlich"),
+ * `reserved_until` → null, und benachrichtigt den Käufer (Typ `tx_rejected`).
+ * Deshalb hier KEIN eigenes send_notification (sonst doppelt).
  */
 export async function rejectTransactionAction(transaction_id: string) {
   const supabase = await createServerClient()
@@ -143,55 +150,26 @@ export async function rejectTransactionAction(transaction_id: string) {
     throw new Error('Nicht angemeldet')
   }
 
-  try {
-    const { data: tx } = await supabase
-      .from('transactions')
-      .select('seller_id, buyer_id, listing_id, status')
-      .eq('id', transaction_id)
-      .single()
+  const { data, error } = await supabase.rpc('reject_buy_intent', {
+    p_transaction_id: transaction_id,
+  })
 
-    if (!tx || tx.seller_id !== user.id) {
-      throw new Error('Nicht berechtigt')
-    }
-    if (tx.status !== 'pending') {
-      throw new Error('Anfrage kann nicht mehr abgelehnt werden')
-    }
-
-    // Transaktion stornieren
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update({ status: 'cancelled' })
-      .eq('id', transaction_id)
-
-    if (updateError) throw updateError
-
-    // Inserat wieder aktiv schalten (nur wenn es noch existiert)
-    if (tx.listing_id) {
-      await supabase
-        .from('listings')
-        .update({ status: 'active' })
-        .eq('id', tx.listing_id)
-    }
-
-    // Käufer benachrichtigen
-    if (tx.buyer_id && tx.listing_id) {
-      await supabase.rpc('send_notification', {
-        p_recipient_id: tx.buyer_id,
-        p_title: 'Kaufanfrage abgelehnt',
-        p_message: 'Der Verkäufer hat deine Kaufanfrage leider abgelehnt.',
-        p_type: 'tx_rejected',
-        p_listing_id: tx.listing_id,
-      })
-    }
-
-    revalidatePath('/profile')
-    revalidatePath('/')
-
-    return { success: true }
-  } catch (err) {
-    console.error('[rejectTransaction]', err)
-    throw err
+  // Lektion 6/7: RPC-Fehler und fachliches success:false getrennt und sichtbar
+  // behandeln, nie stumm verschlucken.
+  if (error) {
+    console.error('[rejectTransaction]', error)
+    throw new Error(error.message || 'Ablehnen fehlgeschlagen')
   }
+
+  const result = (data ?? {}) as { success?: boolean; error?: string }
+  if (result.success === false) {
+    throw new Error(result.error ?? 'Ablehnen fehlgeschlagen')
+  }
+
+  revalidatePath('/profile')
+  revalidatePath('/')
+
+  return { success: true as const }
 }
 
 export interface CompleteTransactionResult {

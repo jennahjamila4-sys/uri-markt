@@ -10,6 +10,8 @@ const TYPE_ICON: Record<string, string> = {
   tx_confirmed: '✅',
   tx_completed: '🏆',
   tx_rejected: '❌',
+  tx_expiring: '⏳',
+  tx_expired: '⏰',
   no_show: '⚠️',
   match: '🎯',
   smart_match: '🎯',

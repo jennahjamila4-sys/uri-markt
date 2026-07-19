@@ -125,6 +125,49 @@ export function FeedPage({ initialListings }: FeedPageProps) {
     // wird die erste Seite frisch vom Server geladen – ohne Reload/Logout.
   }, [selectedType, selectedCategory, supabase, feedVersion])
 
+  // TEIL 4: Realtime. Eine Subscription auf UPDATEs von public.listings hält
+  // Status + Countdown der sichtbaren Karten aktuell — Reservierung/Freigabe
+  // erscheint ohne Reload. Nur die relevanten Felder werden übernommen; ein
+  // View-Increment (auch ein UPDATE) verändert die Karte damit nicht. RLS greift
+  // auch für Realtime (Entwürfe bleiben unsichtbar). Fehler werden geloggt, nie
+  // verschluckt (Lektion 7) — die Korrektheit hängt weiter an den normalen
+  // Fetches, Realtime ist nur die Live-Ergänzung.
+  useEffect(() => {
+    const channel = supabase
+      .channel('feed-listings-updates')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'listings' },
+        (payload) => {
+          const next = payload.new as Record<string, unknown> & { id?: string }
+          if (!next?.id) return
+          setListings((prev) =>
+            prev.map((l) =>
+              l.id === next.id
+                ? {
+                    ...l,
+                    ...('status' in next ? { status: next.status as string } : {}),
+                    ...('reserved_until' in next
+                      ? { reserved_until: next.reserved_until as string | null }
+                      : {}),
+                    ...('relisted_at' in next
+                      ? { relisted_at: next.relisted_at as string | null }
+                      : {}),
+                  }
+                : l
+            )
+          )
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) console.error('[FeedPage realtime] subscribe error:', err)
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase])
+
   const handleTypeChange = (type: ListingType) => {
     if (type === selectedType) return
     setSelectedType(type)

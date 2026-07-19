@@ -7,6 +7,7 @@ import { ContactSection } from '@/components/listing/ContactSection'
 import { ReviewModal } from '@/components/listing/ReviewModal'
 import { completeTransactionAction } from '@/app/actions/transactions'
 import { paymentMethodShort } from '@/lib/paymentMethod'
+import { useMinuteTick, dealRemainingText } from '@/lib/reservation'
 
 export interface BuyerTransaction {
   id: string
@@ -20,6 +21,8 @@ export interface BuyerTransaction {
     id: string
     title: string
     image_url: string | null
+    /** öffentlicher 48h-Ablauf; einzige Wahrheit für den Deal-Countdown (TEIL 6) */
+    reserved_until: string | null
   } | null
 }
 
@@ -43,6 +46,7 @@ interface Props {
  */
 export function BuyerDashboard({ transactions, reviewedTxIds }: Props) {
   const router = useRouter()
+  const now = useMinuteTick()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [reviewTxId, setReviewTxId] = useState<string | null>(null)
 
@@ -79,6 +83,8 @@ export function BuyerDashboard({ transactions, reviewedTxIds }: Props) {
         // Hat der Käufer selbst die Übergabe schon bestätigt?
         const selfCompleted = !!tx.buyer_completed_at
         const reviewed = reviewedTxIds.includes(tx.id)
+        // TEIL 6: Deal-Countdown aus der einen Wahrheit reserved_until.
+        const remaining = dealRemainingText(tx.listing?.reserved_until, now)
 
         return (
           <div
@@ -125,6 +131,16 @@ export function BuyerDashboard({ transactions, reviewedTxIds }: Props) {
                 die Gegenseite (Kontakt bleibt sichtbar). */}
             {tx.status === 'confirmed' && (
               <div className="mt-4 space-y-3">
+                {remaining && (
+                  <p
+                    data-testid="buyer-countdown"
+                    className="rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm font-semibold text-gold"
+                  >
+                    ⏳ Noch {remaining.replace(/^noch /, '')} — schliesst euren Deal
+                    zu „{tx.listing?.title ?? 'diesem Inserat'}“ ab, sonst geht er
+                    automatisch zurück in den Markt und jemand anderes greift zu.
+                  </p>
+                )}
                 <ContactSection transactionId={tx.id} role="buyer" />
                 {selfCompleted ? (
                   <div className="rounded-xl border border-amber-600/40 bg-amber-900/20 p-4 text-center">
