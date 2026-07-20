@@ -4,6 +4,17 @@
 
 ---
 
+## 🖥️ Arbeitsumgebung & Auslieferung (Stand 19.07.2026)
+
+* Implementierung läuft über Claude Code on the web (Cloud). Kein lokales Claude Code, keine PowerShell-Scripts mehr (kein verify.ps1, kein push.ps1).
+* Quelle der Wahrheit ist ausschliesslich das GitHub-Repo. Claude Code sieht nur das Repo — nicht die lokale Maschine, nicht das Gedächtnis des Planungs-Chats. Alles Nötige muss committet sein.
+* Auslieferung als Pull Request. Jede Aufgabe endet mit einem PR + Änderungs-Zusammenfassung. Nichts landet auf `main`, bevor JJ prüft und mergt.
+* Selbsttest-Pflicht bleibt absolut (Lektion 5/8/9): Vor dem PR müssen `npx tsc --noEmit` und `next build` 0 Fehler haben und die Playwright-E2E grün sein. JJ prüft nur das Endergebnis.
+* Kann der Cloud-Sandbox Build oder E2E nicht ausführen (fehlende Secrets/Env oder Netz-Sperre): STOPP + Meldung an JJ mit der genauen fehlenden Voraussetzung. Tests werden nie stumm übersprungen oder umgangen (No-Workaround).
+* Datenbank unverändert: Alle Migrationen nur über den Planungs-Chat via Supabase-MCP. Claude Code fasst die DB nie direkt an.
+
+---
+
 ## 🎯 Was ist dieses Projekt?
 
 **Uri-Markt** – Hyperlokaler, werbefreier, gamifizierter Marktplatz für den Kanton Uri (Schweiz).
