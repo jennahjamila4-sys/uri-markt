@@ -107,12 +107,49 @@ export type Database = {
           },
         ]
       }
+      favorites: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           boost_cost: number | null
           boost_expires_at: string | null
           boost_type: string | null
           category: string
+          comment_count: number
           commitment_type: string | null
           condition: string | null
           created_at: string | null
@@ -153,6 +190,7 @@ export type Database = {
           boost_expires_at?: string | null
           boost_type?: string | null
           category: string
+          comment_count?: number
           commitment_type?: string | null
           condition?: string | null
           created_at?: string | null
@@ -193,6 +231,7 @@ export type Database = {
           boost_expires_at?: string | null
           boost_type?: string | null
           category?: string
+          comment_count?: number
           commitment_type?: string | null
           condition?: string | null
           created_at?: string | null

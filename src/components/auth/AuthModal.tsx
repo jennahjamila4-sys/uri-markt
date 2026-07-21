@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
@@ -14,7 +14,14 @@ export function AuthModal() {
   const setUser = useAppStore((s) => s.setUser)
   const isOpen = useAppStore((s) => s.isAuthModalOpen)
   const setIsOpen = useAppStore((s) => s.setAuthModalOpen)
+  const desiredTab = useAppStore((s) => s.authModalTab)
   const [tab, setTab] = useState<'login' | 'register'>('login')
+
+  // Beim Öffnen den vom Aufrufer gewünschten Tab übernehmen (Onboarding-CTA
+  // „Los geht's" → 'register'). Nur bei Öffnen, damit manuelles Umschalten bleibt.
+  useEffect(() => {
+    if (isOpen) setTab(desiredTab)
+  }, [isOpen, desiredTab])
 
   const registerForm = useForm({
     resolver: zodResolver(RegisterSchema),

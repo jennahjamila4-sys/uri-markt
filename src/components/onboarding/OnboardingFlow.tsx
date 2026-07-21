@@ -2,69 +2,57 @@
 
 import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
-import { createClient } from '@/lib/supabase/client'
-import { OnboardingScreen1 } from './screens/OnboardingScreen1'
+import { OnboardingScreen1, type Persona } from './screens/OnboardingScreen1'
 import { OnboardingScreen2 } from './screens/OnboardingScreen2'
-import { OnboardingScreen3 } from './screens/OnboardingScreen3'
-import { OnboardingScreen4 } from './screens/OnboardingScreen4'
-import { OnboardingScreen5 } from './screens/OnboardingScreen5'
 
+/**
+ * Onboarding — 2 Screens (Block 12). Screen 1: Hook + zwei Persona-Karten.
+ * Screen 2: Smart-Match-Story (Herzstück) + Geschenk + persona-abhängige
+ * Gratulation + CTA „Los geht's" → Registrierung. Keine Benachrichtigungs-/
+ * Interessen-Screens mehr (Benachrichtigungen liegen jetzt in den Profil-
+ * Einstellungen). Kein Fake-Social-Proof, keine erfundenen Zahlen.
+ */
 export function OnboardingFlow() {
-  const supabase = createClient()
   const onboardingCompleted = useAppStore((s) => s.onboardingCompleted)
   const setOnboardingCompleted = useAppStore((s) => s.setOnboardingCompleted)
+  const openAuthModal = useAppStore((s) => s.openAuthModal)
 
-  const [currentScreen, setCurrentScreen] = useState(1)
-  const [pioneerCount, setPioneerCount] = useState(0)
+  const [currentScreen, setCurrentScreen] = useState<1 | 2>(1)
+  const [persona, setPersona] = useState<Persona>(null)
   const [mounted, setMounted] = useState(false)
 
-  // Persistierten Store erst nach Mount auswerten (kein SSR/Hydration-Mismatch)
+  // Persistierten Store erst nach Mount auswerten (kein SSR/Hydration-Mismatch).
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  useEffect(() => {
-    // Load pioneer count
-    supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('pioneer_badge', true)
-      .then(({ count }) => {
-        setPioneerCount(count ?? 0)
-      })
-  }, [supabase])
-
-  // Vor dem Mount nichts rendern (Server & Client identisch → kein Mismatch)
   if (!mounted) return null
-  // Don't show if onboarding already completed
   if (onboardingCompleted) return null
 
-  const screens = [
-    <OnboardingScreen1 key={1} pioneerCount={Math.max(0, 50 - pioneerCount)} onNext={() => setCurrentScreen(2)} />,
-    <OnboardingScreen2 key={2} onNext={() => setCurrentScreen(3)} />,
-    <OnboardingScreen3 key={3} onNext={() => setCurrentScreen(4)} />,
-    <OnboardingScreen4 key={4} onNext={() => setCurrentScreen(5)} />,
-    <OnboardingScreen5 key={5} onComplete={() => setOnboardingCompleted(true)} />,
-  ]
+  const handleSelect = (p: Persona) => {
+    setPersona(p)
+    setCurrentScreen(2)
+  }
+
+  const handleComplete = () => {
+    setOnboardingCompleted(true)
+    // „Los geht's" → direkt in die Registrierung.
+    openAuthModal('register')
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
-      <div className="relative w-full max-w-md max-h-[90vh] overflow-hidden">
-        {/* Dots Progress */}
-        <div className="absolute top-6 left-0 right-0 flex justify-center gap-2 z-10">
-          {[1, 2, 3, 4, 5].map((dot) => (
-            <div
-              key={dot}
-              className={`h-2 w-2 rounded-full transition-all ${
-                dot === currentScreen ? 'bg-gold w-6' : 'bg-white/30'
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Content */}
-        {screens[currentScreen - 1]}
+      <div className="relative max-h-[92vh] w-full max-w-md overflow-hidden rounded-[28px] border border-glass-border shadow-modal">
+        {currentScreen === 1 ? (
+          <OnboardingScreen1 onSelect={handleSelect} />
+        ) : (
+          <OnboardingScreen2
+            persona={persona}
+            onBack={() => setCurrentScreen(1)}
+            onComplete={handleComplete}
+          />
+        )}
       </div>
     </div>
   )

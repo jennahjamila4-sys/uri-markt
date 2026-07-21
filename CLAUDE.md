@@ -348,6 +348,28 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Selektor-/Timing-Fall wird am Test angepasst, und auch dann ohne eine Assertion
    aufzuweichen.
 
+27. **Cloud-Sandbox kann Code-Gates DOCH fahren — Prerender/E2E getrennt bewerten.**
+   Lücke/Korrektur (21.07.2026, Block 12): Anders als in Cowork (Lektion 17) laufen in
+   Claude-Code-on-the-web `npm ci` → `tsc --noEmit`, ESLint und der `next build`-
+   Kompilier-/Typecheck-Schritt sehr wohl. Zwei Stolpersteine: (a) `npx tsc` zieht eine
+   kaputte globale **TS 6.0.2** (meldet `baseUrl`-Deprecation als Error) → IMMER
+   `./node_modules/.bin/tsc` (Projekt-TS) nutzen; (b) `next build` bricht am
+   **Prerender/Export von „/"** ab, weil dort echte `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`
+   fehlen (`@supabase/ssr: URL and API key are required`) — das ist ein **Env-, kein
+   Code-Fehler**. Beweis, dass der Code prerender-sicher ist (kein Regress), ohne
+   `.env.local` anzulegen: einmalig mit **Dummy-NEXT_PUBLIC-Keys** bauen → läuft komplett
+   grün. → Im PR pro Gate trennen: „tsc/ESLint/Compile grün" vs. „Prerender/Playwright
+   env-abhängig, UNGETESTET". Niemals `.env.local` mit erfundenen Secrets anlegen, um ein
+   Gate grün zu zwingen (Lektion 8/9).
+
+28. **`gen types` per Supabase-MCP ist der legitime Generator-Pfad, wenn CLI/Token
+   fehlen.** Lücke-Prävention (Block 12): Ohne `SUPABASE_ACCESS_TOKEN`/`.env.local` im
+   Sandbox ist die CLI-`gen types` nicht lauffähig — statt STOPP genügt in dieser Session
+   die Supabase-MCP `generate_typescript_types` (identischer Generator, project-ref
+   `lhqsuelguwfdflapzdhk`). Das ist **kein Handedit** (Lektion 11) und exakt das, was der
+   Planungs-Chat sonst nachliefert. Nach dem Schreiben Diff prüfen (nur die erwarteten
+   Spalten/Tabellen dürfen dazukommen).
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
@@ -428,6 +450,21 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
 
+- **Block 12** (21.07.2026): Onboarding, FOMO-Texte & ehrliche UI — Onboarding auf
+  **2 Screens** (Ken-Burns-Hero + zwei Persona-Karten; Smart-Match-Story mit „⚡ Das
+  Herzstück", Geschenk-Teaser 5 Uri-Taler, persona-abhängige Gratulation, CTA „Los
+  geht's" → Registrierung); Benachrichtigungs-Auswahl in die Profil-Einstellungen
+  verschoben (`NotificationSettings`), Interessen-/Confetti-Screens + Fake-Pionier-Count
+  entfernt. Feed-Kommentar-Badge aus `listings.comment_count` (bei 0 aus, keine eigene
+  Query). Herz **ehrlich** (`favorites`): `toggleFavoriteAction` (user_id aus `auth.uid()`,
+  idempotent), Herz-Zustand aus DB geladen, neuer „❤️ Favoriten"-Tab mit Status-Stickern.
+  Taler-Karten-Texte + Empty-States exakt aus block-12-MD. E2E
+  `e2e/block12-onboarding-ehrliche-ui.spec.ts` (Kommentar ±1 beide Trigger-Zweige, Herz
+  persistent, **RLS-Leak-Beweis**, Onboarding-Screens). DB nur gelesen; Types via
+  Supabase-MCP regeneriert (kein Handedit, Lektion 28). **Gate-Status:** tsc + ESLint +
+  next-build-Code-Gates GRÜN (voller Build grün mit Dummy-Env bewiesen); **Playwright
+  UNGETESTET** (kein `.env.local`/E2E-Konten im Sandbox → JJ via run-verify.ps1,
+  Lektion 26/27). Auslieferung als **PR**. Details: `uebergabe-2026-07-21-block12.md`.
 - **Block 11** (19.07.2026): Reibungsloser Deal — Prefill im Kaufformular
   (`profiles_private`, partieller Upsert), 48h-Countdown live sichtbar für alle
   (`reserved_until` + hydration-sicherer `useMinuteTick`, `src/lib/reservation.ts`)
