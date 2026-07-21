@@ -107,3 +107,61 @@
   ESLint grün, DB-Generat enthält favorites + comment_count.
 - **UNGETESTET:** Playwright-E2E (kein `.env.local`/E2E-Konten im Sandbox) → JJ via
   run-verify.ps1. Erst bei grünem Lauf gilt Block 12 als fertig (Lektion 26).
+
+---
+
+## Nachbesserung 21.07.2026 (abends) — 2 rote E2E-Tests gefixt
+
+> JJ-Verify (lokal): `BUILD_EXIT=0`, **43 passed, 2 failed, 4 did not run**. Beide roten
+> Tests sind Folge der Onboarding-Umstellung (Lektion 1/20/29). Fix auf demselben Branch
+> `claude/block-12-onboarding-ui-a07lwo` (PR #3), neuer Commit, KEIN neuer PR.
+
+**Zählung erklärt:** `block11-deal.spec.ts` ist `test.describe.serial` — Test 4 rot →
+Tests 5–8 werden übersprungen = **4 did not run**. Also nur 2 echte Rot-Ursachen.
+
+### Fehler 1 — `e2e/block7-legal.spec.ts` „Onboarding-Startguthaben zeigt 5 Taler (nicht 100)"
+- **Root Cause:** Der Test navigierte das ALTE 5-Screen-Onboarding (Buttons „Jetzt
+  starten"/„Weiter"/„Später", Confetti-Screen „Uri-Taler Guthaben"). Nach Block 12 gibt es
+  nur noch 2 Screens; die Screens/Buttons existieren nicht mehr → hing bei „Jetzt starten".
+  Diese Spec klickt als EINZIGE das Onboarding OHNE Skip-Seed durch, deshalb fiel sie beim
+  Umbau durch (die anderen Specs skippen per `localStorage`-Seed, Store-Shape unverändert).
+- **Fix:** Navigation aufs neue 2-Screen-Onboarding umgestellt (Screen 1 „Gold wert" +
+  Persona-Karte antippen → Screen 2). Die fachliche Prüfung **„5 Taler, nicht 100" bleibt**:
+  jetzt am Geschenk-Teaser auf Screen 2 (neuer `data-testid="onboarding-gift"`) —
+  `toContainText('5 Uri-Taler')` **und** `not.toContainText('100')`. Assertion nicht
+  gelöscht/geskippt (Lektion 9). Faktisch wahr: `handle_new_user` = 500 Rappen = 5 Taler.
+
+### Fehler 2 — `e2e/block11-deal.spec.ts:336` Test 4 „Wieder erhältlich"
+- **D1-Messung ohne Trace:** Der Playwright-Trace war im Cloud-Sandbox nicht verfügbar
+  (kein `.env.local`, Artefakt nicht committet). Ursache daher aus dem **Code-Diff bewiesen**
+  statt geraten: (a) Skip-Seed intakt (Store-Persist-Shape `uri-markt-v1`/`onboardingCompleted`
+  von Block 12 unverändert) → **nicht** der Onboarding-/Skip-Helper. (b) Der `relisted`-Pfad in
+  `ListingCard` und ganz `src/lib/reservation.ts` sind **byte-identisch** zu Block 11; die
+  Buy-/Create-/`expire_stale_reservations`-RPC-Pfade wurden von Block 12 nicht angefasst.
+  → **Kein Block-12-Code-Regress**, sondern ein Timing-Fenster auf dem realtime-abhängigen
+  Feed-Badge: der „🔄 Wieder erhältlich"-Sticker erscheint erst nach dem Client-Mount
+  (`useMinuteTick`), ein einzelner Feed-Load kann ihn knapp verpassen.
+- **Fix (kein Skip, Lektion 9/D5):** Die Badge-Assertion in eine **Reload-Retry-Schleife**
+  (30 s, Muster wie `expectNotificationText` in derselben Datei) gehüllt. Die Assertion
+  selbst ist unverändert — der Sticker MUSS erscheinen; nur die Timing-Robustheit steigt.
+
+### Gate-Status (Cloud-Sandbox, diese Nachbesserung)
+- **`./node_modules/.bin/tsc --noEmit`: GRÜN** (Projekt-TS; `**/*.ts` deckt die Specs mit ab).
+- **ESLint (geänderte Specs `block7`/`block11`): GRÜN.**
+- **`next build`: GRÜN** — Exit 0, „Compiled successfully", 9/9 Seiten, Middleware
+  (mit Dummy-`NEXT_PUBLIC`-Keys; nichts an `.env.local` angelegt). Nur ein `data-testid`
+  in `OnboardingScreen2.tsx` betrifft den Build, Spec-Dateien nicht.
+- **Playwright-E2E: NICHT im Sandbox lauffähig (UNGETESTET hier)** — Preflight braucht
+  `.env.local` mit echten Supabase-Keys + `E2E_USER_A/B`; existieren im Cloud-Sandbox nicht.
+  → **JJ fährt den vollständigen Lauf via `e2e/run-verify.ps1`.** Erwartung nach dem Fix:
+  block7 Test 1 grün, block11 Test 4 grün → Tests 5–8 laufen wieder → **0 failed / 0 did-not-run**.
+
+### Geänderte Dateien (Nachbesserung)
+- `e2e/block7-legal.spec.ts` (Test-1-Navigation auf 2-Screen-Onboarding, Assertion 5≠100 erhalten)
+- `e2e/block11-deal.spec.ts` (Reload-Retry um die relisted-badge-Assertion in Test 4)
+- `src/components/onboarding/screens/OnboardingScreen2.tsx` (`data-testid="onboarding-gift"`)
+- `CLAUDE.md` (Lektion 29), `uebergabe-2026-07-21-block12.md` (dieser Abschnitt)
+
+### Nicht angefasst
+- Der rote **vercel-Preview-Check** (fehlende Supabase-Env im Preview, kein Code-Fehler) —
+  bewusst unberührt gelassen.

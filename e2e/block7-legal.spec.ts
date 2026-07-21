@@ -62,25 +62,29 @@ test.afterAll(async () => {
 })
 
 // ============================================================================
-// Onboarding-Startguthaben (ohne Skip -> Onboarding sichtbar durchklicken)
+// Onboarding-Startguthaben (ohne Skip -> neues 2-Screen-Onboarding durchklicken)
+// Block 12: Das alte 5-Screen-Onboarding (Jetzt starten/Weiter/Später + der
+// Confetti-Screen mit „Uri-Taler Guthaben") existiert nicht mehr. Das
+// Startguthaben (5 Uri-Taler, faktisch = handle_new_user 500 Rappen) steht jetzt
+// als Geschenk-Teaser auf Screen 2. Die Pruefung „5 Taler, nicht 100" bleibt.
 // ============================================================================
 test('Onboarding-Startguthaben zeigt 5 Taler (nicht 100)', async ({ page }) => {
   await page.goto('/')
 
-  // Screen 1 -> 2 -> 3 -> 4 -> 5. Auf Screen 4 bewusst "Später" (der andere
-  // Button loest den Browser-Notification-Prompt aus).
-  await page.getByRole('button', { name: 'Jetzt starten' }).click()
-  await expect(page.getByRole('heading', { name: 'Profil vervollständigen' })).toBeVisible()
-  await page.getByRole('button', { name: 'Weiter' }).click()
-  await expect(page.getByRole('heading', { name: 'Was interessiert dich?' })).toBeVisible()
-  await page.getByRole('button', { name: 'Weiter' }).click()
-  await expect(page.getByRole('heading', { name: 'Bleib am Ball' })).toBeVisible()
-  await page.getByRole('button', { name: 'Später' }).click()
+  // Screen 1 (Hook + Persona-Karten) -> Karte antippen -> Screen 2 (Smart-Match-
+  // Story + Geschenk-Teaser).
+  await expect(page.getByText('Gold wert')).toBeVisible()
+  await page.getByTestId('onboarding-persona-verkaufen').click()
 
-  const guthaben = page.getByText('Uri-Taler Guthaben')
-  await expect(guthaben).toBeVisible()
-  // Die grosse Zahl unmittelbar darueber muss 5 sein (frueher faelschlich 100).
-  await expect(guthaben.locator('xpath=preceding-sibling::div[1]')).toHaveText('5')
+  // Screen 2: Der Geschenk-Teaser MUSS das Startguthaben mit 5 Uri-Taler zeigen.
+  await expect(page.getByTestId('onboarding-herzstueck')).toBeVisible()
+  const gift = page.getByTestId('onboarding-gift')
+  await expect(gift).toBeVisible()
+  await expect(gift).toContainText('5 Uri-Taler')
+  // Regressionsschutz: frueher faelschlich 100 — darf als Startguthaben nirgends
+  // im Geschenk-Teaser auftauchen.
+  await expect(gift).not.toContainText('100')
+  await expect(page.getByTestId('onboarding-cta-start')).toBeVisible()
 })
 
 // ============================================================================

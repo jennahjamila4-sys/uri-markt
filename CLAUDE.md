@@ -370,6 +370,28 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Planungs-Chat sonst nachliefert. Nach dem Schreiben Diff prüfen (nur die erwarteten
    Spalten/Tabellen dürfen dazukommen).
 
+29. **UI-Umbau bricht auch Tests, die die ALTE UI aktiv durchklicken — nicht nur die
+   über den Skip-Helper (Lektion 20 ergänzt).** Lücke (Verify-Rot 21.07., Block-12-
+   Nachbesserung): Beim Onboarding-Umbau (5 → 2 Screens) suchten fast alle Specs das
+   Onboarding per Skip-Seed weg (`localStorage uri-markt-v1 = {onboardingCompleted:true}`,
+   Store-Shape unverändert → Seed hält). Genau EINE Spec (`block7-legal` Test 1) klickte
+   das Onboarding bewusst OHNE Skip durch (alte Buttons „Jetzt starten"/„Weiter"/„Später",
+   Screen „Uri-Taler Guthaben") und hing an entfernten Screens. → Bei jedem Screen-/Flow-
+   Umbau nicht nur nach `skipOnboarding` greppen, sondern nach den ALTEN Screen-Strings/
+   Button-Namen in `e2e/` (`grep -n "Jetzt starten\|Profil vervollständigen\|..."`). Die
+   fachliche Assertion („Startguthaben = 5 Taler, nicht 100") bleibt — nur an den Ort
+   ziehen, wo die Zahl in der neuen UI steht (Geschenk-Teaser `data-testid="onboarding-gift"`),
+   nie löschen/skippen (Lektion 9).
+   **Nachtrag D1 ohne Trace-Zugriff:** Ist der Playwright-Trace im Cloud-Sandbox nicht
+   verfügbar (kein `.env.local`, Artefakt nicht committet), wird die Ursache aus dem
+   Code-Diff bewiesen statt geraten: `block11` Test 4 („Wieder erhältlich") hing NICHT am
+   Onboarding (Skip-Seed intakt) — der `relisted`-Pfad in `ListingCard` und `reservation.ts`
+   sind byte-identisch zu Block 11, die Buy-/Create-/RPC-Pfade unberührt. Also kein Block-12-
+   Regress, sondern ein Timing-Fenster auf dem realtime-abhängigen Feed-Badge (Sticker
+   erscheint erst nach Client-Mount/`useMinuteTick`). Fix = Reload-Retry um die Badge-
+   Assertion (Muster wie `expectNotificationText`), Assertion unverändert (Lektion 9:
+   nur Timing-Robustheit, keine gemessene Realität verfälscht).
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)

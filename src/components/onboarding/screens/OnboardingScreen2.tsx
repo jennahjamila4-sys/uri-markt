@@ -87,6 +87,7 @@ export function OnboardingScreen2({ persona, onBack, onComplete }: Props) {
 
         {/* Geschenk-Teaser — faktisch wahr (5 Uri-Taler, handle_new_user) */}
         <div
+          data-testid="onboarding-gift"
           className="reveal mb-5 flex items-center gap-3 rounded-2xl border border-gold/40 bg-[linear-gradient(135deg,rgba(255,215,0,0.14),rgba(255,152,0,0.05))] px-4 py-3.5"
           style={{ animationDelay: '.52s' }}
         >

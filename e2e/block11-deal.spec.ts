@@ -349,9 +349,22 @@ test.describe.serial('Block 11: Reibungsloser Deal', () => {
     expect(l.relisted_at).toBeTruthy()
 
     // Karte (B = Nicht-Eigentuemer) zeigt „🔄 Wieder erhaeltlich!"; Detail kaufbar.
-    await pageB.goto('/')
-    const card = pageB.getByTestId('listing-card').filter({ hasText: OFFER_RELIST })
-    await expect(card.getByTestId('relisted-badge')).toBeVisible({ timeout: 20_000 })
+    // Der Sticker haengt am reaktivierten relisted_at und wird erst nach dem
+    // Client-Mount (useMinuteTick) sichtbar; gegen einen transienten Feed-/
+    // Realtime-Zustand mit Reload-Retry absichern (Muster wie expectNotificationText).
+    // Assertion unveraendert — der Sticker MUSS erscheinen.
+    const relistDeadline = Date.now() + 30_000
+    for (;;) {
+      await pageB.goto('/')
+      const card = pageB.getByTestId('listing-card').filter({ hasText: OFFER_RELIST })
+      try {
+        await expect(card.getByTestId('relisted-badge')).toBeVisible({ timeout: 8_000 })
+        break
+      } catch {
+        if (Date.now() > relistDeadline)
+          throw new Error('relisted-badge erschien nicht innert 30s')
+      }
+    }
     await openListingDetail(pageB, OFFER_RELIST)
     await expect(pageB.getByRole('button', { name: /^🛒 Kaufen$/ })).toBeVisible()
   })
