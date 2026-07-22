@@ -16,6 +16,8 @@ import { PaymentInfoForm, type PaymentInfo } from './PaymentInfoForm'
 import { TalerHistory, type WalletTxItem } from './TalerHistory'
 import { TalerPurchase } from './TalerPurchase'
 import { EditProfileForm } from './EditProfileForm'
+import { NotificationSettings } from './NotificationSettings'
+import { FavoritesList, type FavoriteItem } from './FavoritesList'
 import { DeleteAccountSection } from './DeleteAccountSection'
 import type { Profile, UserLevel } from '@/types'
 
@@ -27,6 +29,7 @@ interface Props {
   buyerTransactions: BuyerTransaction[]
   paymentInfo: PaymentInfo | null
   walletTransactions: WalletTxItem[]
+  favorites: FavoriteItem[]
   /** Transaktions-IDs, die der Nutzer bereits bewertet hat */
   reviewedTxIds: string[]
 }
@@ -35,6 +38,7 @@ type View =
   | 'overview'
   | 'matches'
   | 'listings'
+  | 'favorites'
   | 'sales'
   | 'purchases'
   | 'payment'
@@ -50,6 +54,7 @@ export function ProfileDashboard({
   buyerTransactions,
   paymentInfo,
   walletTransactions,
+  favorites,
   reviewedTxIds,
 }: Props) {
   const [view, setView] = useState<View>('overview')
@@ -83,6 +88,7 @@ export function ProfileDashboard({
   const tiles: { key: View; emoji: string; label: string; badge?: number }[] = [
     { key: 'matches', emoji: '🎯', label: 'Smart Matches', badge: matches.length },
     { key: 'listings', emoji: '📦', label: 'Meine Inserate' },
+    { key: 'favorites', emoji: '❤️', label: 'Favoriten', badge: favorites.length },
     { key: 'purchases', emoji: '🛒', label: 'Meine Käufe', badge: activePurchases },
     { key: 'sales', emoji: '💰', label: 'Meine Verkäufe', badge: pendingSales },
     { key: 'payment', emoji: '💳', label: 'Zahlungen' },
@@ -203,6 +209,7 @@ export function ProfileDashboard({
             <h2 className="font-display text-xl font-bold text-white">
               {view === 'matches' && '🎯 Smart Matches'}
               {view === 'listings' && '📦 Meine Inserate'}
+              {view === 'favorites' && '❤️ Favoriten'}
               {view === 'purchases' && '🛒 Meine Käufe'}
               {view === 'sales' && '💰 Meine Verkäufe'}
               {view === 'payment' && '💳 Zahlungen'}
@@ -219,6 +226,7 @@ export function ProfileDashboard({
           </div>
 
           {view === 'matches' && <SmartMatchList matches={matches} />}
+          {view === 'favorites' && <FavoritesList favorites={favorites} />}
           {view === 'listings' && (
             <MyListings
               key={listingsTab}
@@ -247,6 +255,8 @@ export function ProfileDashboard({
           {view === 'account' && (
             <div className="space-y-6">
               <EditProfileForm profile={profile} />
+              {/* Block 12: Benachrichtigungs-Auswahl aus dem Onboarding hierher. */}
+              <NotificationSettings />
               <DeleteAccountSection />
             </div>
           )}

@@ -1,9 +1,11 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Eye, Heart, MapPin } from 'lucide-react'
+import { toast } from 'sonner'
+import { Eye, Heart, MapPin, MessageCircle } from 'lucide-react'
 import { CATEGORIES } from '@/types'
 import { useAppStore } from '@/store/appStore'
+import { toggleFavoriteAction } from '@/app/actions/favorites'
 import {
   useMinuteTick,
   reservedRemainingText,
@@ -14,6 +16,10 @@ import type { ListingWithProfile } from '@/types'
 interface ListingCardProps {
   listing: ListingWithProfile
   onClick?: () => void
+  /** Ob dieses Inserat vom aktuellen Nutzer favorisiert ist (aus `favorites`). */
+  isFavorited?: boolean
+  /** Nach erfolgreichem Umschalten: übergeordnete Liste synchron halten. */
+  onFavoriteChange?: (listingId: string, favorited: boolean) => void
 }
 
 const CATEGORY_EMOJI: Record<string, string> = Object.fromEntries(
@@ -60,17 +66,54 @@ function LiveViewers({ id }: { id: string }) {
   }, [n])
 
   return (
-    <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-uri-fire/30 bg-uri-fire/10 px-2.5 py-[5px] text-[11px] font-semibold text-uri-fire">
+    <div className="inline-flex items-center gap-1.5 rounded-full border border-uri-fire/30 bg-uri-fire/10 px-2.5 py-[5px] text-[11px] font-semibold text-uri-fire">
       <span className="animate-flick">🔥</span>
       <b ref={ref}>{n}</b>&nbsp;schauen gerade
     </div>
   )
 }
 
-export function ListingCard({ listing, onClick }: ListingCardProps) {
-  const [fav, setFav] = useState(false)
+export function ListingCard({
+  listing,
+  onClick,
+  isFavorited = false,
+  onFavoriteChange,
+}: ListingCardProps) {
+  const [fav, setFav] = useState(isFavorited)
+  const [favBusy, setFavBusy] = useState(false)
   const currentUserId = useAppStore((s) => s.user?.id)
+  const openAuthModal = useAppStore((s) => s.openAuthModal)
   const isOwn = !!currentUserId && listing.user_id === currentUserId
+
+  // Herz-Zustand aus der geladenen Favoriten-Liste übernehmen (Reload/Realtime).
+  useEffect(() => {
+    setFav(isFavorited)
+  }, [isFavorited])
+
+  const commentCount = listing.comment_count ?? 0
+
+  const toggleFav = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (favBusy) return
+    // Ohne Login kein echtes Favorisieren → Registrierung/Login anbieten (Lektion 6).
+    if (!currentUserId) {
+      openAuthModal('login')
+      return
+    }
+    const next = !fav
+    setFav(next) // optimistisch (Herz-Pop)
+    setFavBusy(true)
+    try {
+      const res = await toggleFavoriteAction(listing.id)
+      setFav(res.favorited)
+      onFavoriteChange?.(listing.id, res.favorited)
+    } catch (err) {
+      setFav(!next) // zurückrollen
+      toast.error(err instanceof Error ? err.message : 'Favorit fehlgeschlagen')
+    } finally {
+      setFavBusy(false)
+    }
+  }
   const isSold = listing.status === 'sold'
   const isReserved = listing.status === 'reserved'
   const now = useMinuteTick()
@@ -121,15 +164,15 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
           </span>
         )}
 
-        {/* Herz (reine Optik, keine Persistenz) */}
+        {/* Herz – echte Favoriten (favorites-Tabelle, own-only via RLS) */}
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            setFav((v) => !v)
-          }}
-          aria-label="Merken"
-          className="absolute right-2.5 top-2.5 z-[4] grid h-[34px] w-[34px] place-items-center rounded-full border border-glass-border bg-black/40 backdrop-blur-sm transition active:scale-90"
+          onClick={toggleFav}
+          disabled={favBusy}
+          aria-label={fav ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+          aria-pressed={fav}
+          data-testid="favorite-btn"
+          className="absolute right-2.5 top-2.5 z-[4] grid h-[34px] w-[34px] place-items-center rounded-full border border-glass-border bg-black/40 backdrop-blur-sm transition active:scale-90 disabled:opacity-60"
         >
           <Heart
             size={17}
@@ -216,14 +259,27 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
           </span>
         </div>
 
-        {listing.type === 'Angebot' && !isSold && !isReserved ? (
-          <LiveViewers id={listing.id} />
-        ) : (
-          <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-glass px-2.5 py-[5px] text-[11.5px] text-white/55">
-            <Eye size={13} className="stroke-[1.6]" />
-            {listing.views ?? 0}
-          </div>
-        )}
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {listing.type === 'Angebot' && !isSold && !isReserved ? (
+            <LiveViewers id={listing.id} />
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-glass-border bg-glass px-2.5 py-[5px] text-[11.5px] text-white/55">
+              <Eye size={13} className="stroke-[1.6]" />
+              {listing.views ?? 0}
+            </div>
+          )}
+
+          {/* Kommentar-Zähler aus listings.comment_count (bei 0 ausgeblendet) */}
+          {commentCount > 0 && (
+            <div
+              data-testid="comment-count-badge"
+              className="inline-flex items-center gap-1 rounded-full border border-glass-border bg-glass px-2.5 py-[5px] text-[11.5px] text-white/55"
+            >
+              <MessageCircle size={13} className="stroke-[1.6]" />
+              {commentCount}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

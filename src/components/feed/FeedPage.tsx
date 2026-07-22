@@ -37,6 +37,43 @@ export function FeedPage({ initialListings }: FeedPageProps) {
   const [showTikTok, setShowTikTok] = useState(false)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
   const feedVersion = useAppStore((s) => s.feedVersion)
+  const userId = useAppStore((s) => s.user?.id)
+  // Favorisierte Inserat-IDs des aktuellen Nutzers (own-only via RLS). Steuert
+  // den Herz-Zustand jeder Karte; hält nach Reload (aus DB geladen).
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!userId) {
+      setFavoriteIds(new Set())
+      return
+    }
+    let mounted = true
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('listing_id')
+        .eq('user_id', userId)
+      if (error) {
+        console.error('[FeedPage favorites]', error)
+        return
+      }
+      if (mounted && data) {
+        setFavoriteIds(new Set(data.map((f) => f.listing_id)))
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [userId, supabase])
+
+  const handleFavoriteChange = (listingId: string, favorited: boolean) => {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev)
+      if (favorited) next.add(listingId)
+      else next.delete(listingId)
+      return next
+    })
+  }
 
   // Nächste Seite laden (cursor-basiert). EINE Funktion für Grid-Observer UND
   // Vollbild-Modus (TikTokScroll) – identische Pagination, kein Zweitpfad.
@@ -210,6 +247,8 @@ export function FeedPage({ initialListings }: FeedPageProps) {
               <ListingCard
                 listing={listing}
                 onClick={() => setSelectedListingId(listing.id)}
+                isFavorited={favoriteIds.has(listing.id)}
+                onFavoriteChange={handleFavoriteChange}
               />
             )}
           </div>
@@ -219,8 +258,9 @@ export function FeedPage({ initialListings }: FeedPageProps) {
       {listings.length === 0 && !isLoading && (
         <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
           <div className="text-5xl">📦</div>
-          <p className="text-white/60">
-            Noch keine Inserate in Uri. Sei der Erste!
+          <p className="max-w-sm text-white/60">
+            Noch nichts hier — aber das ändert sich schnell. Stell dein erstes Inserat ein und
+            mach den Anfang in deiner Gemeinde.
           </p>
         </div>
       )}

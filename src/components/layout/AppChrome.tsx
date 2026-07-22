@@ -24,14 +24,14 @@ export function AppChrome() {
 
   const selectedListingId = useAppStore((s) => s.selectedListingId)
   const setSelectedListingId = useAppStore((s) => s.setSelectedListingId)
-  const setAuthModalOpen = useAppStore((s) => s.setAuthModalOpen)
+  const openAuthModal = useAppStore((s) => s.openAuthModal)
 
   // Server-Redirect `/?auth=required` (z.B. Profil ohne Login) → Auth-Modal öffnen
   // und den Parameter aus der URL entfernen, damit es nicht erneut auslöst.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('auth') === 'required') {
-      setAuthModalOpen(true)
+      openAuthModal('login')
       params.delete('auth')
       const qs = params.toString()
       window.history.replaceState(
@@ -40,7 +40,7 @@ export function AppChrome() {
         window.location.pathname + (qs ? `?${qs}` : '')
       )
     }
-  }, [setAuthModalOpen])
+  }, [openAuthModal])
 
   return (
     <>

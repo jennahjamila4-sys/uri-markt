@@ -342,7 +342,11 @@ export function MyListings({ listings, initialTab = 'active' }: Props) {
         )
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-glass-border bg-obsidian-3 p-6 text-center">
-          <p className="text-white/60">Keine Inserate in dieser Kategorie.</p>
+          <p className="text-white/60">
+            {tab === 'active'
+              ? 'Du hast noch nichts eingestellt. In 2 Minuten ist dein erstes Inserat online.'
+              : 'Keine Inserate in dieser Kategorie.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">

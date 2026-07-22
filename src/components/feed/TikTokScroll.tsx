@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { MessageCircle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/appStore'
 import {
@@ -153,9 +154,21 @@ export function TikTokScroll({
                   <h3 className="mt-2 font-display text-xl font-bold text-white">
                     {listing.title}
                   </h3>
-                  <p className="text-2xl font-display font-bold text-gold">
-                    {price}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-2xl font-display font-bold text-gold">
+                      {price}
+                    </p>
+                    {/* Kommentar-Zähler aus listings.comment_count (bei 0 aus) */}
+                    {(listing.comment_count ?? 0) > 0 && (
+                      <span
+                        data-testid="comment-count-badge"
+                        className="inline-flex items-center gap-1 text-sm text-white/70"
+                      >
+                        <MessageCircle size={15} className="stroke-[1.6]" />
+                        {listing.comment_count}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="mt-3 flex gap-2">
                     <button

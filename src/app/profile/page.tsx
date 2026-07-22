@@ -10,6 +10,7 @@ import type { SellerTransaction } from '@/components/listing/SellerDashboard'
 import type { BuyerTransaction } from '@/components/profile/BuyerDashboard'
 import type { PaymentInfo } from '@/components/profile/PaymentInfoForm'
 import type { WalletTxItem } from '@/components/profile/TalerHistory'
+import type { FavoriteItem } from '@/components/profile/FavoritesList'
 
 export default async function ProfilePage() {
   const supabase = await createServerClient()
@@ -90,6 +91,22 @@ export default async function ProfilePage() {
     .eq('id', user.id)
     .maybeSingle()
 
+  // Favorisierte Inserate (RLS: nur eigene favorites-Zeilen). Join auf listings
+  // für Titel/Status/Preis → korrekter Status-Sticker im Favoriten-Tab.
+  const { data: favorites } = await supabase
+    .from('favorites')
+    .select(
+      'created_at,listing:listings!favorites_listing_id_fkey(id,title,status,price,price_type,type,image_url,gemeinde)'
+    )
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  // Nur noch existierende Inserate (Join kann bei gelöschtem Inserat null sein).
+  const favoriteItems: FavoriteItem[] = (favorites ?? [])
+    .map((f) => f.listing as unknown as FavoriteItem | null)
+    .filter((l): l is FavoriteItem => !!l)
+
   // Taler-Bewegungen des Nutzers (RLS: nur eigene). Neueste zuerst.
   const { data: walletTx } = await supabase
     .from('wallet_transactions')
@@ -114,6 +131,7 @@ export default async function ProfilePage() {
           }
           paymentInfo={(paymentInfo ?? null) as PaymentInfo | null}
           walletTransactions={(walletTx ?? []) as WalletTxItem[]}
+          favorites={favoriteItems}
           reviewedTxIds={reviewedTxIds}
         />
       </main>

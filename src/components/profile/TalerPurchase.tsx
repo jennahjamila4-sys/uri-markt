@@ -52,6 +52,17 @@ export function TalerPurchase({ credits }: { credits: number }) {
 
   return (
     <div data-testid="taler-purchase" className="space-y-4">
+      {/* Block 12: entlastend-ehrlicher Ton, Zahlen faktisch, keine Cash-out-Andeutung */}
+      <div className="rounded-2xl border border-gold/30 bg-gold/[0.06] p-4">
+        <h3 className="font-display text-lg font-bold text-gold">
+          Uri-Taler — dein Beitrag, wenn&apos;s klappt.
+        </h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-white/70">
+          Inserieren ist kostenlos. Erst wenn du verkaufst, gehen 10% als Taler an die
+          Plattform — so bleibt Uri-Markt werbefrei und fair.
+        </p>
+      </div>
+
       <div className="rounded-2xl border border-glass-border bg-obsidian-3 p-4 text-center">
         <p className="text-xs text-white/60">Aktuelles Guthaben</p>
         <p
@@ -91,6 +102,11 @@ export function TalerPurchase({ credits }: { credits: number }) {
               {p.taler} Taler
             </p>
             <p className="text-sm text-white/60">CHF {(p.rappen / 100).toFixed(2)}</p>
+            {p.popular && (
+              <p className="mt-1.5 text-xs leading-snug text-white/50">
+                Genug für deine nächsten Deals — ohne dass du an Gebühren denken musst.
+              </p>
+            )}
             <button
               data-testid={`taler-buy-${p.id}`}
               onClick={() => buy(p.id)}

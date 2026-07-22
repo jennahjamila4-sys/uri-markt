@@ -44,6 +44,9 @@ interface AppState {
 
   isAuthModalOpen: boolean
   setAuthModalOpen: (v: boolean) => void
+  /** Vorwahl des Tabs im AuthModal (Onboarding-CTA „Los geht's" → 'register'). */
+  authModalTab: 'login' | 'register'
+  openAuthModal: (tab?: 'login' | 'register') => void
 
   isCreateModalOpen: boolean
   setCreateModalOpen: (v: boolean) => void
@@ -104,6 +107,9 @@ export const useAppStore = create<AppState>()(
 
       isAuthModalOpen: false,
       setAuthModalOpen: (v) => set({ isAuthModalOpen: v }),
+      authModalTab: 'login',
+      openAuthModal: (tab = 'login') =>
+        set({ isAuthModalOpen: true, authModalTab: tab }),
 
       isCreateModalOpen: false,
       setCreateModalOpen: (v) =>
