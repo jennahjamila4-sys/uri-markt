@@ -27,8 +27,8 @@ $AllEnvs    = @('production','preview','development')
 $NonProdEnvs= @('preview','development')
 
 # Rein lokale Test-/Tooling-Variablen, die NIE nach Vercel gehoeren.
-# E2E_* wird zusaetzlich per Praefix gefiltert (siehe unten).
-$LocalOnly  = @('SUPABASE_ACCESS_TOKEN')
+# E2E_* und VERCEL_* werden zusaetzlich per Praefix gefiltert (siehe unten).
+$LocalOnly  = @('SUPABASE_ACCESS_TOKEN', 'VERCEL_OIDC_TOKEN')
 
 $script:Ok = $false
 
@@ -91,6 +91,7 @@ function Set-VercelEnv([string]$name, [string]$value, [string]$env) {
 # Entscheidet die Ziel-Environments fuer eine Variable oder $null (= filtern).
 function Get-Targets([string]$name) {
     if ($name -match '^E2E_')            { return $null }         # Test-Konten, nie zu Vercel
+    if ($name -match '^VERCEL_')         { return $null }         # rein lokale CLI-Tokens (z.B. VERCEL_OIDC_TOKEN)
     if ($LocalOnly -contains $name)      { return $null }         # lokales Tooling
     if ($name -match '^STRIPE')          { return $NonProdEnvs }  # Sonderregel: nie Production
     return $AllEnvs
