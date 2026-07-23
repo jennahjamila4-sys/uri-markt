@@ -153,10 +153,11 @@ test.describe('mit uebersprungenem Onboarding', () => {
     const form = await openRegisterForm(page)
     await fillRegister(form)
     // Checkbox NICHT anhaken.
-    await form.getByRole('button', { name: 'Registrieren' }).click()
-
-    await expect(page.getByTestId('register-terms-error')).toBeVisible()
-    await expect(page.getByTestId('register-terms-error')).toContainText('zustimmen')
+    // Block 13: Der Submit ist ohne Haekchen jetzt DISABLED (kein stiller Klick,
+    // Lektion 6) — der sichtbare Grund steht im Hinweistext daneben.
+    await expect(page.getByTestId('register-terms-hint')).toBeVisible()
+    await expect(page.getByTestId('register-terms-hint')).toContainText('Häkchen')
+    await expect(form.getByRole('button', { name: 'Registrieren' })).toBeDisabled()
 
     // Kein Konto angelegt (Trigger haette Profil geschrieben).
     await page.waitForTimeout(800)

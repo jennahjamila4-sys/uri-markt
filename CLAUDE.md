@@ -392,6 +392,36 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Assertion (Muster wie `expectNotificationText`), Assertion unverändert (Lektion 9:
    nur Timing-Robustheit, keine gemessene Realität verfälscht).
 
+30. **„Arabische Schrift" im UI ist oft Native-Element-Chrome in OS-Locale — kein
+   String im Code.** Lücke (23.07.2026, Block 13): JJ sah arabische Schrift „beim
+   Foto-Upload". Ein repo-weiter Arabisch/RTL-Sweep von `src/` fand 0 arabische
+   Zeichen und 0 RTL-Steuerzeichen — die einzige Quelle war der **native
+   `<input type="file">`**, dessen Button-Text („Datei auswählen / Keine Datei
+   ausgewählt") der Browser in der OS-Locale rendert (arabisch auf JJs System),
+   per HTML/CSS NICHT setzbar. Root-Cause-Fix = nativen Input `sr-only` in ein
+   `<label>` kapseln und die sichtbare Fläche als eigene, deutsch beschriftete
+   Komponente bauen (alle Strings gehören uns) — kein CSS-Verstecken von Inhalt.
+   **Sweep-Falle:** Der Range `ﭐ-﻿` fängt fälschlich die Emoji-
+   Variation-Selectors (U+FE00–FE0F, v.a. **U+FE0F**) und den BOM (U+FEFF) → jedes
+   Emoji wie 🏷️/⚙️ meldet einen Falschtreffer. Für einen sauberen Sweep die echten
+   Arabisch-Blöcke nehmen (`؀-ۿ`, `ݐ-ݿ`, `ࢠ-ࣿ`,
+   `ﭐ-﷿`, `ﹰ-ﻼ`) und die Variation-Selectors ausschliessen.
+   Zusätzlich: `grep -P` mit `\x{FB50}` scheitert in der C-Locale („code point too
+   large") → ripgrep (Grep-Tool) oder `perl -CSD` nutzen, `perl`-`$.` aber pro
+   Datei zurücksetzen (`close ARGV if eof`), sonst laufen die Zeilennummern durch.
+
+31. **Button-Disable statt Klick→Fehler zieht die Tests dieses Klick-Pfads nach
+   (Lektion 20/29 auf Gate-Ebene).** Lücke (Block 13): Die Consent-Pflicht wurde
+   als **disabled Submit-Button** umgesetzt (Block-MD: „Button disabled"). Der
+   bestehende `block7`-Test „ohne Zustimmung" klickte aber den Button und erwartete
+   die zod-Fehlermeldung `register-terms-error` — ein disabled Button feuert kein
+   Submit, der Test wäre rot geworden. → Bei jeder Umstellung von „Klick löst
+   Validierungsfehler aus" auf „Aktion ist gesperrt" sofort die Specs mitziehen,
+   die den alten Pfad fahren; die fachliche Assertion (kein Konto ohne Zustimmung)
+   bleibt, nur der Nachweis wandert auf „Button disabled + sichtbarer Hinweis".
+   Der Grund MUSS sichtbar bleiben (Lektion 6): disabled ohne Hinweistext =
+   stumme blockierte Aktion; ein `register-terms-hint` neben dem Button nennt ihn.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
@@ -472,6 +502,27 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
 
+- **Block 13** (23.07.2026): Go-Live-Härtung — **Schritt 0 gemessen:** Stripe-Webhook
+  `/api/webhooks/stripe` (Event `checkout.session.completed`), Stripe-Env nur
+  `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (kein Publishable Key — Checkout via
+  `session.url`-Redirect), **Resend in `src/` nicht implementiert** (keine
+  resend.dev-Adresse aktiv). **(1)** Consent: `CONSENT_VERSION`-Konstante
+  (`src/lib/consent.ts`), `consent_version` in signUp-Metadata, Submit-Button ohne
+  Häkchen disabled + sichtbarer Hinweis (`register-terms-hint`). **(2)** Types via
+  Supabase-MCP regeneriert → `user_consents` ergänzt (kein Handedit, DB nur gelesen).
+  **(3)** Platzhalter-Sweep: 0 echte Platzhalter; **Fund gemeldet:** Impressum-E-Mail
+  steht rückwärts (`sellehcyes.ssiws@…` = umgekehrt) → JJ trägt real nach
+  (Firmendaten-Regel, nicht angefasst). **(4)** RTL/Arabisch-Sweep: 0 in `src/`; die
+  „arabische Schrift beim Foto-Upload" = native `<input type=file>`-OS-Locale-Chrome
+  (2 Stellen) → Root-Cause-Fix per eigener `PhotoUploadField`-Komponente (Lektion 30).
+  **(5)** `deploy/vercel-env-push.ps1` (Preflight, E2E_*-Filter, Stripe nie Production,
+  Namen-Vorschau + Bestätigung, GRÜN/ROT, Read-Host). **(6)** E2E
+  `e2e/block13-consent.spec.ts` (ohne Häkchen blockiert; consent_version in Metadata;
+  Trigger schreibt 2 Zeilen agb+datenschutz mit Version+Zeitstempel; RLS-Beweis User B).
+  `block7`-Test „ohne Zustimmung" nachgezogen (Lektion 31). **Gate-Status:** tsc +
+  ESLint + next-build GRÜN (voller Build mit Dummy-Env Exit 0); **Playwright UNGETESTET**
+  (kein `.env.local`/E2E-Konten im Sandbox → JJ via run-verify.ps1). Auslieferung als
+  **PR**. Details: `uebergabe-2026-07-23-block13.md`.
 - **Block 12** (21.07.2026): Onboarding, FOMO-Texte & ehrliche UI — Onboarding auf
   **2 Screens** (Ken-Burns-Hero + zwei Persona-Karten; Smart-Match-Story mit „⚡ Das
   Herzstück", Geschenk-Teaser 5 Uri-Taler, persona-abhängige Gratulation, CTA „Los
