@@ -94,6 +94,11 @@ const NOACC_EMAIL = `e2e-b13-noacc-${TS}@example.com`
 // Test 3 (DB-Trigger via Admin-API): Wegwerf-User.
 const TRIG_EMAIL = `e2e-b13-trig-${TS}@example.com`
 const TRIG_USERNAME = `e2eb13_trig_${randomBytes(3).toString('hex')}`
+// Test b1 (UI-Metadata): Username MUSS schema-gueltig sein (RegisterSchema
+// erlaubt max. 20 Zeichen) — sonst blockiert react-hook-form den Submit und der
+// signUp-Request kommt nie los. 'b13m' + 13-stelliger TS = 17 Zeichen.
+const META_USERNAME = `b13m${TS}`
+const META_EMAIL = `e2e-b13-meta-${TS}@example.com`
 // Test 4 (RLS): eindeutiger Versions-Marker, damit der Seed exakt aufraeumbar ist.
 const RLS_VERSION = `e2e-b13-rls-${TS}`
 const PW = 'Test1234!'
@@ -185,8 +190,8 @@ test('Mit Haekchen sendet der Signup consent_version = CONSENT_VERSION in der Me
   page,
 }) => {
   const form = await openRegisterForm(page)
-  await form.getByPlaceholder('E-Mail').fill(`e2e-b13-meta-${TS}@example.com`)
-  await form.getByPlaceholder('Username').fill(`e2eb13_meta_${TS}`)
+  await form.getByPlaceholder('E-Mail').fill(META_EMAIL)
+  await form.getByPlaceholder('Username').fill(META_USERNAME)
   await form.locator('select').selectOption({ index: 1 })
   await form.getByPlaceholder('Passwort (Min. 8 Zeichen)').fill(PW)
   await form.getByTestId('register-terms').check()
@@ -206,7 +211,7 @@ test('Mit Haekchen sendet der Signup consent_version = CONSENT_VERSION in der Me
   )
 
   // Aufraeumen, falls der Auth-Server den Signup doch angenommen hat.
-  const pr = await rest(`profiles?username=eq.e2eb13_meta_${TS}&select=id`)
+  const pr = await rest(`profiles?username=eq.${META_USERNAME}&select=id`)
   const prows = await pr.json().catch(() => [])
   if (Array.isArray(prows) && prows[0]?.id) {
     await adminAuth(`users/${prows[0].id}`, { method: 'DELETE' }).catch(() => {})
