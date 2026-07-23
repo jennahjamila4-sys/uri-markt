@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/appStore'
 import { CATEGORIES, GEMEINDEN } from '@/types'
 import { categoryConfig, detectCategory } from '@/lib/gesuchConfig'
 import { SmartFields, type SmartData } from './SmartFields'
+import { PhotoUploadField } from './PhotoUploadField'
 import { uploadListingImage } from '@/lib/supabase/storage'
 import {
   createListingAction,
@@ -502,15 +503,13 @@ export function ChameleonForm({ mode, initial, onSuccess }: ChameleonFormProps) 
                 </div>
 
                 <div>
-                  <label className="text-sm text-white/80">Foto (optional)</label>
-                  <p className="text-xs text-white/40">Mit Foto verkaufst du deutlich schneller.</p>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp"
+                  <PhotoUploadField
+                    id="chameleon-photo-upload"
+                    label="Foto (optional)"
+                    hint="Mit Foto verkaufst du deutlich schneller."
                     onChange={onImageUpload}
-                    disabled={isUploading || imageUrls.length >= 5}
-                    className="mt-2 w-full text-sm"
+                    isUploading={isUploading}
+                    count={imageUrls.length}
                   />
                   {imageUrls.length > 0 && (
                     <div className="mt-3 grid grid-cols-5 gap-2">

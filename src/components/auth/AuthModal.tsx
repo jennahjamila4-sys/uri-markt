@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createClient } from '@/lib/supabase/client'
 import { RegisterSchema, LoginSchema } from '@/lib/validations/auth'
+import { CONSENT_VERSION } from '@/lib/consent'
 import { useAppStore } from '@/store/appStore'
 import { GEMEINDEN } from '@/types'
 import type { Profile } from '@/types'
@@ -52,6 +53,10 @@ export function AuthModal() {
           data: {
             username: data.username,
             gemeinde: data.gemeinde,
+            // Single Source of Truth: der DB-Trigger handle_new_user() liest
+            // consent_version aus der Metadata und schreibt daraus je eine Zeile
+            // agb + datenschutz nach user_consents (serverseitig).
+            consent_version: CONSENT_VERSION,
           },
           // Fallback auf den echten Browser-Origin: ohne ihn ergäbe eine fehlende
           // NEXT_PUBLIC_APP_URL den String "undefined/auth/callback" (Prod-Bruch).
@@ -273,10 +278,21 @@ export function AuthModal() {
                 {registerForm.formState.errors.acceptTerms.message}
               </p>
             )}
+            {!registerForm.watch('acceptTerms') && (
+              <p
+                data-testid="register-terms-hint"
+                className="text-xs text-white/50"
+              >
+                Setze das Häkchen oben, um die Registrierung freizuschalten.
+              </p>
+            )}
             <button
               type="submit"
-              disabled={registerForm.formState.isSubmitting}
-              className="btn-gold w-full rounded-lg px-4 py-2 font-display font-bold disabled:opacity-50"
+              disabled={
+                registerForm.formState.isSubmitting ||
+                !registerForm.watch('acceptTerms')
+              }
+              className="btn-gold w-full rounded-lg px-4 py-2 font-display font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {registerForm.formState.isSubmitting ? 'Wird registriert...' : 'Registrieren'}
             </button>

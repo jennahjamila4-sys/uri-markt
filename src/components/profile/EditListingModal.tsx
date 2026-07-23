@@ -12,6 +12,7 @@ import { updateListingAction } from '@/app/actions/listings'
 import { AngebotSchema } from '@/lib/validations/listing'
 import { GesuchSchema } from '@/lib/validations/onboarding'
 import { uploadListingImage } from '@/lib/supabase/storage'
+import { PhotoUploadField } from '@/components/create/PhotoUploadField'
 import { useAppStore } from '@/store/appStore'
 import { CATEGORIES, GEMEINDEN } from '@/types'
 
@@ -267,14 +268,12 @@ export function EditListingModal({ listingId, listingType, onSaved, onClose }: P
             )}
 
             <div>
-              <label className="text-sm font-display font-bold text-white">Bilder (max 5)</label>
-              <input
-                type="file"
-                multiple
-                accept="image/jpeg,image/png,image/webp"
+              <PhotoUploadField
+                id="edit-photo-upload"
+                label="Bilder (max 5)"
                 onChange={onImageUpload}
-                disabled={isUploading || images.length >= 5}
-                className="mt-2 w-full"
+                isUploading={isUploading}
+                count={images.length}
               />
               {images.length > 0 && (
                 <div className="mt-3 grid grid-cols-5 gap-2">
