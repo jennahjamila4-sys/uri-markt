@@ -9,6 +9,7 @@ import { CATEGORIES, GEMEINDEN } from '@/types'
 import { categoryConfig, detectCategory } from '@/lib/gesuchConfig'
 import { SmartFields, type SmartData } from './SmartFields'
 import { PhotoUploadField } from './PhotoUploadField'
+import { AngebotCardFlow } from './AngebotCardFlow'
 import { uploadListingImage } from '@/lib/supabase/storage'
 import {
   createListingAction,
@@ -295,6 +296,12 @@ export function ChameleonForm({ mode, initial, onSuccess }: ChameleonFormProps) 
   const inputCls =
     'mt-1 w-full rounded-lg border border-glass-border bg-obsidian-4 px-3 py-2 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-gold'
 
+  // BLOCK 14: Der Angebots-Tab läuft über den neuen Card-Flow (Smart Form 2.0).
+  // Der Gesuch-Tab bleibt bewusst auf dem bestehenden Block-10-Formular (Plan §4).
+  if (!isGesuch) {
+    return <AngebotCardFlow initial={initial} onSuccess={onSuccess} />
+  }
+
   return (
     <div className="space-y-6">
       {/* ---------- STUFE 1 ---------- */}
@@ -567,19 +574,6 @@ export function ChameleonForm({ mode, initial, onSuccess }: ChameleonFormProps) 
           {isSubmitting ? 'Wird veröffentlicht …' : 'Veröffentlichen'}
         </button>
       </div>
-
-      {/* TEIL 7: dezenter 48h-Hinweis, nur beim Angebot. Faktisch wahr,
-          empathisch, kein Druck. */}
-      {!isGesuch && (
-        <p
-          data-testid="reserve-hint"
-          className="text-center text-xs leading-relaxed text-white/50"
-        >
-          💛 Gut zu wissen: Sobald jemand kaufen möchte, ist dein Inserat 48 Std.
-          für euch beide reserviert. Schau regelmässig vorbei — so entgeht dir
-          kein Deal!
-        </p>
-      )}
     </div>
   )
 }

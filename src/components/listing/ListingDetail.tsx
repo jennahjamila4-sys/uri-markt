@@ -6,6 +6,7 @@ import { DealFlow } from './DealFlow'
 import { CommentSection } from './CommentSection'
 import { GesuchMatches } from './GesuchMatches'
 import { smartFieldLabel } from '@/lib/gesuchConfig'
+import { conditionLabel } from '@/lib/conditionConfig'
 import { useMinuteTick, isRecentlyRelisted } from '@/lib/reservation'
 import { useAppStore } from '@/store/appStore'
 import type { ListingWithProfile } from '@/types'
@@ -210,6 +211,17 @@ export function ListingDetail({ listingId, listing: initialListing, onClose }: P
               </button>
             )}
           </div>
+
+          {/* Block 14: Zustand (kanonisch oder Altwert-Fallback) */}
+          {listing.type === 'Angebot' && conditionLabel(listing.condition) && (
+            <div
+              data-testid="detail-condition"
+              className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 text-sm text-white"
+            >
+              <span className="text-gold">Zustand</span>
+              <span className="font-semibold">{conditionLabel(listing.condition)}</span>
+            </div>
+          )}
 
           {/* Block 10: alle Gemeinden als Chips */}
           {gemeindenList.length > 0 && (

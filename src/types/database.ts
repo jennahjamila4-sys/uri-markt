@@ -145,6 +145,7 @@ export type Database = {
       }
       listings: {
         Row: {
+          auto_release: boolean
           boost_cost: number | null
           boost_expires_at: string | null
           boost_type: string | null
@@ -186,6 +187,7 @@ export type Database = {
           views: number | null
         }
         Insert: {
+          auto_release?: boolean
           boost_cost?: number | null
           boost_expires_at?: string | null
           boost_type?: string | null
@@ -227,6 +229,7 @@ export type Database = {
           views?: number | null
         }
         Update: {
+          auto_release?: boolean
           boost_cost?: number | null
           boost_expires_at?: string | null
           boost_type?: string | null

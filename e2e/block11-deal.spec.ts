@@ -169,15 +169,33 @@ async function ensureGemeinde(modal: Locator, name: string, want = true) {
   if (active !== want) await chip.click()
 }
 
+// Block 14: Angebots-Tab ist der Card-Flow — bis Preis-Schritt navigieren,
+// 48h-Modal bestaetigen.
+async function gotoPriceCard(modal: Locator) {
+  const priceField = modal.locator('#field-price')
+  for (let i = 0; i < 4; i++) {
+    if (await priceField.isVisible().catch(() => false)) return
+    await modal.getByTestId('cardflow-next').click()
+  }
+}
+async function confirmPublish(page: Page, modal: Locator) {
+  await modal.getByTestId('cardflow-next').click()
+  await modal.getByRole('checkbox').check()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
+  const m = modal.getByTestId('publish-48h-modal')
+  await expect(m).toBeVisible()
+  await m.getByRole('button', { name: /Alles klar/ }).click()
+  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+}
+
 async function createAngebot(page: Page, title: string, price = '20', gemeinde = 'Altdorf') {
   const modal = await openCreate(page, 'Angebot')
   await modal.locator('#field-title input').fill(title)
   await setCategory(modal, 'sonstiges')
+  await gotoPriceCard(modal)
   await modal.locator('input[placeholder="Preis in CHF"]').fill(price)
   await ensureGemeinde(modal, gemeinde, true)
-  await modal.getByRole('checkbox').check() // Rechts-Bestaetigung (einzige Checkbox im Create-Modal)
-  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+  await confirmPublish(page, modal)
 }
 
 async function openListingDetail(page: Page, title: string) {
@@ -266,6 +284,12 @@ test.describe.serial('Block 11: Reibungsloser Deal', () => {
     ctxB = await browser.newContext()
     await ctxA.addInitScript(skipOnboarding)
     await ctxB.addInitScript(skipOnboarding)
+    // Block 14: KI-Endpoint als "nicht verfuegbar" mocken -> lokaler Fallback-Pfad.
+    for (const c of [ctxA, ctxB]) {
+      await c.route('**/api/analyze-listing', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '{"result":null}' })
+      )
+    }
     pageA = await ctxA.newPage()
     pageB = await ctxB.newPage()
     await login(pageA, USER_A.email, USER_A.password)
@@ -392,21 +416,21 @@ test.describe.serial('Block 11: Reibungsloser Deal', () => {
   })
 
   test('Test 6: Foto-Upload — Bild landet auf dem Detail', async () => {
+    // Block 14: Foto liegt auf Card 1 (PhotoUploadField). Upload triggert die
+    // KI-Analyse (ohne API-Key → { result:null }, kein Crash).
     const modal = await openCreate(pageA, 'Angebot')
     await modal.locator('#field-title input').fill(OFFER_PHOTO)
     await setCategory(modal, 'sonstiges')
-    await modal.locator('input[placeholder="Preis in CHF"]').fill('25')
-    await ensureGemeinde(modal, 'Altdorf', true)
-    await modal.getByRole('button', { name: /Mehr Details/ }).click()
     await modal.locator('input[type="file"]').setInputFiles({
       name: 'e2e.png',
       mimeType: 'image/png',
       buffer: PNG_1x1,
     })
-    await expect(pageA.getByText('Bild hochgeladen')).toBeVisible({ timeout: 20_000 })
-    await modal.getByRole('checkbox').check()
-    await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-    await expect(pageA.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+    await expect(pageA.getByText('Foto hochgeladen')).toBeVisible({ timeout: 20_000 })
+    await gotoPriceCard(modal)
+    await modal.locator('input[placeholder="Preis in CHF"]').fill('25')
+    await ensureGemeinde(modal, 'Altdorf', true)
+    await confirmPublish(pageA, modal)
 
     await openListingDetail(pageA, OFFER_PHOTO)
     await expect(pageA.locator('.snap-center img').first()).toBeVisible()

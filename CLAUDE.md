@@ -422,6 +422,29 @@ oder Migration auf profiles/Policies angewendet wurde.)
    Der Grund MUSS sichtbar bleiben (Lektion 6): disabled ohne Hinweistext =
    stumme blockierte Aktion; ein `register-terms-hint` neben dem Button nennt ihn.
 
+32. **KI-Antwort NIE ungeprüft rendern — Whitelist auf Server UND Client.** Block 14:
+   `analyzeListing` liefert dynamische Formularfelder. Eine KI-Antwort ist nicht
+   vertrauenswürdig (falscher Feld-Typ, erfundene Kategorie, riesige Options-Listen).
+   → `validateAnalyzeResult` (strikte Whitelist: Typen ∈ {chips,zahlen_skala,toggle,text},
+   feed_kategorie ∈ App-Kategorien, Zustands-Slugs ∈ 8er-Liste, max. Felder/Optionen,
+   Skala-Schritte begrenzt) läuft im Route-Handler UND nochmal client-seitig als zweite
+   Verteidigungslinie; bei jeder Verletzung → `null` → lokaler Fallback (kein Crash,
+   Lektion 7). Als **Route-Handler** (nicht Server Action) gebaut, damit der Client per
+   `fetch` aufruft und die E2E ihn deterministisch per `page.route` mocken kann.
+
+33. **Card-Flow-Redesign zieht ALLE Create-Helfer nach — und der KI-Pfad muss im Test
+   deterministisch AUS sein (Lektion 20/29 auf Flow- + KI-Ebene).** Block 14 baute den
+   Angebots-Tab vom Single-Screen zum mehrstufigen Card-Flow um (+48h-Modal VOR dem
+   Insert). Damit brechen ALLE Specs, die ein Angebot anlegen (block9/10/11,
+   deal-completion): Titel liegt auf Card 1, Preis auf Card 4, Publish öffnet erst das
+   48h-Modal. → Helfer im selben Block mitgezogen (`gotoPriceCard`/`confirmPublish`,
+   stabile `data-testid`: `cardflow-next`, `publish-48h-modal`, `auto-release-toggle`).
+   Zusätzlich: Da die alten Specs gegen JJs echtes `.env.local` (mit `ANTHROPIC_API_KEY`)
+   laufen, würde die KI den lokalen Fallback-Pfad überschreiben und ihre Chip-/Kategorie-
+   Assertions sprengen → in jedem alten Spec `page.route('**/api/analyze-listing', {result:null})`
+   gemockt (testet bewusst den Offline-Fallback). Der NEUE block14-Spec mockt die KI mit
+   KONTROLLIERTEN Ergebnissen (T1/T3/T4) — echter Foto-KI-Call bleibt JJ-Klick-Test.
+
 ---
 
 ## ⚙️ Tech Stack (FINAL – nicht ändern ohne Rückfrage)
@@ -502,6 +525,25 @@ NEXT_PUBLIC_APP_URL=https://uri-markt.vercel.app
   `uebergabe-2026-07-11.md`. E2E-Accounts via Admin-API angelegt (email_confirm). KEIN Push.
 - **Bug-Session 02** (02.07.2026, Commit `c3d441d`): `create_buy_intent`-Migration ist laut JJ live eingespielt. BUG 2 erneut geprüft – Kauf-Flow und Gesuch-Feed durchgehend konsistent (Typwerte `Angebot`/`Gesuch`/`Event` identisch in `src/types`, Feed-Filter, Erstellung; `ListingCard` rendert Gesuche sauber). Drift beseitigt: `createBuyIntentAction` ruft die RPC jetzt **getypt** mit exakt den 3 Live-Argumenten auf (`p_listing_id`, `p_payment_method`, `p_buyer_contact`) – kein `p_buyer_id`, kein `as any`, keine Betrag/Provisions-Rechnung im Client; bei `success === false` wird `data.error` geworfen. Veraltete 4-Argument-Definition in `src/types/database.ts` von Hand auf die 3-Argument-Version korrigiert (⚠️ `gen types` ohne Access-Token/MCP nicht möglich – bei nächster Gelegenheit sauber neu generieren). `tsc` + `build` grün. Commit lokal, KEIN Push.
 
+- **Block 14** (23.07.2026): Smart Form 2.0 — Angebots-Erstell-Flow neu als **Card-für-
+  Card-Reise** (Foto+Titel → KI-Details → Zustand → Preis/Ort → Zusammenfassung), 48h-
+  Modal mit `auto_release`-Toggle **vor** dem Insert. **database.ts** vom Streuner-Commit
+  (Repo-Root) 1:1 in `src/types/database.ts` übernommen (nur `auto_release` neu), Streuner
+  gelöscht, Plan nach `docs/planung/` verschoben. Neu: `src/lib/conditionConfig.ts` (8
+  kanonische Zustands-Grade + Anwendbarkeits-Map + Smart-Default-Keywords + Altwert-
+  Fallback), `src/lib/analyzeListing.ts` (Typen + strikte Whitelist-Validierung),
+  `src/app/api/analyze-listing/route.ts` (Vision-KI `CLAUDE_MODEL_FAST`, bis 5 Bilder,
+  nie blockierend), `AiFields`/`AngebotCardFlow`. Zustands-Card mit Pflicht-Mängelfeld
+  (maengel/defekt), Smart-Default (Puls-Vorschlag). Autosave (localStorage-Recovery-
+  Banner + debounced Draft-Upsert `autosaveDraftAction`). Detail zeigt Zustand
+  (`detail-condition`), EditListingModal auf neue Slugs + Altwert-Fallback. Reserved-
+  ohne-Countdown (`auto_release=false`) in Card/DealFlow/Dashboards ehrlich gelabelt.
+  Block-11-`reserve-hint` durch das 48h-Modal ersetzt. E2E `e2e/block14-smart-form.spec.ts`
+  (T1–T7, KI per `page.route` gemockt) + alle Alt-Create-Helfer nachgezogen (Lektion 33).
+  DB nur gelesen; Migration M14-2 (condition-Backfill) folgt NACH Merge im Planungs-Chat.
+  **Gate-Status:** tsc + ESLint + `next build` (Dummy-Env) GRÜN; **Playwright UNGETESTET**
+  (kein `.env.local`/E2E-Konten im Sandbox → JJ via run-verify.ps1, Lektion 26/27).
+  Auslieferung als **PR**. Details: `uebergabe-2026-07-23-block14.md`.
 - **Block 13** (23.07.2026): Go-Live-Härtung — **Schritt 0 gemessen:** Stripe-Webhook
   `/api/webhooks/stripe` (Event `checkout.session.completed`), Stripe-Env nur
   `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` (kein Publishable Key — Checkout via

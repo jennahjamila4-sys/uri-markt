@@ -15,6 +15,7 @@ import { uploadListingImage } from '@/lib/supabase/storage'
 import { PhotoUploadField } from '@/components/create/PhotoUploadField'
 import { useAppStore } from '@/store/appStore'
 import { CATEGORIES, GEMEINDEN } from '@/types'
+import { CONDITION_GRADES, LEGACY_CONDITION_LABELS } from '@/lib/conditionConfig'
 
 type AngebotData = typeof AngebotSchema._type
 type GesuchData = typeof GesuchSchema._type
@@ -223,14 +224,22 @@ export function EditListingModal({ listingId, listingType, onSaved, onClose }: P
             <div>
               <label className="text-sm font-display font-bold text-white">Zustand</label>
               <select
-                value={angebotForm.watch('condition')}
-                onChange={(e) => angebotForm.setValue('condition', e.target.value as AngebotData['condition'])}
+                value={angebotForm.watch('condition') ?? ''}
+                onChange={(e) => angebotForm.setValue('condition', (e.target.value || undefined) as AngebotData['condition'])}
                 className={inputCls}
               >
-                <option value="new">Neu</option>
-                <option value="like_new">Wie neu</option>
-                <option value="good">Gut</option>
-                <option value="acceptable">Akzeptabel</option>
+                <option value="">– auswählen –</option>
+                {CONDITION_GRADES.map((g) => (
+                  <option key={g.slug} value={g.slug}>{g.short}</option>
+                ))}
+                {/* Altwert des Inserats sichtbar halten, falls noch nicht per
+                    Backfill (M14-2) migriert — nur Anzeige, nie neu gewählt. */}
+                {(() => {
+                  const cur = angebotForm.watch('condition')
+                  return cur && LEGACY_CONDITION_LABELS[cur] ? (
+                    <option value={cur}>{LEGACY_CONDITION_LABELS[cur]} (bisher)</option>
+                  ) : null
+                })()}
               </select>
             </div>
 

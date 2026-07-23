@@ -10,6 +10,48 @@
 
 ---
 
+## 0-A. Block 14 — Smart Form 2.0 (23.07.2026)
+
+Vom Planungs-Chat live eingespielt (Migration **M14-1** `block14_auto_release_opt_out`,
+D2-Grant-Check grün). Claude Code hat die DB **nicht** angefasst; `database.ts` via
+`gen types` neu generiert (nur `listings.auto_release` kam hinzu).
+
+**`listings` — neue Spalte**
+- `auto_release boolean NOT NULL DEFAULT true` — steuert die 48h-Automatik.
+  - `true` → alles wie bisher: beim Kauf-Intent `reserved_until = now()+48h`, Vorwarnung,
+    automatische Freigabe zurück in den Feed.
+  - `false` → Käufer-Intent setzt `status='reserved'`, aber **`reserved_until IS NULL`**.
+    Keine Vorwarnung, keine Auto-Freigabe — die Reservierung bleibt, bis der Verkäufer
+    selbst entscheidet.
+
+**RPC-Verhalten mit `auto_release` (unverändert von M14-1, hier dokumentiert):**
+- `create_buy_intent` / `process_transaction_commission`: setzen `reserved_until` NUR
+  wenn `auto_release = true`, sonst `NULL` (Status wird trotzdem `reserved`).
+- `expire_stale_reservations` / `warn_expiring_reservations`: **überspringen**
+  Transaktionen, deren Listing `auto_release = false` hat.
+
+**UI-Kontrakt (Anzeige, Block-11-Komponenten ergänzt):**
+`status='reserved' AND reserved_until IS NULL` → „⏳ Reserviert" **ohne** Countdown und
+**ohne** „wird wieder frei". Betroffen: `ListingCard`, `DealFlow` (via
+`reservedRemainingText`, null-sicher), `SellerDashboard`/`BuyerDashboard` (pending-Text
+verzweigt auf `listing.auto_release === false`). Dafür wird `auto_release` in die
+`transactions→listing`-Selects (`src/app/profile/page.tsx`) mitgeladen.
+
+**`listings.condition` — neue kanonische Werte (Anzeige/Schreibpfad):**
+Text, weiterhin **kein** CHECK-Constraint. Ab Block 14 schreibt die UI die 8 kanonischen
+Slugs: `neu_mit_etikett`, `neu_ohne_etikett`, `einmal_genutzt`, `sehr_gut`, `gut`,
+`gebrauchsspuren`, `maengel`, `defekt` (Single Source: `src/lib/conditionConfig.ts`).
+Die 4 Altwerte `new`/`like_new`/`good`/`acceptable` bleiben **lesbar** (Fallback-Labels
+„Neu"/„Wie neu"/„Guter Zustand"/„Gebrauchsspuren") und werden nie neu geschrieben.
+> **Geplant (Migration M14-2, NACH diesem PR-Merge im Planungs-Chat):** Backfill der 4
+> Altwerte auf die kanonischen Slugs. Bis dahin muss das Anzeige-Mapping die Altwerte
+> weiter labeln (erledigt via `conditionLabel()`).
+
+**Zusatz-Signal:** `smart_data.gereinigt = "Ja"` (Kleider/Kindersachen/Schuh-Subtyp) —
+neuer optionaler Key, wie alle anderen smart_data-Keys nur bei Befüllung geschrieben.
+
+---
+
 ## 0-B. Block 10 — Smarte Formulare (17./18.07.2026)
 
 Ergänzungen durch Block 10 (Migrationen 10-1/10-2 vom Planungs-Chat live eingespielt,

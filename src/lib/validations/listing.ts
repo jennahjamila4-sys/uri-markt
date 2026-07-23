@@ -7,11 +7,31 @@ export const SmartDataSchema = z
   .record(z.string(), z.union([z.string(), z.array(z.string()), z.number()]))
   .optional()
 
+// Block 14: 8 kanonische Zustands-Slugs (neu wählbar) + 4 Altwerte (nur noch
+// zur Validierung bestehender/bearbeiteter Inserate, nie neu in der UI wählbar).
+export const CONDITION_VALUES = [
+  'neu_mit_etikett',
+  'neu_ohne_etikett',
+  'einmal_genutzt',
+  'sehr_gut',
+  'gut',
+  'gebrauchsspuren',
+  'maengel',
+  'defekt',
+  // Legacy (Altdaten / EditListingModal-Kompatibilität bis Backfill M14-2):
+  'new',
+  'like_new',
+  'good',
+  'acceptable',
+] as const
+
 export const AngebotSchema = z.object({
   title: z.string().min(3, 'Min. 3 Zeichen').max(100, 'Max. 100 Zeichen'),
   description: z.string().max(2000).optional(),
   category: z.string().min(1, 'Kategorie wählen'),
-  condition: z.enum(['new', 'like_new', 'good', 'acceptable']),
+  // Block 14: Dienstleistungen/Jobs zeigen keine Zustands-Card → condition optional.
+  condition: z.enum(CONDITION_VALUES).optional(),
+  auto_release: z.boolean().optional(),
   price_type: z.enum(['fixed', 'vhb', 'free', 'auction']),
   price: z.number().min(0).optional(),
   gemeinde: z.string().min(1, 'Gemeinde wählen'),
