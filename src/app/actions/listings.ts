@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import { createServerClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { AngebotSchema } from '@/lib/validations/listing'
+import { AngebotSchema, CONDITION_VALUES } from '@/lib/validations/listing'
 import { GesuchSchema } from '@/lib/validations/onboarding'
 import { CATEGORIES } from '@/types'
 import { CLAUDE_MODEL_FAST } from '@/lib/ai'
@@ -103,6 +103,8 @@ export async function createListingAction(rawData: unknown) {
     // Anzeige (ListingCard/Feed/Profil) liest die Singular-Spalte image_url;
     // das Formular lädt Bilder als image_urls[]. Erstes Bild spiegeln.
     image_url: validated.data.image_urls?.[0] ?? null,
+    // Block 14: 48h-Automatik (Default AN). false → keine Auto-Freigabe.
+    auto_release: validated.data.auto_release ?? true,
     user_id: user.id,
     type: 'Angebot',
     status: 'active',
@@ -233,7 +235,7 @@ export async function updateListingAction(
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       category: parsed.data.category,
-      condition: parsed.data.condition,
+      condition: parsed.data.condition ?? null,
       price_type: parsed.data.price_type,
       price: parsed.data.price_type === 'free' ? null : (parsed.data.price ?? null),
       gemeinde: parsed.data.gemeinde,
@@ -369,7 +371,7 @@ const DraftSchema = z.object({
   title: z.string().min(3, 'Titel muss mindestens 3 Zeichen lang sein').max(150),
   category: z.string().optional(),
   description: z.string().max(2000).optional(),
-  condition: z.enum(['new', 'like_new', 'good', 'acceptable']).optional(),
+  condition: z.enum(CONDITION_VALUES).optional(),
   price_type: z.enum(['fixed', 'vhb', 'free', 'auction']).optional(),
   price: z.number().min(0).optional(),
   max_budget: z.number().min(0).optional(),
@@ -425,6 +427,71 @@ export async function saveDraftAction(rawData: unknown) {
 }
 
 /**
+ * BLOCK 14 — Autosave-Upsert für Entwürfe. Legt beim ersten Aufruf (kein
+ * draftId) einen Entwurf an und aktualisiert danach GENAU diese Zeile — so
+ * entsteht pro angefangenem Inserat nur EINE Draft-Zeile (kein Spam durch das
+ * debounced Autosave). RLS + user_id-Filter + status='draft' sichern ab.
+ * Gibt die Draft-ID zurück (der Client merkt sie sich).
+ */
+export async function autosaveDraftAction(
+  draftId: string | null,
+  rawData: unknown
+): Promise<{ id: string }> {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Nicht angemeldet')
+
+  const parsed = DraftSchema.safeParse(rawData)
+  if (!parsed.success) {
+    throw new Error(parsed.error.errors[0]?.message ?? 'Titel fehlt (mind. 3 Zeichen)')
+  }
+  const d = parsed.data
+  const gemeinden = d.gemeinden ?? (d.gemeinde ? [d.gemeinde] : [])
+
+  const fields: Database['public']['Tables']['listings']['Update'] = {
+    type: d.type,
+    title: d.title,
+    category: d.category ?? '',
+    gemeinde: gemeinden[0] ?? '',
+    gemeinden,
+    price_type: d.price_type ?? 'fixed',
+    price: d.type === 'Gesuch' ? (d.max_budget ?? null) : (d.price ?? null),
+    max_budget: d.type === 'Gesuch' ? (d.max_budget ?? null) : null,
+    condition: d.type === 'Angebot' ? (d.condition ?? null) : null,
+    description: d.description ?? null,
+    smart_data: (d.smart_data ?? null) as SmartDataInsert,
+    image_urls: d.image_urls ?? [],
+    image_url: d.image_urls?.[0] ?? null,
+  }
+
+  if (draftId) {
+    const { data: updated, error } = await supabase
+      .from('listings')
+      .update(fields)
+      .eq('id', draftId)
+      .eq('user_id', user.id)
+      .eq('status', 'draft')
+      .select('id')
+    if (error) throw new Error('Entwurf konnte nicht gespeichert werden')
+    if (updated && updated.length > 0) {
+      revalidatePath('/profile')
+      return { id: draftId }
+    }
+    // draftId nicht (mehr) als Entwurf vorhanden → neu anlegen.
+  }
+
+  const { data: draft, error: insertError } = await supabase
+    .from('listings')
+    .insert([{ ...fields, user_id: user.id, status: 'draft' } as Database['public']['Tables']['listings']['Insert']])
+    .select('id')
+    .single()
+  if (insertError) throw new Error('Entwurf konnte nicht gespeichert werden')
+
+  revalidatePath('/profile')
+  return { id: draft.id }
+}
+
+/**
  * Entwurf veröffentlichen: vollständige Validierung nach Typ; Übergang
  * status draft → active ist atomar über den Status-Filter abgesichert.
  * WICHTIG (Lektion 1): Nach erfolgreicher Veröffentlichung wird
@@ -477,7 +544,7 @@ export async function publishDraftAction(draftId: string, rawData: unknown) {
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       category: parsed.data.category,
-      condition: parsed.data.condition,
+      condition: parsed.data.condition ?? null,
       price_type: parsed.data.price_type,
       price: parsed.data.price_type === 'free' ? null : (parsed.data.price ?? null),
       gemeinde: gemeinden[0],
@@ -485,6 +552,7 @@ export async function publishDraftAction(draftId: string, rawData: unknown) {
       smart_data: (parsed.data.smart_data ?? null) as SmartDataInsert,
       image_urls: parsed.data.image_urls ?? [],
       image_url: parsed.data.image_urls?.[0] ?? null,
+      auto_release: parsed.data.auto_release ?? true,
       pickup_available: parsed.data.pickup_available,
       shipping_available: parsed.data.shipping_available,
       shipping_cost: parsed.data.shipping_cost ?? null,

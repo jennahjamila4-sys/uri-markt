@@ -152,16 +152,34 @@ async function openListingDetail(page: Page, title: string) {
   await heading.first().click()
 }
 
-/** Gratis-Angebot ueber das neue Chamaeleon-Formular. */
+// Block 14: Angebots-Tab ist der Card-Flow (Smart Form 2.0). Bis Preis-Schritt
+// navigieren; Zusammenfassung → Veröffentlichen → 48h-Modal bestaetigen.
+async function gotoPriceCard(modal: Locator) {
+  const priceField = modal.locator('#field-price')
+  for (let i = 0; i < 4; i++) {
+    if (await priceField.isVisible().catch(() => false)) return
+    await modal.getByTestId('cardflow-next').click()
+  }
+}
+async function confirmPublish(page: Page, modal: Locator) {
+  await modal.getByTestId('cardflow-next').click()
+  await modal.getByRole('checkbox').check()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
+  const m = modal.getByTestId('publish-48h-modal')
+  await expect(m).toBeVisible()
+  await m.getByRole('button', { name: /Alles klar/ }).click()
+  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+}
+
+/** Gratis-Angebot ueber den Card-Flow. */
 async function createFreeAngebot(page: Page, title: string, gemeinde = 'Altdorf') {
   const modal = await openCreate(page, 'Angebot')
   await modal.locator('#field-title input').fill(title)
   await setCategory(modal, 'sonstiges')
+  await gotoPriceCard(modal)
   await modal.getByRole('button', { name: /Gratis/ }).click()
   await ensureGemeinde(modal, gemeinde, true)
-  await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+  await confirmPublish(page, modal)
 }
 
 async function buyOffer(page: Page, title: string) {
@@ -248,6 +266,12 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
     ctxB = await browser.newContext()
     await ctxA.addInitScript(skipOnboarding)
     await ctxB.addInitScript(skipOnboarding)
+    // Block 14: KI-Endpoint als "nicht verfuegbar" mocken -> lokaler Fallback-Pfad.
+    for (const c of [ctxA, ctxB]) {
+      await c.route('**/api/analyze-listing', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '{"result":null}' })
+      )
+    }
     pageA = await ctxA.newPage()
     pageB = await ctxB.newPage()
     await login(pageA, USER_A.email, USER_A.password)
@@ -263,15 +287,15 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
   test('Test 1: Chamaeleon — Kategorie erkannt, Chip → smart_data-Grid', async () => {
     const modal = await openCreate(pageA, 'Angebot')
     await modal.locator('#field-title input').fill(OFFER_1)
-    // Lokale Erkennung: „wollpullover" → kleider
+    // Lokale Erkennung: „wollpullover" → kleider (Banner auf Card 1)
     await expect(modal.getByText(/Erkannt: Kleider & Mode/)).toBeVisible()
-    // Stufe-2-Chip antippen (Farbe „Rot")
+    // Weiter zu Card 2 (Details) → Stufe-2-Chip „Rot" antippen (Fallback-Felder).
+    await modal.getByTestId('cardflow-next').click()
     await modal.getByRole('button', { name: 'Rot', exact: true }).click()
+    await gotoPriceCard(modal)
     await modal.locator('input[placeholder="Preis in CHF"]').fill('20')
     await ensureGemeinde(modal, 'Altdorf', true)
-    await modal.getByRole('checkbox').check()
-    await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-    await expect(pageA.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+    await confirmPublish(pageA, modal)
 
     await openListingDetail(pageA, OFFER_1)
     await expect(pageA.getByTestId('smart-data-grid')).toBeVisible()
@@ -312,6 +336,7 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
     const modal = await openCreate(pageA, 'Angebot')
     await modal.locator('#field-title input').fill(OFFER_DRAFT)
     await expect(modal.getByText(/Erkannt: Kleider & Mode/)).toBeVisible()
+    await gotoPriceCard(modal)
     await modal.locator('input[placeholder="Preis in CHF"]').fill('20')
     await ensureGemeinde(modal, 'Altdorf', true)
     await modal.getByRole('button', { name: 'Als Entwurf speichern' }).click()
@@ -360,12 +385,11 @@ test.describe.serial('Block 10: Smarte Formulare + Entwuerfe', () => {
     const modal = await openCreate(pageA, 'Angebot')
     await modal.locator('#field-title input').fill(MULTI_1)
     await setCategory(modal, 'moebel')
+    await gotoPriceCard(modal)
     await modal.locator('input[placeholder="Preis in CHF"]').fill('30')
     await ensureGemeinde(modal, 'Altdorf', true)
     await ensureGemeinde(modal, 'Flüelen', true)
-    await modal.getByRole('checkbox').check()
-    await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-    await expect(pageA.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+    await confirmPublish(pageA, modal)
 
     await openListingDetail(pageA, MULTI_1)
     await expect(pageA.getByTestId('detail-gemeinde').filter({ hasText: 'Altdorf' })).toBeVisible()

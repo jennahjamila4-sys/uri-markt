@@ -230,12 +230,34 @@ body {
   animation: sheen 2.2s linear infinite;
 }
 
+/* BLOCK 14 — Smart Form 2.0: Chip-Pop + Erkennungs-Shimmer */
+.chip-pop {
+  transition: transform 0.16s cubic-bezier(0.16,1,0.3,1), background-color 0.2s ease;
+}
+.chip-pop:active {
+  transform: scale(0.92);
+}
+.shimmer-band {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgba(255,215,0,0.05),
+    rgba(255,215,0,0.16),
+    rgba(255,215,0,0.05)
+  );
+  background-size: 200% 100%;
+  animation: sheen 1.6s linear infinite;
+}
+
 /* Respektiert System-Einstellung „Bewegung reduzieren" */
 @media (prefers-reduced-motion: reduce) {
   .reveal, .kenburns, .text-shine, .animate-scarce, .animate-beacon,
   .animate-flick, .animate-stamp, .heart-pop, .gold-sweep::before,
-  .prog-shimmer::after {
+  .prog-shimmer::after, .shimmer-band, .animate-card-in, .animate-pulse-gold,
+  .animate-fade-in {
     animation: none !important;
   }
   .reveal { opacity: 1; transform: none; }
+  .chip-pop:active { transform: none; }
 }

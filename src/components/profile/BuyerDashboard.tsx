@@ -23,6 +23,8 @@ export interface BuyerTransaction {
     image_url: string | null
     /** öffentlicher 48h-Ablauf; einzige Wahrheit für den Deal-Countdown (TEIL 6) */
     reserved_until: string | null
+    /** Block 14: false → keine 48h-Automatik (Reservierung ohne Countdown) */
+    auto_release?: boolean | null
   } | null
 }
 
@@ -121,7 +123,9 @@ export function BuyerDashboard({ transactions, reviewedTxIds }: Props) {
                   freigeschaltet.
                 </p>
                 <p className="mt-2 text-xs text-amber-300/80">
-                  ⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.
+                  {tx.listing?.auto_release === false
+                    ? '⏳ Reserviert — bleibt für euch beide, bis der Verkäufer entscheidet.'
+                    : '⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.'}
                 </p>
               </div>
             )}

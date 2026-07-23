@@ -93,6 +93,25 @@ async function ensureGemeinde(modal: Locator, name: string, want = true) {
   if (active !== want) await chip.click()
 }
 
+// Block 14: Angebots-Tab ist der Card-Flow — bis Preis-Schritt navigieren,
+// 48h-Modal bestaetigen.
+async function gotoPriceCard(modal: Locator) {
+  const priceField = modal.locator('#field-price')
+  for (let i = 0; i < 4; i++) {
+    if (await priceField.isVisible().catch(() => false)) return
+    await modal.getByTestId('cardflow-next').click()
+  }
+}
+async function confirmPublish(page: Page, modal: Locator) {
+  await modal.getByTestId('cardflow-next').click()
+  await modal.getByRole('checkbox').check()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
+  const m = modal.getByTestId('publish-48h-modal')
+  await expect(m).toBeVisible()
+  await m.getByRole('button', { name: /Alles klar/ }).click()
+  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+}
+
 /** Angebot erstellen: Kategorie Kleider & Mode, Festpreis, Gemeinde Altdorf */
 async function createAngebot(page: Page, title: string, price: number) {
   await page.goto('/')
@@ -101,11 +120,10 @@ async function createAngebot(page: Page, title: string, price: number) {
   await modal.getByRole('button', { name: /Angebot$/ }).click()
   await modal.locator('#field-title input').fill(title)
   await setCategory(modal, 'kleider')
+  await gotoPriceCard(modal)
   await modal.locator('input[placeholder="Preis in CHF"]').fill(String(price))
   await ensureGemeinde(modal, 'Altdorf', true)
-  await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+  await confirmPublish(page, modal)
 }
 
 /** Gratis-Angebot (Kategorie Sonstiges) — fuer den tx_pending-Test */
@@ -116,11 +134,10 @@ async function createFreeAngebot(page: Page, title: string) {
   await modal.getByRole('button', { name: /Angebot$/ }).click()
   await modal.locator('#field-title input').fill(title)
   await setCategory(modal, 'sonstiges')
+  await gotoPriceCard(modal)
   await modal.getByRole('button', { name: /Gratis/ }).click()
   await ensureGemeinde(modal, 'Altdorf', true)
-  await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+  await confirmPublish(page, modal)
 }
 
 /** Gesuch erstellen: Kategorie Kleider & Mode, Budget, Gemeinde Altdorf */
@@ -207,6 +224,12 @@ test.describe.serial('Block 9: Smart-Match-System', () => {
     ctxB = await browser.newContext()
     await ctxA.addInitScript(skipOnboarding)
     await ctxB.addInitScript(skipOnboarding)
+    // Block 14: KI-Endpoint als "nicht verfuegbar" mocken -> lokaler Fallback-Pfad.
+    for (const c of [ctxA, ctxB]) {
+      await c.route('**/api/analyze-listing', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '{"result":null}' })
+      )
+    }
     pageA = await ctxA.newPage()
     pageB = await ctxB.newPage()
     await login(pageA, USER_A.email, USER_A.password)

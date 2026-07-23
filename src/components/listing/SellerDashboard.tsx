@@ -30,6 +30,8 @@ export interface SellerTransaction {
     image_url: string | null
     /** öffentlicher 48h-Ablauf; einzige Wahrheit für den Deal-Countdown (TEIL 6) */
     reserved_until: string | null
+    /** Block 14: false → keine 48h-Automatik (Reservierung ohne Countdown) */
+    auto_release?: boolean | null
   } | null
 }
 
@@ -160,9 +162,11 @@ export function SellerDashboard({ transactions, credits, reviewedTxIds }: Props)
                   data-testid="seller-countdown"
                   className="rounded-lg border border-amber-600/30 bg-amber-900/15 px-3 py-2 text-xs text-amber-300"
                 >
-                  {remaining
-                    ? `⏳ Noch ${remaining.replace(/^noch /, '')}, um die Anfrage anzunehmen — sonst wird das Inserat wieder frei.`
-                    : '⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.'}
+                  {tx.listing?.auto_release === false
+                    ? '⏳ Reserviert — bleibt für euch beide, bis du entscheidest (keine 48h-Automatik).'
+                    : remaining
+                      ? `⏳ Noch ${remaining.replace(/^noch /, '')}, um die Anfrage anzunehmen — sonst wird das Inserat wieder frei.`
+                      : '⏳ Bis zu 48h reserviert — danach wird das Inserat wieder frei.'}
                 </p>
                 <div className="rounded-lg border border-glass-border bg-obsidian-4 p-3 text-sm">
                   <div className="flex justify-between text-white/70">

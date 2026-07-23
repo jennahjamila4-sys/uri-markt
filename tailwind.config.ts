@@ -51,8 +51,19 @@ const config: Config = {
         'stagger-1': 'fade-in 0.4s ease-out 0.1s both',
         'stagger-2': 'fade-in 0.4s ease-out 0.2s both',
         'stagger-3': 'fade-in 0.4s ease-out 0.3s both',
+        // Block 14 — Smart Form 2.0
+        'card-in': 'card-in 0.42s cubic-bezier(0.16,1,0.3,1)',
+        'pulse-gold': 'pulse-gold 1.8s ease-in-out infinite',
       },
       keyframes: {
+        'card-in': {
+          from: { opacity: '0', transform: 'translateX(26px) scale(0.985)' },
+          to: { opacity: '1', transform: 'translateX(0) scale(1)' },
+        },
+        'pulse-gold': {
+          '0%,100%': { boxShadow: '0 0 0 0 rgba(255,215,0,0.55)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(255,215,0,0)' },
+        },
         'fomo-pulse': {
           '0%,100%': { opacity: '1', transform: 'scale(1)' },
           '50%': { opacity: '0.5', transform: 'scale(0.95)' },

@@ -76,8 +76,25 @@ async function ensureGemeinde(modal: Locator, name: string, want = true) {
   if (active !== want) await chip.click()
 }
 
-// Single-Screen-Chamaeleon-Formular (Block 10) — kein Wizard/„Weiter" mehr.
-// Referenz: e2e/block10-smart-forms.spec.ts.
+// Block 14: Angebots-Tab ist der Card-Flow (Smart Form 2.0). Helfer navigieren
+// bis zum Preis-Schritt und bestaetigen das 48h-Modal.
+async function gotoPriceCard(modal: Locator) {
+  const priceField = modal.locator('#field-price')
+  for (let i = 0; i < 4; i++) {
+    if (await priceField.isVisible().catch(() => false)) return
+    await modal.getByTestId('cardflow-next').click()
+  }
+}
+async function confirmPublish(page: Page, modal: Locator) {
+  await modal.getByTestId('cardflow-next').click() // Preis → Zusammenfassung
+  await modal.getByRole('checkbox').check()
+  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
+  const m = modal.getByTestId('publish-48h-modal')
+  await expect(m).toBeVisible()
+  await m.getByRole('button', { name: /Alles klar/ }).click()
+  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+}
+
 async function createFreeListing(page: Page, title: string) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Inserat erstellen' }).click()
@@ -86,11 +103,10 @@ async function createFreeListing(page: Page, title: string) {
   await modal.getByRole('button', { name: /Angebot$/ }).click()
   await modal.locator('#field-title input').fill(title)
   await setCategory(modal, 'sonstiges')
+  await gotoPriceCard(modal)
   await modal.getByRole('button', { name: /Gratis/ }).click()
   await ensureGemeinde(modal, 'Altdorf', true)
-  await modal.getByRole('checkbox').check()
-  await modal.getByRole('button', { name: 'Veröffentlichen', exact: true }).click()
-  await expect(page.getByText('Inserat erfolgreich erstellt! 🎉')).toBeVisible()
+  await confirmPublish(page, modal)
 }
 
 async function buyListing(page: Page, title: string) {
@@ -149,6 +165,12 @@ test('beidseitiger Deal-Flow: Kauf → Bestätigung → beidseitiger Abschluss �
     )
   await sellerCtx.addInitScript(skipOnboarding)
   await buyerCtx.addInitScript(skipOnboarding)
+  // Block 14: KI-Endpoint als "nicht verfuegbar" mocken -> lokaler Fallback-Pfad.
+  for (const c of [sellerCtx, buyerCtx]) {
+    await c.route('**/api/analyze-listing', (r) =>
+      r.fulfill({ status: 200, contentType: 'application/json', body: '{"result":null}' })
+    )
+  }
 
   const seller = await sellerCtx.newPage()
   const buyer = await buyerCtx.newPage()

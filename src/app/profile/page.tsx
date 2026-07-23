@@ -50,7 +50,7 @@ export default async function ProfilePage() {
   const { data: sellerTransactions } = await supabase
     .from('transactions')
     .select(
-      'id,status,amount,commission,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url,reserved_until)'
+      'id,status,amount,commission,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url,reserved_until,auto_release)'
     )
     .eq('seller_id', user.id)
     .in('status', ['pending', 'confirmed', 'completed'])
@@ -63,7 +63,7 @@ export default async function ProfilePage() {
   const { data: buyerTransactions } = await supabase
     .from('transactions')
     .select(
-      'id,status,amount,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url,reserved_until)'
+      'id,status,amount,payment_method,created_at,buyer_completed_at,seller_completed_at,listing:listings!transactions_listing_id_fkey(id,title,image_url,reserved_until,auto_release)'
     )
     .eq('buyer_id', user.id)
     .in('status', ['pending', 'confirmed', 'completed'])
