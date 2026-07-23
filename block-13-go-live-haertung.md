@@ -44,7 +44,7 @@ Block 13 ist DONE, wenn:
 
 **Aufgaben:**
 1. **Consent-Checkbox Registrierung:** Pflicht-Checkbox im Register-Tab des AuthModal, Links auf AGB + Datenschutz, Text z.B. „Ich akzeptiere die AGB und die Datenschutzerklärung". Ohne Häkchen kein Submit (Button disabled + klare Hilfe). Bei `signUp`: `consent_version` in die Metadata (EINE Konstante als Single Source, z.B. `CONSENT_VERSION = '2026-07-23'` in einer lib-Datei). Frontend-Design-Skill anwenden (s. Regel unten).
-2. **Types regenerieren:** `npx supabase gen types typescript --project-id lhqsuelguwfdflapzdhk` → `src/types/database.ts` (enthält dann `user_consents`). Kein Handedit. Falls Access-Token fehlt → STOPP, an JJ melden; Planungs-Chat generiert via MCP.
+2. **Types regenerieren:** via Supabase-MCP `generate_typescript_types` (project `lhqsuelguwfdflapzdhk`) → `src/types/database.ts` (enthält dann `user_consents`). Kein Handedit, DB nur lesen (Muster aus Block 12). Falls MCP nicht verfügbar → STOPP an JJ; Planungs-Chat generiert und liefert die Datei.
 3. **Platzhalter-Sweep:** Repo-weite Suche nach Platzhalter-Mustern (TODO, PLATZHALTER, Muster-, [Name], [Adresse], example.com, Lorem etc.) in Impressum/Datenschutz/AGB und überall → Liste an JJ; Erwartung 0 Treffer (JJ hat Daten schon eingetragen). Treffer ≠ 0 → JJ trägt lokal nach (Firmendaten NIE im Chat).
 4. **Arabisch/RTL-Sweep + Fix:** Repo-weite Regex-Suche Unicode-Bereiche `\u0600-\u06FF`, `\u0750-\u077F`, `\uFB50-\uFEFF` + RTL-Steuerzeichen (`\u200E`, `\u200F`, `\u202A-\u202E`). JJ sah arabische Schrift u.a. beim Foto-Upload. Root-Cause finden (vermutlich kopierter/korrupter String oder Fremd-Locale einer Library) und sauber fixen — kein CSS-Verstecken.
 5. **`deploy/vercel-env-push.ps1`:**
@@ -54,7 +54,7 @@ Block 13 ist DONE, wenn:
    - Zeigt vor dem Push NUR Variablen-NAMEN + Ziel-Environments, wartet auf Bestätigung, pusht dann einzeln via `vercel env add`
    - Hard-Guard: bricht ab, wenn `.env.local` fehlt; gibt GRÜN/ROT-Endstatus; `Read-Host` am Ende
 6. **E2E `e2e/block13-consent.spec.ts`:** (a) Registrierung ohne Häkchen → Submit blockiert; (b) mit Häkchen → Konto entsteht UND `user_consents` enthält 2 Zeilen (agb+datenschutz) mit `CONSENT_VERSION` und Zeitstempel (Service-Role-Check); (c) User B sieht Consents von User A nicht (RLS-Beweis); Cleanup vorher/nachher.
-7. Qualitäts-Gates: `./node_modules/.bin/tsc --noEmit` 0 Errors, `npm run build` 0 Errors, ESLint grün, E2E grün → Commit (KEIN Push) → Testliste an JJ.
+7. Qualitäts-Gates (Cloud-Sandbox, Muster Block 12): `npm ci`, dann `./node_modules/.bin/tsc --noEmit` 0 Errors, `npm run build` grün (Dummy-`NEXT_PUBLIC`-Keys erlaubt, nichts an `.env.local` anlegen), ESLint grün. Playwright-E2E läuft NICHT im Cloud-Sandbox (keine Secrets) → Status UNGETESTET, **Auslieferung als Pull Request**. JJ fährt E2E lokal via `e2e/run-verify.ps1` auf dem PR-Branch; erst bei GRÜN gilt der Block als fertig, dann merged JJ den PR.
 
 **Bindende Regel für JEDE UI-Arbeit (Block 13, 14, 15 und alle weiteren):**
 > **Frontend-Design-Skill IMMER anwenden.** Ziel: exklusive Animationen und Erlebnisse, hochwertig und einzigartig — keine generischen Standard-Komponenten. Design-Referenz `docs/design/design-referenz.html` bleibt verbindlich (Dark, Gold #FFD700, Glassmorphism, Syne + DM Sans).
@@ -115,7 +115,7 @@ Block 13 ist DONE, wenn:
 ```
 Lies zuerst CLAUDE.md und uebergabe-2026-07-21-block12.md vollständig. Dann Block 13 laut docs/planung/block-13-go-live-haertung.md, Abschnitt 3.
 
-Regeln: No-Workaround (nur Root-Cause), D1–D5, ein Fix pro Zyklus, max. 3 Zyklen dann STOPP an JJ. Kein git push ohne JJ-OK. DB wird NICHT angefasst (Migration ist bereits eingespielt, user_consents existiert live).
+Regeln: No-Workaround (nur Root-Cause), D1–D5, ein Fix pro Zyklus, max. 3 Zyklen dann STOPP an JJ. Auslieferung als Pull Request (kein direkter Push auf main). DB wird NICHT angefasst — die Migration ist bereits eingespielt, user_consents existiert live (Supabase-MCP nur LESEN, z.B. generate_typescript_types).
 
 Schritt 0 (Pflicht, VOR jedem Code): Repo-Ist messen und an JJ melden:
 - Exakter Stripe-Webhook-Routen-Pfad (aus dem Code, nicht raten)
@@ -123,15 +123,15 @@ Schritt 0 (Pflicht, VOR jedem Code): Repo-Ist messen und an JJ melden:
 - Resend-Absenderadresse (resend.dev ja/nein)
 
 Dann Aufgaben 1–7 aus Abschnitt 3 des Block-MD:
-1. Pflicht-Consent-Checkbox in der Registrierung + CONSENT_VERSION-Konstante + Metadata bei signUp
-2. npx supabase gen types typescript --project-id lhqsuelguwfdflapzdhk → src/types/database.ts (kein Handedit; Token fehlt → STOPP an JJ)
-3. Platzhalter-Sweep gesamtes Repo (Liste an JJ, Erwartung 0)
-4. Arabisch/RTL-Sweep (Unicode-Ranges + RTL-Steuerzeichen) → Root-Cause-Fix der Fundstellen
-5. deploy/vercel-env-push.ps1 mit Preflight (vercel whoami + link), E2E_*-Filter, Stripe-Secrets NIE nach Production, Namen-Vorschau vor Push, Hard-Guards, GRÜN/ROT, Read-Host
-6. e2e/block13-consent.spec.ts (ohne Häkchen blockiert; mit Häkchen → 2 user_consents-Zeilen mit Version+Zeitstempel via Service-Role; RLS-Beweis mit User B; Cleanup)
-7. Gates: ./node_modules/.bin/tsc --noEmit, npm run build, ESLint, E2E — alles 0 Errors/grün → Commit (KEIN Push) → Testliste an JJ
+1. Pflicht-Consent-Checkbox in der Registrierung + CONSENT_VERSION-Konstante + consent_version in signUp-Metadata
+2. Types via Supabase-MCP generate_typescript_types (project lhqsuelguwfdflapzdhk) → src/types/database.ts, kein Handedit
+3. Platzhalter-Sweep gesamtes Repo (Liste an JJ, Erwartung 0 Treffer)
+4. Arabisch/RTL-Sweep (Unicode-Ranges \u0600-\u06FF, \u0750-\u077F, \uFB50-\uFEFF + RTL-Steuerzeichen \u200E \u200F \u202A-\u202E) → Root-Cause-Fix der Fundstellen (JJ sah 2 Stellen, u.a. beim Foto-Upload)
+5. deploy/vercel-env-push.ps1 (läuft auf JJs PC): Preflight vercel whoami + Projekt-Link, E2E_*-Filter, Stripe-Secrets NIE nach Production, Namen-Vorschau vor Push, Hard-Guards, GRÜN/ROT, Read-Host am Ende
+6. e2e/block13-consent.spec.ts (ohne Häkchen blockiert mit sichtbarem Grund; mit Häkchen → 2 user_consents-Zeilen mit Version+Zeitstempel via Service-Role-Check; RLS-Beweis mit User B; Cleanup vorher/nachher)
+7. Gates im Cloud-Sandbox: npm ci → ./node_modules/.bin/tsc --noEmit 0 Errors, npm run build grün (Dummy-NEXT_PUBLIC-Keys erlaubt, nichts an .env.local anlegen), ESLint grün. Playwright läuft hier NICHT (keine Secrets) → als UNGETESTET markieren, PR erstellen. JJ fährt run-verify.ps1 auf dem PR-Branch; bei ROT: Fix-Commits auf DENSELBEN Branch/PR, kein neuer PR.
 
 BINDEND für alle UI-Arbeit: Frontend-Design-Skill anwenden — exklusive Animationen und Erlebnisse, hochwertig und einzigartig, keine generischen Komponenten. Design-Referenz docs/design/design-referenz.html (Dark, Gold #FFD700, Glassmorphism, Syne + DM Sans) verbindlich.
 
-Am Ende: uebergabe-2026-07-23-block13.md schreiben (BEWIESEN/UNGETESTET/ANGEFANGEN) + neue Lektionen in CLAUDE.md.
+Am Ende: uebergabe-2026-07-23-block13.md schreiben (strikt BEWIESEN/UNGETESTET/ANGEFANGEN) + neue Lektionen in CLAUDE.md — beides im selben PR.
 ```
